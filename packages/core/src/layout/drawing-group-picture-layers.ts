@@ -246,9 +246,35 @@ export function groupPictureLayerDrawing<D extends InlineDrawingRecord | Anchore
 }
 
 /**
- * `ink` grown to hold every turned or mirrored picture of the group. Such a picture paints
- * whole, past the extent where its corners reach, as a turned shape member does. Returns
- * `ink` itself when no picture reaches past it.
+ * Whether the picture of a group record paints past the drawing extent: it is turned or
+ * mirrored, or a corner of its frame lies outside the extent. Word does not cut the members
+ * of a group at the group extent (2026-11-25 render), so such a picture paints whole.
+ *
+ * @internal
+ */
+export function groupPicturePaintsPastExtent(
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord
+): boolean {
+  if (!drawing.groupPicture) return false;
+  const corners = drawing.geometry.imageTransformCorners ?? [];
+  const frame = pictureCornerFrame(corners);
+  if (!frame) return false;
+  if (frame.rotationDegrees !== 0 || frame.flipH) return true;
+  const box = drawing.geometry.contentBounds;
+  const slack = 0.01;
+  return corners.some(
+    (corner) =>
+      corner.x < box.x - slack ||
+      corner.y < box.y - slack ||
+      corner.x > box.x + box.width + slack ||
+      corner.y > box.y + box.height + slack
+  );
+}
+
+/**
+ * `ink` grown to hold every picture of the group that paints past the extent. Such a picture
+ * paints whole, where its corners reach, as a shape member does. Returns `ink` itself when
+ * no picture reaches past it.
  *
  * @internal
  */
@@ -266,10 +292,8 @@ export function groupPictureInkReach(
     ...(drawing.groupPictureLayers ?? []).map((layer) => groupPictureLayerDrawing(drawing, layer)),
   ];
   for (const picture of pictures) {
-    const corners = picture.geometry.imageTransformCorners ?? [];
-    const frame = pictureCornerFrame(corners);
-    if (!frame || (frame.rotationDegrees === 0 && !frame.flipH)) continue;
-    for (const corner of corners) {
+    if (!groupPicturePaintsPastExtent(picture)) continue;
+    for (const corner of picture.geometry.imageTransformCorners ?? []) {
       if (!Number.isFinite(corner.x) || !Number.isFinite(corner.y)) continue;
       left = Math.min(left, corner.x);
       top = Math.min(top, corner.y);

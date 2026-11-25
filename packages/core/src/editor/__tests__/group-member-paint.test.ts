@@ -451,17 +451,56 @@ describe('the outline of a picture member', () => {
   });
 });
 
-// A turned picture widens the clip of the group for the picture. A vector member that reaches
-// past the group extent stays cut at the extent, as it is without the picture.
-test('a turned picture does not widen the clip of the vector members', async () => {
-  const members = picture(150, 140, { xfrmAttributes: ' rot="2700000"' }) + bar(350, 20, '111111');
-  await withMounted(docx(members), (_surface, container) => {
-    const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
-    expect(outer.style.clipPath).toContain('inset(');
-    const frames = Array.from(outer.querySelectorAll<HTMLElement>('.docx-drawing-image-frame'));
-    const vector = frames.filter((frame) => frame.querySelector('svg'));
-    expect(vector.length).toBeGreaterThan(0);
-    for (const frame of vector) expect(frame.style.clipPath).toBe('inset(0px 0px 0px 0px)');
+// Word does not cut a member at the group extent (2026-11-25 render). A member that reaches
+// past the extent paints whole, in the editor as in PDF.
+describe('a member that reaches past the group extent', () => {
+  const insetsOf = (element: HTMLElement) =>
+    /inset\((.+)\)/.exec(element.style.clipPath)![1]!.split(' ').map(parseFloat);
+
+  test('a bar past the right edge paints whole', async () => {
+    // The bar runs from 350pt to 450pt in a group 400pt wide.
+    await withMounted(docx(bar(350, 20, '111111')), (surface, container) => {
+      expect(groupRecord(surface).vectorShape?.overflowVisible).toBe(true);
+      const outer = container.querySelector<HTMLElement>('.docx-drawing')!;
+      expect(insetsOf(outer)[1]!).toBeLessThanOrEqual(-50);
+    });
+  });
+
+  test('a bar inside the extent keeps the group clip', async () => {
+    await withMounted(docx(bar(100, 20, '111111')), (surface) => {
+      expect(groupRecord(surface).vectorShape?.overflowVisible).toBeUndefined();
+    });
+  });
+
+  test('an upright picture past the left edge paints whole', async () => {
+    await withMounted(docx(picture(-50, 20)), (_surface, container) => {
+      const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+      expect(insetsOf(outer)[3]!).toBeLessThanOrEqual(-50);
+      const [frame] = layersOf(container);
+      expect(frame!.style.clipPath).toBe('');
+    });
+  });
+
+  test('an upright picture inside the extent keeps the outer box closed', async () => {
+    await withMounted(docx(picture(0, 20)), (_surface, container) => {
+      const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+      expect(outer.style.clipPath).not.toContain('inset(');
+    });
+  });
+
+  test('a turned picture does not cut a bar that reaches past the extent', async () => {
+    const members =
+      picture(150, 140, { xfrmAttributes: ' rot="2700000"' }) + bar(350, 20, '111111');
+    await withMounted(docx(members), (_surface, container) => {
+      const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+      expect(insetsOf(outer)[1]!).toBeLessThanOrEqual(-50);
+      const vector = Array.from(
+        outer.querySelectorAll<HTMLElement>('.docx-drawing-image-frame')
+      ).filter((frame) => frame.querySelector('svg'));
+      expect(vector.length).toBeGreaterThan(0);
+      // The vector frame is cut at the ink of the vector members, 50pt past the right edge.
+      for (const frame of vector) expect(insetsOf(frame)[1]!).toBeLessThanOrEqual(-50);
+    });
   });
 });
 

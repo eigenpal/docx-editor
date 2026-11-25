@@ -366,3 +366,13 @@ test('the outline of a turned picture member paints whole, past the group extent
   expect(x + width).toBeCloseTo(177.80127 + 1.5, 3);
   expect(commands).toContain('19.19873 -21.650635 m 105.80127 28.349365 l');
 });
+
+test('an upright picture that reaches past the group extent paints whole', async () => {
+  // Word does not cut a member at the group extent (2026-11-25 render). The picture starts
+  // 20pt above the group top, so its frame runs from y = 740 down to y = 690.
+  const { commands } = await exported(input(picture(-20) + bar(60, 'FF0000')));
+  expect(commands).toContain(
+    'q 72 740 m 172 740 l 172 690 l 72 690 l h W n 72 740 m 172 740 l 172 690 l 72 690 l h W n ' +
+      '100 0 0 50 72 690 cm'
+  );
+});

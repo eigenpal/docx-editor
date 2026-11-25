@@ -7,7 +7,7 @@ import { PDFDocument, PDFName, PDFString, type PDFImage, type PDFPage } from 'pd
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
 import {
   groupPictureLayerDrawing,
-  pictureCornerFrame,
+  groupPicturePaintsPastExtent,
   vectorPictureBand,
   type LayoutBox,
   type ListMarkerPictureRecord,
@@ -539,9 +539,8 @@ export class ImageWriter {
       height = 1 - crop.top - crop.bottom;
     if (!(width > 0 && height > 0)) return report('Image crop has no visible area');
     if (d.geometry.clipPolygon && d.geometry.clipPolygon.length === 0) return '';
-    // A turned group picture paints whole, past the extent, as a turned shape member does.
-    const frame = d.groupPicture ? pictureCornerFrame(points) : null;
-    const turnedMember = !!frame && (frame.rotationDegrees !== 0 || frame.flipH);
+    // A group picture that reaches past the extent paints whole, as a shape member does.
+    const turnedMember = groupPicturePaintsPastExtent(d);
     const clip =
       d.geometry.clipPolygon?.length && !turnedMember
         ? d.geometry.clipPolygon.map((v) => ({

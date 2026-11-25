@@ -80,13 +80,12 @@ function withinGroupReach(
 }
 
 /**
- * Whether a member frame, in extent EMU, has a visible part inside the extent and stays
- * within one extent of it on every side.
+ * Whether a member frame, in extent EMU, stays within one extent of the drawing on every side.
  *
- * Paint clips the picture to the extent, so a frame outside it has no visible pixels. The
- * outer bound keeps a file-supplied offset or a tiny `a:chExt` from scaling the frame into
- * coordinates that no output can represent: the frame never reaches farther than three
- * times the drawing's own extent.
+ * A picture paints past the extent, as Word paints it (2026-11-25 render). The bound keeps a
+ * file-supplied offset or a tiny `a:chExt` from scaling the frame into coordinates that no
+ * output can represent: the frame never reaches farther than three times the drawing's own
+ * extent.
  */
 function memberFrameIsBounded(
   frame: Readonly<{ x: number; y: number; cx: number; cy: number }>,
@@ -94,8 +93,18 @@ function memberFrameIsBounded(
 ): boolean {
   const right = frame.x + frame.cx;
   const bottom = frame.y + frame.cy;
-  if (!(frame.x < extent.cx && frame.y < extent.cy && right > 0 && bottom > 0)) return false;
   return withinGroupReach(frame.x, frame.y, extent) && withinGroupReach(right, bottom, extent);
+}
+
+/**
+ * Whether a shape's picture fill stays upright when the shape turns: `a:blipFill/@rotWithShape`
+ * is false (CT_BlipFillProperties; ECMA-376 Part 1, 20.1.8.14). A `pic:blipFill` always turns
+ * with its picture.
+ */
+function fillStaysUpright(blipFill: OoxmlElement): boolean {
+  if (blipFill.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return false;
+  const raw = schemaAttributeValue(blipFill.attributes, 'rotWithShape');
+  return raw === '0' || raw === 'false';
 }
 
 export interface GroupPictureRead {
@@ -225,6 +234,13 @@ function pictureSourceOf(member: OoxmlElement): PictureSource | null {
     : null;
 }
 
+const UNIT_SQUARE = Object.freeze([
+  { x: 0, y: 0 },
+  { x: 1, y: 0 },
+  { x: 1, y: 1 },
+  { x: 0, y: 1 },
+]);
+
 const FILL_CHOICES = new Set([
   'noFill',
   'solidFill',
@@ -257,6 +273,10 @@ function signedFraction(node: OoxmlElement | null, name: string): number | null 
  * The picture clips to the member's geometry and keeps its blip colour effects
  * (`a:alphaModFix`, Part 1, 20.1.8.6, and the others that a lone picture keeps). It paints
  * without its shape effects, such as a shadow.
+ *
+ * A shape fill with `rotWithShape` false does not turn or mirror with its shape or its groups.
+ * It stretches upright over the bounding box of the turned shape, and the turned geometry of
+ * the shape clips it (2026-11-25 Word render).
  */
 function readPictureMember(
   member: OoxmlElement,
@@ -292,13 +312,30 @@ function readPictureMember(
     space,
     turn.rotationDegrees
   );
-  const boxCx = place.extent.cx * place.scaleX;
-  const boxCy = place.extent.cy * place.scaleY;
-  const boxCentre = turnGroupPoint(space, {
-    x: place.offset.x + boxCx / 2,
-    y: place.offset.y + boxCy / 2,
+  const shapeCx = place.extent.cx * place.scaleX;
+  const shapeCy = place.extent.cy * place.scaleY;
+  const shapeCentre = turnGroupPoint(space, {
+    x: place.offset.x + shapeCx / 2,
+    y: place.offset.y + shapeCy / 2,
   });
-  const facing = composedPictureTurn(turn, space);
+  const shapeFacing = composedPictureTurn(turn, space);
+  const shapeRing = shapeClipRing(shapeProperties, { cx, cy });
+  // An upright fill takes the bounding box of the turned geometry as its box.
+  const uprightFill =
+    fillStaysUpright(blipFill) && (shapeFacing.rotationDegrees !== 0 || shapeFacing.flipH);
+  const turnedRing = uprightFill
+    ? turnedShapeRing(shapeRing ?? UNIT_SQUARE, shapeCx, shapeCy, shapeFacing)
+    : null;
+  const boxCx = turnedRing ? turnedRing.right - turnedRing.left : shapeCx;
+  const boxCy = turnedRing ? turnedRing.bottom - turnedRing.top : shapeCy;
+  if (!(boxCx > 0 && boxCy > 0)) return null;
+  const boxCentre = turnedRing
+    ? {
+        x: shapeCentre.x + (turnedRing.left + turnedRing.right) / 2,
+        y: shapeCentre.y + (turnedRing.top + turnedRing.bottom) / 2,
+      }
+    : shapeCentre;
+  const facing = turnedRing ? { rotationDegrees: 0, flipH: false } : shapeFacing;
 
   // The picture's rectangle in the unit square of the box, and the part of it inside the box.
   const stretch = drawingMl(blipFill, 'stretch');
@@ -344,9 +381,8 @@ function readPictureMember(
   if (![frameEmu.x, frameEmu.y, frameCx, frameCy].every(Number.isFinite)) return null;
   // The bound applies to the member's upright box, as it applies to a shape member before the
   // group turns. A picture that a turn brings into the extent also passes.
-  const upright = { x: place.offset.x, y: place.offset.y, cx: boxCx, cy: boxCy };
-  if (!memberFrameIsBounded(upright, extent) && !memberFrameIsBounded(frameEmu, extent))
-    return null;
+  const placed = { x: place.offset.x, y: place.offset.y, cx: shapeCx, cy: shapeCy };
+  if (!memberFrameIsBounded(placed, extent) && !memberFrameIsBounded(frameEmu, extent)) return null;
 
   // `a:srcRect` (Part 1, 20.1.8.55) picks the part of the source that stretches over the
   // picture's rectangle. The box then cuts a further part of that.
@@ -362,7 +398,13 @@ function readPictureMember(
     bottom: source('b') + (sourceHeight * (image.bottom - shown.bottom)) / imageHeight,
   };
   // The member's geometry clips the picture, in the unit square of the shown part.
-  const ring = shapeClipRing(shapeProperties, { cx, cy });
+  // The turned shape cuts an upright fill: its ring, in the unit square of the box.
+  const ring = turnedRing
+    ? turnedRing.points.map((point) => ({
+        x: (point.x - turnedRing.left) / boxCx,
+        y: (point.y - turnedRing.top) / boxCy,
+      }))
+    : shapeRing;
   const clipUnit = ring?.map((point) =>
     Object.freeze({
       x: (point.x - shown.left) / (shown.right - shown.left),
@@ -388,6 +430,37 @@ function readPictureMember(
     ...(clipUnit ? { memberClipUnit: Object.freeze(clipUnit) } : {}),
     ...(adjusted ? { effects } : {}),
   });
+}
+
+/**
+ * The clip ring of a shape after the shape mirrors and turns about its centre: the points as
+ * offsets from the centre, in extent EMU, and their bounding box. `ring` is in the unit square
+ * of the shape's box, `cx` by `cy`.
+ */
+function turnedShapeRing(
+  ring: readonly Readonly<{ x: number; y: number }>[],
+  cx: number,
+  cy: number,
+  facing: { readonly rotationDegrees: number; readonly flipH: boolean }
+) {
+  const radians = (facing.rotationDegrees * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  const points = ring.map((point) => {
+    const dx = (point.x - 0.5) * cx * (facing.flipH ? -1 : 1);
+    const dy = (point.y - 0.5) * cy;
+    const turned = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+    left = Math.min(left, turned.x);
+    top = Math.min(top, turned.y);
+    right = Math.max(right, turned.x);
+    bottom = Math.max(bottom, turned.y);
+    return turned;
+  });
+  return { points, left, top, right, bottom };
 }
 
 /**

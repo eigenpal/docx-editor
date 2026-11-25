@@ -237,8 +237,17 @@ describe('group picture projection', () => {
     expect(projectionsOf(drawing)[0]!.groupPicture?.alternateContent).toBe(false);
   });
 
+  test('a picture outside the group extent, within one extent of it, paints', () => {
+    // Word does not cut a member at the group extent (2026-11-25 render).
+    for (const member of [pictureMember({ x: 3100 }), pictureMember({ y: -800 })]) {
+      const [projection] = projectionsOf(groupDrawing(member));
+      expect(projection!.groupPicture).not.toBeNull();
+      expect(projection!.diagnostics).toEqual([]);
+    }
+  });
+
   test('a picture frame partly outside the group extent keeps its frame', () => {
-    // Half the picture lies left of the child offset; paint clips it to the extent.
+    // Half the picture lies left of the child offset; it paints whole, past the extent.
     const [projection] = projectionsOf(groupDrawing(pictureMember({ x: -1400 })));
     expect(projection!.groupPicture?.frameEmu).toEqual({
       x: -1500 * SCALE,
@@ -525,10 +534,8 @@ describe('group picture projection', () => {
       'a group with a zero child extent',
       groupDrawing(pictureMember()).replace('<a:chExt cx="3000"', '<a:chExt cx="0"'),
     ],
-    // Frame bounds: a frame with no visible part, or one that reaches more than one extent
-    // past the group, paints nothing, so its coordinates reach no output.
-    ['a picture right of the group extent', groupDrawing(pictureMember({ x: 3100 }))],
-    ['a picture above the group extent', groupDrawing(pictureMember({ y: -800 }))],
+    // Frame bounds: a frame that reaches more than one extent past the group paints nothing,
+    // so its coordinates reach no output.
     [
       'a picture offset far past the group extent',
       groupDrawing(pictureMember({ x: 999999999999999 }) + barMember(2100)),

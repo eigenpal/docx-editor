@@ -487,3 +487,81 @@ describe('the frame of a picture member', () => {
     expect(projection.diagnostics).toEqual([]);
   });
 });
+
+// `a:blipFill/@rotWithShape` false (CT_BlipFillProperties; Part 1, 20.1.8.14): the fill does
+// not turn or mirror with its shape. Word stretches it upright over the bounding box of the
+// turned geometry, and the turned geometry cuts it (2026-11-25 render).
+describe('a picture fill that does not turn with its shape', () => {
+  const upright = (xfrmAttributes: string, attribute = ' rotWithShape="0"') =>
+    pictureOf(
+      shapeMember(
+        `<a:blipFill${attribute}><a:blip r:embed="rIdImg"/>${STRETCH}</a:blipFill>`
+      ).replace('<a:xfrm>', `<a:xfrm${xfrmAttributes}>`)
+    );
+  // The shape is 6 000 000 by 2 000 000 EMU at the top left of the extent.
+  const CENTRE = { x: 3_000_000, y: 1_000_000 };
+
+  test('a quarter turn: the fill takes the turned box, upright', () => {
+    const picture = upright(' rot="5400000"');
+    expect(picture.rotationDegrees).toBeUndefined();
+    expect(picture.flipH).toBeUndefined();
+    expect(picture.frameEmu.cx).toBeCloseTo(2_000_000, 3);
+    expect(picture.frameEmu.cy).toBeCloseTo(6_000_000, 3);
+    expect(picture.frameEmu.x + picture.frameEmu.cx / 2).toBeCloseTo(CENTRE.x, 3);
+    expect(picture.frameEmu.y + picture.frameEmu.cy / 2).toBeCloseTo(CENTRE.y, 3);
+    expectCrop(picture.crop, NO_CROP);
+    // The turned rectangle fills its own bounding box.
+    const ring = picture.memberClipUnit!;
+    expect(ring).toHaveLength(4);
+    for (const point of ring) {
+      expect(Math.min(Math.abs(point.x), Math.abs(point.x - 1))).toBeCloseTo(0, 9);
+      expect(Math.min(Math.abs(point.y), Math.abs(point.y - 1))).toBeCloseTo(0, 9);
+    }
+  });
+
+  test('a 30 degree turn: the turned rectangle cuts the upright fill', () => {
+    const picture = upright(' rot="1800000"');
+    const cos = Math.cos(Math.PI / 6);
+    const sin = Math.sin(Math.PI / 6);
+    expect(picture.rotationDegrees).toBeUndefined();
+    expect(picture.frameEmu.cx).toBeCloseTo(6_000_000 * cos + 2_000_000 * sin, 3);
+    expect(picture.frameEmu.cy).toBeCloseTo(6_000_000 * sin + 2_000_000 * cos, 3);
+    expect(picture.frameEmu.x + picture.frameEmu.cx / 2).toBeCloseTo(CENTRE.x, 3);
+    // The top left corner of the shape lands on the left edge of the bounding box.
+    const [topLeft, topRight] = picture.memberClipUnit!;
+    expect(topLeft!.x).toBeCloseTo((2_000_000 * sin) / picture.frameEmu.cx, 9);
+    expect(topLeft!.y).toBeCloseTo(0, 9);
+    expect(topRight!.x).toBeCloseTo(1, 9);
+  });
+
+  test('a mirrored shape does not mirror the fill', () => {
+    const picture = upright(' flipH="1"');
+    expect(picture.flipH).toBeUndefined();
+    expect(picture.rotationDegrees).toBeUndefined();
+    expect(picture.frameEmu).toEqual({ x: 0, y: 0, cx: 6_000_000, cy: 2_000_000 });
+  });
+
+  test('the turn of the group does not turn the fill', () => {
+    const picture = pictureOf(
+      shapeMember(`<a:blipFill rotWithShape="0"><a:blip r:embed="rIdImg"/>${STRETCH}</a:blipFill>`),
+      ' rot="5400000"'
+    );
+    expect(picture.rotationDegrees).toBeUndefined();
+    expect(picture.frameEmu.cx).toBeCloseTo(2_000_000, 3);
+    expect(picture.frameEmu.cy).toBeCloseTo(6_000_000, 3);
+  });
+
+  test('a fill that turns with its shape keeps the turn', () => {
+    for (const attribute of [' rotWithShape="1"', '']) {
+      const picture = upright(' rot="5400000"', attribute);
+      expect(picture.rotationDegrees).toBe(90);
+      expect(picture.frameEmu).toEqual({ x: 0, y: 0, cx: 6_000_000, cy: 2_000_000 });
+    }
+  });
+
+  test('an upright shape keeps its plain frame', () => {
+    const picture = upright('');
+    expect(picture.memberClipUnit).toBeUndefined();
+    expect(picture.frameEmu).toEqual({ x: 0, y: 0, cx: 6_000_000, cy: 2_000_000 });
+  });
+});

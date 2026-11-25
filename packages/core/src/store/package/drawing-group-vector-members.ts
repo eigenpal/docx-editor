@@ -59,6 +59,18 @@ function withinGroupReach(component: VectorShapeComponent, extent: Extent): bool
   return true;
 }
 
+/** Whether a point of the component's geometry, in extent EMU, lies outside the extent. */
+function reachesPastExtent(component: VectorShapeComponent, extent: Extent): boolean {
+  for (const paths of [component.subpathsEmu, component.arrowheadsEmu ?? []]) {
+    for (const path of paths) {
+      for (const { x, y } of path) {
+        if (x < -1 || y < -1 || x > extent.cx + 1 || y > extent.cy + 1) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * The gradient of a group fill, placed over the box of the group that sets it, for a member
  * that says `a:grpFill` (CT_GroupFillProperties, ECMA-376 Part 1, 20.1.8.35). Word paints one
@@ -101,7 +113,7 @@ export interface GroupVectorMembers {
   readonly components: VectorShapeComponent[];
   /** The group's own turn in clockwise degrees; 0 for an upright group. */
   readonly rotationDegrees: number;
-  /** A member paints past the group extent: a turned member, or one in a turned group. */
+  /** A member paints past the group extent: it is turned, or its geometry reaches past it. */
   readonly overflowVisible: boolean;
   /** The visible members of the group, nested members too, whether or not they paint. */
   readonly memberCount: number;
@@ -240,6 +252,10 @@ export function projectGroupVectorMembers(
     components.push(...painted);
   }
   orderAmongPictures();
+  // Word does not cut a member at the group extent (2026-11-25 render): a member that reaches
+  // past the extent paints whole, as a turned member does.
+  if (!overflowVisible && components.some((component) => reachesPastExtent(component, extent)))
+    overflowVisible = true;
   if (frame.turn) components = turnGroupComponents(components, extent, frame.turn);
   return {
     components,

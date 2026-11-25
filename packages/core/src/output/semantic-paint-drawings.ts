@@ -36,6 +36,7 @@ import {
   groupPictureLayerDrawing,
   pictureCornerFrame,
   groupPictureInkReach,
+  groupPicturePaintsPastExtent,
   vectorPictureBand,
   type DrawingGroupPictureLayerRecord,
 } from '../layout/drawing-group-picture-layers.ts';
@@ -428,9 +429,9 @@ function imageFrameElement(
     clipsPictureOnly ? content : paint
   );
   const flipTransform = imagePaintTransformStyle(drawing);
-  // A turned group picture paints whole, past the extent, as a turned shape member does.
-  const turnedMember = drawing.groupPicture !== undefined && flipTransform !== undefined;
-  if (clipPath && clipsPictureOnly && !turnedMember) inner.style.clipPath = clipPath;
+  // A group picture that reaches past the extent paints whole, as a shape member does.
+  if (clipPath && clipsPictureOnly && !groupPicturePaintsPastExtent(drawing))
+    inner.style.clipPath = clipPath;
   inner.style.left = `${(content.x - paint.x) * ctx.scale}px`;
   inner.style.top = `${(content.y - paint.y) * ctx.scale}px`;
   inner.style.width = `${content.width * ctx.scale}px`;
