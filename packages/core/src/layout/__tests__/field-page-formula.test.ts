@@ -254,6 +254,13 @@ describe('formulas that stay inert', () => {
     ['an operand with a picture', formula([pageOperand('PAGE \\# "00"')], '5')],
     ['a field that is not a page field', formula([complexField('SEQ Figure', '5')], '5')],
     ['a nested operand', formula([BEGIN + instr(' PAGE ') + pageOperand() + END], '5')],
+    [
+      'an operand whose code nests another field',
+      formula(
+        [BEGIN + instr(' PAGE ') + complexField('QUOTE x', 'x') + SEPARATE + text('5') + END],
+        '5'
+      ),
+    ],
     ['no operand', formula([], '5', ' = 5 ')],
     ['a page field that is not a formula', formula([pageOperand()], '5', ' IF ', ' = 1 "x" ')],
     ['a formula with an unsupported switch', formula([pageOperand()], '5', ' = ', ' \\* Ordinal ')],
@@ -282,5 +289,92 @@ describe('a formula in the result of a simple field', () => {
 
   test('keeps the saved result over a PAGE operand in a roman section', () => {
     expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual(['5', '5', '5']);
+  });
+});
+
+describe('a formula whose operand result nests another field', () => {
+  test('shows each page its own number', () => {
+    // The operand's saved result is replaced, so a field inside it does not change the value.
+    const operand =
+      BEGIN + instr(' PAGE ') + SEPARATE + text('5') + complexField('QUOTE 7', '7') + END;
+    const footer = `<w:p>${formula([operand], '57')}</w:p>`;
+    expect(footerTexts(footer)).toEqual(['1', '2', '3']);
+    expect(detectStoryPageFields(footerPart(footer).root).hasPage).toBe(true);
+  });
+});
+
+describe('a formula in the result of another complex field', () => {
+  const outer = (inner: string) => BEGIN + instr(' QUOTE "x" ') + SEPARATE + inner + END;
+  const footer = `<w:p>${outer(text('[') + formula([pageOperand()], '5') + text(']'))}</w:p>`;
+
+  test('shows each page its own number, as in a simple field', () => {
+    expect(footerTexts(footer)).toEqual(['[1]', '[2]', '[3]']);
+    expect(detectStoryPageFields(footerPart(footer).root).hasPage).toBe(true);
+  });
+
+  test('shows it two fields deep', () => {
+    const deep = `<w:p>${outer(outer(formula([pageOperand('NUMPAGES')], '5')))}</w:p>`;
+    expect(footerTexts(deep)).toEqual(['3', '3', '3']);
+  });
+
+  test('keeps the saved result over a PAGE operand in a roman section', () => {
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual(['[5]', '[5]', '[5]']);
+  });
+
+  test('keeps the saved result for arithmetic', () => {
+    const arithmetic = `<w:p>${outer(formula([pageOperand()], '6', ' = ', ' + 1 '))}</w:p>`;
+    expect(footerTexts(arithmetic)).toEqual(['6', '6', '6']);
+  });
+});
+
+describe('a formula with tracked changes in its instruction', () => {
+  const REVISION = 'w:author="A" w:date="2026-01-01T00:00:00Z"';
+  const inserted = (content: string) => `<w:ins w:id="1" ${REVISION}>${content}</w:ins>`;
+  const deleted = (content: string) => `<w:del w:id="2" ${REVISION}>${content}</w:del>`;
+  const delInstr = (value: string) =>
+    `<w:r><w:delInstrText xml:space="preserve">${value}</w:delInstrText></w:r>`;
+  const delText = (value: string) =>
+    `<w:r><w:delText xml:space="preserve">${value}</w:delText></w:r>`;
+  const deletedPage = deleted(BEGIN + delInstr(' PAGE ') + SEPARATE + delText('5') + END);
+  const footerOf = (field: string) => `<w:p>${text('[')}${field}${text(']')}</w:p>`;
+
+  // A tracked deletion of only the operand, or a tracked insertion, leaves the `=` in place.
+  const live: readonly [string, string][] = [
+    [
+      'a deleted operand',
+      BEGIN + instr(' = ') + deletedPage + instr(' ') + SEPARATE + text('9') + END,
+    ],
+    [
+      'an inserted operand',
+      BEGIN + instr(' = ') + inserted(pageOperand()) + instr(' ') + SEPARATE + text('9') + END,
+    ],
+    [
+      'an inserted `=`',
+      BEGIN + inserted(instr(' = ')) + pageOperand() + instr(' ') + SEPARATE + text('9') + END,
+    ],
+    ['an inserted formula', inserted(formula([pageOperand()], '9'))],
+  ];
+  for (const [name, field] of live) {
+    test(`shows each page its own number for ${name}`, () => {
+      expect(footerTexts(footerOf(field))).toEqual(['[1]', '[2]', '[3]']);
+    });
+  }
+
+  test('keeps the saved result of a deleted formula', () => {
+    const field = deleted(
+      BEGIN +
+        delInstr(' = ') +
+        BEGIN +
+        delInstr(' PAGE ') +
+        SEPARATE +
+        delText('5') +
+        END +
+        delInstr(' ') +
+        SEPARATE +
+        delText('9') +
+        END
+    );
+    expect(footerTexts(footerOf(field))).toEqual(['[9]', '[9]', '[9]']);
+    expect(detectStoryPageFields(footerPart(footerOf(field)).root).hasPage).toBe(false);
   });
 });

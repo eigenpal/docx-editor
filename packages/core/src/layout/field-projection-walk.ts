@@ -43,6 +43,7 @@ import {
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { projectSimpleFieldResult } from './field-simple-result.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
+import { formulaOperandIsNumber } from './field-page-furniture.ts';
 import { modelTextOfRunChild, hyphenDisplayOf, runPropertiesOf } from './field-run-text.ts';
 import { captureInstructionSpecs, formControlMarkerOf } from './field-form.ts';
 import { synthesizeAtomicField } from './field-synthesis.ts';
@@ -568,8 +569,11 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
           // duplicates at the tracked level. Overflowed nesting never arms — projection would
           // be replacing content the atom parser already demoted. A field inside an enclosing
           // instruction never arms: its value feeds that instruction and is not displayed.
+          // A formula over a PAGE operand that is not a number (a roman section) keeps its
+          // cached result, as it does at level 1.
           const displayed = pageContext && !isInsideOpenFieldInstruction(field);
-          nestedPage.onSeparate(displayed ? match : null, separateLevel);
+          const live = displayed && match && formulaOperandIsNumber(match, pageContext.format);
+          nestedPage.onSeparate(live ? match : null, separateLevel);
         }
         continue;
       }
