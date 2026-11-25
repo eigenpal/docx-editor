@@ -178,7 +178,7 @@ Generated TOC rows are read-only. Delete and Backspace do not remove them. Conte
 - An inline content control that holds a field character never divides at the field edge.
 - Field instructions stay inert. Macros, DDE, OLE, and external include instructions never execute.
 - Saved results inside another field's instruction do not display.
-- Paragraphs inside a field instruction do not display and do not advance list numbers. This also applies in table cells and content controls. They also stay hidden when field instructions show.
+- Paragraphs inside a field instruction do not display and do not advance list numbers. This also applies in table cells and content controls. They also stay hidden when field instructions show. That display applies to table of contents fields, so other fields keep showing their saved results.
 - Backspace, Delete, and the `mergeParagraphs` command do not join across a paragraph mark inside a field instruction. `mergeParagraphs` refuses with the `unsupported` code.
 - Enter and the `splitParagraph` command refuse to add a paragraph mark inside a field instruction, including at the start of the field result.
 - Automation writes refuse to add or remove a paragraph mark inside a field instruction. This includes paragraph and range deletes, also over the whole field.

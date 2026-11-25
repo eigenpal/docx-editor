@@ -42,11 +42,11 @@ const para = (content: string, pPr = '') =>
 const item = (content: string) =>
   para(content, '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>');
 
-function laidOut(body: string) {
+function laidOut(body: string, showFieldCodes = false) {
   const result = layoutSemanticDocument(
     read(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`),
     1,
-    { measurer, geometry: PAGE, numberingIndex }
+    { measurer, geometry: PAGE, numberingIndex, showFieldCodes }
   );
   return {
     layout: result,
@@ -203,5 +203,15 @@ describe('a field nested past the nesting cap', () => {
       'before ',
       'Result after',
     ]);
+  });
+});
+
+// Showing field instructions applies to table of contents fields. An `IF` field keeps its saved
+// result, and the paragraphs inside its field codes still take no line.
+describe('paragraphs inside a field instruction with field instructions shown', () => {
+  test('take no line', () => {
+    const shown = laidOut(ifField([para(instr('Clause')), para('')], 'Result'), true).lines;
+    expect(shown.map((line) => line.trim())).toEqual(['before', 'Result after']);
+    expect(shown.join('')).not.toContain('Clause');
   });
 });

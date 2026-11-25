@@ -33,7 +33,9 @@ const NO_COLUMNS: ReadonlySet<number> = new Set();
  * nothing, so list numbering skips it; a continuation with no merged cell above it starts its
  * own merge and keeps its paragraphs. List numbering also skips a cell paragraph inside a field
  * instruction (see `field-instruction-paragraphs.ts`): it is field code, not content. The story's
- * own top-level blocks come from `listCountingBlocks`, which already leaves those out.
+ * own top-level blocks come from `listCountingBlocks`, which already leaves those out. A cell
+ * is scanned in its stored form, while the top level is scanned in the revision view, so a
+ * field character inside a tracked insertion or deletion can count differently in a cell.
  */
 export function walkStoryParagraphs(
   blocks: readonly OoxmlElement[],

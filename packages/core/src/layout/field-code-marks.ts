@@ -7,6 +7,12 @@
 // that holds `begin` (see `field-instruction-paragraphs.ts`). The editor and the automation
 // planners ask these questions of the tree, so a write never adds or removes such a mark
 // without saying so.
+//
+// These answers read the stored tree, with every tracked insertion and deletion in it, because
+// writes act on the stored tree. Layout reads the revision view the page shows, so a field
+// character inside a tracked insertion or deletion can count here and not on the page, or the
+// other way round. A refusal can then cover a mark the page shows as a break, or miss one the
+// page hides.
 
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { parentNodeOf } from '@docx-editor.dev/core/store';
