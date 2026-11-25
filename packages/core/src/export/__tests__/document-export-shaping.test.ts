@@ -753,6 +753,48 @@ test('body textbox PAGE fields stay deferred and cannot crowd active fonts out',
   if (opened.ok) opened.session.dispose();
 });
 
+test('a page field or formula in another field result requests the face that paints it', async () => {
+  const begin = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
+  const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const instr = (value: string) =>
+    `<w:r><w:instrText xml:space="preserve">${value}</w:instrText></w:r>`;
+  const separate = (face: string) =>
+    `<w:r><w:rPr><w:rFonts w:ascii="${face}"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r>`;
+  const empty = (instruction: string) => begin + instr(instruction) + separate('Inner Face') + end;
+  const formula =
+    begin + instr(' = ') + empty(' PAGE ') + instr(' + 1 ') + separate('Inner Face') + end;
+  const outer = (face: string, result: string) =>
+    `<w:p>${begin}${instr(' QUOTE "x" ')}${separate(face)}${result}${end}</w:p>`;
+  const bytes = minimalDocx(
+    '<w:p><w:r><w:rPr><w:rFonts w:ascii="Body Face"/></w:rPr><w:t>body</w:t></w:r></w:p>' +
+      outer('Outer Page Face', empty(' NUMPAGES ')) +
+      outer('Outer Formula Face', formula) +
+      outer('Outer Inert Face', empty(' SEQ Figure ')) +
+      // A page field inside a nested instruction feeds that instruction and is not painted.
+      outer(
+        'Outer Instruction Face',
+        begin +
+          instr(' IF ') +
+          empty(' PAGE ') +
+          instr(' = 1 "a" "b" ') +
+          separate('Inner Face') +
+          end
+      )
+  );
+  let request: FontResolutionRequest | undefined;
+  const resolver = defineFontResolver((next: FontResolutionRequest) => {
+    request = next;
+    return fontFragment();
+  });
+  const opened = await openFontBackedDocumentForExport(bytes, { fonts: resolver });
+  expect(opened.ok).toBe(true);
+  expect(request?.families).toContain('Outer Page Face');
+  expect(request?.families).toContain('Outer Formula Face');
+  expect(request?.families).not.toContain('Outer Inert Face');
+  expect(request?.families).not.toContain('Outer Instruction Face');
+  if (opened.ok) opened.session.dispose();
+});
+
 test('simple and textbox complex SYMBOL fields expose projected marker and explicit faces', async () => {
   const bytes = minimalDocx(
     '<w:p><w:fldSimple w:instr=\' SYMBOL 183 \\f "Simple Symbol" \'/></w:p>' +
