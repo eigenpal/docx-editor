@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A table row whose cells all start or continue a vertical merge took one default text line, even with a smaller minimum row height.",
+  "after": "That row takes its minimum row height. A row with no authored height still takes one default text line.",
+  "reason": "The change is in table row layout only. Shared state, operations, and synchronization are unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/table-vmerge-head-row-height.test.ts"],
+  "changeset": "merged-row-minimum-height",
+  "migration": null
+}

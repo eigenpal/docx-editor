@@ -1596,9 +1596,12 @@ export function layoutRowFragmentBounded(
   // A row whose ONLY cells are detached merge heads has had nothing raise it: the two passes
   // above skip detached cells on purpose. Keep its paragraph-line floor, but do not
   // apply that floor to rows consisting entirely of continuation cells: the merged
-  // head and authored row heights already supply their required span geometry.
+  // head and authored row heights already supply their required span geometry. An
+  // `atLeast` row height (`w:trHeight`, 17.4.80) is the row's own minimum, so the
+  // authored floor below sizes the row instead.
   if (
     rowBottom <= rowTop + 0.001 &&
+    (atLeastHeightPt ?? 0) <= 0 &&
     flowed.some(
       (entry) =>
         !entry.cell.vMergeContinue && !cellHidesEndMark(entry.cell, deps.documentFirstParagraphId)
