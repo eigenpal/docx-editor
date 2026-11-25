@@ -182,3 +182,42 @@ test('regular text keeps the host face after a late italic, in measurement and i
     spy.mockRestore();
   }
 });
+
+test('a synthesized stand-in face does not count as installed until its own face loads', async () => {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const container = document.createElement('div');
+  const editor = createDocxEditor({
+    container,
+    document: swissFamilyDocument(),
+    fonts: () => ({
+      sources: [source(face('Stand In', 400, 'normal'), regularBytes)],
+      substitutions: [
+        { from: face('Brand Light', 400, 'normal'), to: face('Stand In', 400, 'normal') },
+      ],
+      // The bold face arrives later, as a background load does.
+      deferred: released.then(() => ({
+        sources: [source(face('Stand In', 700, 'normal'), boldBytes)],
+        substitutions: [
+          { from: face('Brand Light', 700, 'normal'), to: face('Stand In', 700, 'normal') },
+        ],
+      })),
+    }),
+  });
+  const bold = { fontFamily: 'Brand Light', bold: true, italic: false } as never;
+  const measurer = () => editor.surface?.textMeasurer?.();
+  try {
+    await until(() => editor.fontMeasurement().measurer === 'shaped', 'regular face installed');
+    // Bold text measures through the regular face with a synthesized bold...
+    expect(measurer()?.syntheticBold?.(bold)).toBe(true);
+    // ...but no bold face is installed yet.
+    expect(measurer()?.hasResolvedFont?.(bold)).toBe(false);
+    release();
+    await until(() => measurer()?.hasResolvedFont?.(bold) === true, 'bold face installed');
+    expect(measurer()?.syntheticBold?.(bold)).toBe(false);
+  } finally {
+    editor.destroy();
+  }
+});
