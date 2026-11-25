@@ -7,6 +7,7 @@ import {
   documentFontSubstitutionPlan,
   applyDocumentFontSubstitutions,
   hostChainedDocumentFallbacks,
+  synthesizedServedFaces,
 } from '../layout/document-font-substitution.ts';
 import { symbolFontFamily, validFontFamily } from '../store/package/run-defaults.ts';
 import {
@@ -443,6 +444,7 @@ export async function acquireDocumentExportShaping(
         const composed = composeFontConfiguration(resolved ?? {});
         const configuration = applyDocumentFontSubstitutions(composed, documentFonts);
         const standIns = hostChainedDocumentFallbacks(composed, configuration, documentFonts);
+        const synthesized = synthesizedServedFaces(composed, configuration);
         if (configuration.sources.length === 0) {
           const report = fontResolutionReport(
             families,
@@ -469,7 +471,8 @@ export async function acquireDocumentExportShaping(
           originFailures,
           shaping.resolveFont,
           embeddedFontDiagnostics.dropped,
-          standIns
+          standIns,
+          synthesized
         );
         publishFontResolutionReport(report, options);
         enforceStrictFontPolicy(report, options, options.glyphFallbacks);
