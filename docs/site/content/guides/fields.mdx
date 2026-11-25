@@ -210,7 +210,7 @@ Generated TOC rows are read-only. Delete and Backspace do not remove them. Conte
 - The caret has one stop where the two sides meet. When the result starts a new line, or runs in the other direction, each side keeps its own stop. The editor state can report a caret at that stop as the start of the result paragraph.
 - Backspace, Delete, and the `mergeParagraphs` command do not join across a paragraph mark inside a field instruction. `mergeParagraphs` refuses with the `unsupported` code.
 - Enter, the `splitParagraph` command, and section breaks refuse to add a paragraph mark inside a field instruction. This includes the start of the field result when the two sides do not share one line, for example when the first paragraph ends a section. A table or a table of contents inserted in the field result goes before the paragraph that holds the start of the field. A rich paste there falls back to plain text, and the editor state reports a `field-code-mark` rejection.
-- Automation writes refuse to add or remove a paragraph mark inside a field instruction. This includes paragraph and range deletes, also over the whole field.
+- Automation writes refuse to add or remove a paragraph mark inside a field instruction. An untracked range delete that covers the whole field, from its start through the end of its result, removes the field instead.
 - `LISTNUM` and `REF` in headers, footers, and text boxes keep their saved result.
 - `NOTEREF` with `\p` or `\f` keeps its saved result.
 - `STYLEREF` results longer than 4,096 characters keep their saved result.
