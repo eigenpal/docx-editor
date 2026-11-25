@@ -129,6 +129,44 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect(plan.rowOptions(2)).toBeUndefined();
   });
 
+  test('a row offered again decides its merges again, unless a placed part holds them', () => {
+    // The same rows. At the first offer only the shorter merge fits, as above.
+    const rows = [
+      row('r0', [filled('longHead', 0), filled('shortHead', 1)]),
+      row('r1', [cell('c0', 0, true), cell('c1', 1, true)]),
+      row('r2', [cell('c2', 0, true), filled('plain', 1)]),
+    ];
+    const plan = planVMergeRowHeights(rows, probeFrom({ longHead: 20, shortHead: 80, plain: 10 }))!;
+    const detachedAt = (options: RowVMergeLayoutOptions | undefined) =>
+      [...(options?.detachedSpanHeightPtByCellId ?? []).keys()].sort();
+    expect(detachedAt(admitVMergeSpansAt(plan, 0, 0, 85))).toEqual(['shortHead']);
+    // A row that continues from a placed fragment keeps what its heads were placed against.
+    expect(detachedAt(admitVMergeSpansAt(plan, 0, 0, 200, true))).toEqual(['shortHead']);
+    expect(floorsOf(plan, 3)).toEqual([20, 60, undefined]);
+    // A row that moved before any of it was placed is offered again, here with room for both.
+    expect(detachedAt(admitVMergeSpansAt(plan, 0, 0, 200))).toEqual(['longHead', 'shortHead']);
+    expect(floorsOf(plan, 3)).toEqual([0, 80, 10]);
+  });
+
+  test('a row held from above keeps the decision of its head row when offered again', () => {
+    // Column 0 merges rows 0-2 and column 1 merges rows 1-2: one decision, headed at row 0.
+    const rows = [
+      row('r0', [filled('outer', 0), filled('side', 1)]),
+      row('r1', [cell('c0', 0, true), filled('inner', 1)]),
+      row('r2', [cell('c1', 0, true), cell('c2', 1, true)]),
+    ];
+    const plan = planVMergeRowHeights(rows, probeFrom({ outer: 30, inner: 40 }))!;
+    admitVMergeSpansAt(plan, 0, 0, 200);
+    expect(admitVMergeSpansAt(plan, 1, 0, 200)?.detachedSpanHeightPtByCellId?.has('inner')).toBe(
+      true
+    );
+    expect(plan.heldFromAbove(1)).toBe(true);
+    // Offered again with no room left, row 1 still detaches the inner head it was sized for.
+    const again = admitVMergeSpansAt(plan, 1, 0, 0)!;
+    expect(again.detachedSpanHeightPtByCellId?.has('inner')).toBe(true);
+    expect(again.coveredFromAbove).toBe(true);
+  });
+
   test('a detached head costs the row nothing, not even an empty cell line', () => {
     // The probe used to blank a head's blocks instead of detaching it, and row layout gives
     // an empty cell a line plus its insets. That phantom line became a hard floor on a

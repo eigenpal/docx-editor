@@ -216,6 +216,11 @@ export interface VMergeRowHeights {
    * over-reservation of the surplus, on a retry path only.
    */
   withdrawAt(rowIndex: number): void;
+  /**
+   * Whether an accepted decision headed in an EARLIER row covers this row: the
+   * `coveredFromAbove` of {@link rowOptions}, without measuring anything.
+   */
+  heldFromAbove(rowIndex: number): boolean;
   /** Placement options for a row covered by an accepted span, `undefined` otherwise. */
   rowOptions(rowIndex: number): RowVMergeLayoutOptions | undefined;
 }
@@ -742,6 +747,7 @@ export function planVMergeRowHeights(
         }
       }
     },
+    heldFromAbove: (rowIndex) => heldRows.has(rowIndex),
     rowOptions: (rowIndex) => {
       if (!coveredRows.has(rowIndex)) return undefined;
       // Derived now, not at accept: every span heading this row has been decided by the
@@ -785,9 +791,9 @@ export function planVMergeRowHeights(
  * A call for a row that is offered again decides the row's merges again, at the new y. The
  * decisions taken at the earlier offer are withdrawn first, so a merge declined there is
  * offered again, and an accepted one is measured again where the row now sits. Keeping them
- * blocked a longer merge behind a shorter one accepted beside it, and made the table depend
- * on where its layout started: a pass that resumes on the fresh page offers every merge there
- * once. Two kinds of decision stay as they are:
+ * blocked a longer merge behind a shorter one accepted beside it, so a head row that moved to
+ * a page laid out differently from one that started there. Two kinds of decision stay as they
+ * are:
  *
  * - a decision headed in an earlier row that covers this one (`coveredFromAbove`): its heads
  *   above were already placed against its floors;
@@ -802,7 +808,7 @@ export function admitVMergeSpansAt(
   continued = false
 ): RowVMergeLayoutOptions | undefined {
   if (plan === null) return undefined;
-  if (!continued && plan.rowOptions(rowIndex)?.coveredFromAbove !== true) {
+  if (!continued && !plan.heldFromAbove(rowIndex)) {
     plan.withdrawAt(rowIndex);
   }
   for (const span of plan.spansAt(rowIndex)) {
