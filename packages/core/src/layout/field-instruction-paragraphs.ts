@@ -39,6 +39,12 @@ function markersOf(block: OoxmlNode): Marker[] {
   return markers;
 }
 
+/** The paragraph that opens a field, and the paragraph where its field codes end. */
+export interface FieldCodeJoin {
+  readonly first: number;
+  readonly last: number;
+}
+
 /** Indexes of the paragraphs in `blocks` that start and end inside the same field's instruction. */
 export function paragraphsInsideFieldInstructions(
   blocks: readonly OoxmlElement[]
@@ -51,13 +57,20 @@ export function paragraphsInsideFieldInstructions(
  * closed field's `begin` and the end of its field codes, also when stray text keeps them in the
  * flow (`spanned`). A text edit in a spanned paragraph can change which paragraphs leave the
  * flow, so incremental layout must not carry the old block list over it.
+ *
+ * `joins` pairs the paragraph that holds a field's `begin` with the paragraph where its field
+ * codes end, for each field whose field codes hold paragraph marks and no plain text. The mark
+ * of the first one is field code too, so edits never add or remove it without saying so (see
+ * `field-code-marks.ts`).
  */
 export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]): {
   readonly inside: ReadonlySet<number>;
   readonly spanned: ReadonlySet<number>;
+  readonly joins: readonly FieldCodeJoin[];
 } {
   const inside = new Set<number>();
   const spanned = new Set<number>();
+  const joins: FieldCodeJoin[] = [];
   const open: { begin: number; instructionEnd: number | null; holdsText: boolean }[] = [];
   blocks.forEach((block, index) => {
     if (block.kind !== 'paragraph') return;
@@ -74,6 +87,8 @@ export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]):
         const field = open.pop();
         if (!field) continue;
         const instructionEnd = field.instructionEnd ?? index;
+        if (instructionEnd > field.begin && !field.holdsText)
+          joins.push({ first: field.begin, last: instructionEnd });
         for (let between = field.begin + 1; between < instructionEnd; between += 1) {
           if (blocks[between]?.kind !== 'paragraph') continue;
           spanned.add(between);
@@ -82,5 +97,5 @@ export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]):
       }
     }
   });
-  return { inside, spanned };
+  return { inside, spanned, joins };
 }
