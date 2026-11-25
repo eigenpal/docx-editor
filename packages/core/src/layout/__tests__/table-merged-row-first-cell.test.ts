@@ -198,3 +198,22 @@ test('a row of continuations with an empty cell keeps the largest box', () => {
   expect(structure.rows[1]!.cells[2]!.blocks).toHaveLength(0);
   expect(middleRow(source)).toBeCloseTo(line(12), 6);
 });
+
+// The floor belongs to the row's first fragment. A remainder on the next page is sized by
+// the content that continues there, as an ordinary row's is.
+test('a split row of lone restarts keeps the floor off its remainder', () => {
+  const remainders = (first: Cell, second: Cell) =>
+    layoutSemanticDocument(documentOf(table([first, second], '')), 0, { measurer })
+      .pages.flatMap((page) => page.fragments)
+      .filter((f): f is TableFragmentRecord => f.kind === 'table')
+      .flatMap((fragment) => fragment.rows.filter((row) => row.isContinuation))
+      .map((row) => row.box.height);
+  // One or two lines continue on the next page, below the first cell's 20pt mark line.
+  for (const lines of [62, 63]) {
+    const long = Array.from({ length: lines }, (_, index) => text(`L${index}`)).join('');
+    const split = remainders(lone(text('s', 16, 40)), lone(long));
+    expect(split).toHaveLength(1);
+    expect(split[0]!).toBeLessThan(line(20));
+    expect(split).toEqual(remainders(plain(text('s', 16, 40)), plain(long)));
+  }
+});

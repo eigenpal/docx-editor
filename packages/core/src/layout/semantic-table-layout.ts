@@ -1605,9 +1605,9 @@ export function layoutRowFragmentBounded(
   }
   // The passes above skip detached heads, continuations, and waiting `btLr` cells on purpose.
   // A row that only they hold has had nothing raise it, and a lone restart can floor its row
-  // above its content (`unsizedRowFloorPt`, 17.4.84).
+  // above its content (`unsizedRowFloorPt`, 17.4.84), but not a remainder fragment.
   const raised = rowBottom > rowTop + 0.001;
-  if (!raised || sizing.floorsContent) {
+  if (!raised || (sizing.floorsContent && !isContinuation)) {
     const floorPt = unsizedRowFloorPt({
       flowed,
       raised,
