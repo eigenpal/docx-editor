@@ -4,7 +4,7 @@
 // paints nothing, and the other members still paint: one member never replaces the whole
 // group with a placeholder. The caller reports each such member in a diagnostic.
 //
-// Members paint in document order (`wpg:grpSp`, CT_GroupShape; ECMA-376 Part 1, 20.1.2.2.20:
+// Members paint in document order (`wpg:grpSp`, CT_WordprocessingGroup; ECMA-376 Part 1, 20.4.2.32:
 // a group is made up of the shapes within it). Each component records how many of the
 // group's pictures come before it, so a painter puts it between the correct pictures.
 //
@@ -18,7 +18,7 @@ import {
   rootGroupSpace,
 } from './drawing-group-members.ts';
 import { placeGradient, readGradientFill } from './drawing-gradient.ts';
-import { ownFillIsPicture, withResolvedGroupFill } from './drawing-group-fill.ts';
+import { hasOwnFrameInk, ownFillIsPicture, withResolvedGroupFill } from './drawing-group-fill.ts';
 import { groupPictureFrame } from './drawing-group-picture-outline.ts';
 import { shapeClipLeftOut } from './drawing-shape-clip-ring.ts';
 import {
@@ -174,11 +174,18 @@ export function projectGroupVectorMembers(
       orderAmongPictures();
       picturesBelow += 1;
       if (frame) components.push(...turned(frame.over));
-      if (frame && space.turns && frame.under.length + frame.over.length > 0)
+      // A turned frame paints whole, past the group extent, as a turned shape member does.
+      if (frame && (turn !== 0 || space.turns) && frame.under.length + frame.over.length > 0)
         overflowVisible = true;
-      // A geometry that gives no clip ring leaves the picture a rectangle.
+      // A geometry that gives no clip ring leaves the picture a rectangle. A fill or an
+      // outline whose frame does not project does not paint. Each names the member.
       const spPr = shapeProperties(member);
-      if (spPr && box && shapeClipLeftOut(spPr, box.extent)) omitted.push(member.id);
+      if (
+        spPr &&
+        box &&
+        (shapeClipLeftOut(spPr, box.extent) || (place && !frame && hasOwnFrameInk(spPr)))
+      )
+        omitted.push(member.id);
       continue;
     }
     if (

@@ -3,8 +3,8 @@ Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// The PDF writer paints the members of a drawing group (`wpg:wgp`, CT_GroupShape; ECMA-376
-// Part 1, 20.1.2.2.20) in document order, each picture in its own frame:
+// The PDF writer paints the members of a drawing group (`wpg:wgp`, CT_WordprocessingGroup; ECMA-376
+// Part 1, 20.4.2.39) in document order, each picture in its own frame:
 //
 // - Shapes paint in bands between the pictures.
 // - The geometry of a picture member (`a:prstGeom`, Part 1, 20.1.9.18) is a clip path.
@@ -126,7 +126,6 @@ async function exported(
   return { imageObjects, pageImageNames: names?.keys().length ?? 0, commands };
 }
 
-
 /** A 2 x 1 pixel RGB picture: other bytes than {@link PNG_1X1}. */
 const PNG_2X1 = Uint8Array.from(
   atob(
@@ -134,8 +133,7 @@ const PNG_2X1 = Uint8Array.from(
   ),
   (c) => c.charCodeAt(0)
 );
-const HEADER_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
+const HEADER_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
 
 /**
  * Two pages. The first-page header, the default header and the first body paragraph hold the
@@ -286,7 +284,9 @@ test('a group with a member that cannot paint reports it and paints the others',
       message: `Shape group paints without ${count} of its members`,
     } as const;
     // Strict export refuses the lost content.
-    const error = await exportPdf(bytes, { useSystemFonts: false }).catch((cause: unknown) => cause);
+    const error = await exportPdf(bytes, { useSystemFonts: false }).catch(
+      (cause: unknown) => cause
+    );
     expect(error).toBeInstanceOf(PdfFidelityError);
     expect((error as PdfFidelityError).diagnostics).toEqual([expect.objectContaining(diagnostic)]);
     // Best-effort export reports it once and paints the picture between the two bars.
@@ -345,4 +345,24 @@ test('a:alphaModFix makes its own picture translucent, and no other picture', as
     expect(translucent).toHaveLength(1);
     expect(translucent[0]).toContain('100 0 0 50 72 660 cm');
   }
+});
+
+test('the outline of a turned picture member paints whole, past the group extent', async () => {
+  // The frame of a picture member is its outline (`a:ln`, CT_LineProperties; ECMA-376 Part 1,
+  // 20.1.2.2.24). It turns with the picture, as the outline of a turned shape member does.
+  const outline = '<a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>';
+  const turned = picture(0)
+    .replace('<a:xfrm>', '<a:xfrm rot="1800000">')
+    .replace('</pic:spPr>', `${outline}</pic:spPr>`);
+  const { commands } = await exported(input(turned));
+  // The corners of the turned frame reach 21.65pt above the group top (y = 741.65) and 5.80pt
+  // to its left (x = 66.20). The clip of the outline adds half of the 3pt line on each side.
+  const clip =
+    /q ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re W n\n[^Q]*Q\nq[^\n]*Do Q\nq ([\d.]+) /.exec(commands);
+  expect(clip).not.toBeNull();
+  const [x, y, width, height] = clip!.slice(1, 5).map(Number) as [number, number, number, number];
+  expect(x).toBeCloseTo(66.19873 - 1.5, 3);
+  expect(y + height).toBeCloseTo(741.650635 + 1.5, 3);
+  expect(x + width).toBeCloseTo(177.80127 + 1.5, 3);
+  expect(commands).toContain('19.19873 -21.650635 m 105.80127 28.349365 l');
 });

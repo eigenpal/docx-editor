@@ -1,4 +1,4 @@
-// A drawing group (`wpg:wgp`, CT_GroupShape; ECMA-376 Part 1, 20.1.2.2.20) that paints without
+// A drawing group (`wpg:wgp`, CT_WordprocessingGroup; ECMA-376 Part 1, 20.4.2.39) that paints without
 // one of its members still renders, but not as authored. The support report of the package
 // and the live editor both say so: the drawing is `partial`, with a `projection-diagnostic`
 // issue whose detail is `group-member-not-shown`. A group whose members all paint is `native`.

@@ -1,4 +1,5 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import { failedGroupPictureCount } from '../layout/drawing-group-picture-layers.ts';
 import { selectedDrawingGraphicKind } from '../store/package/drawing-graphic-kind.ts';
 import {
   drawingSourceIssues,
@@ -29,8 +30,9 @@ export function customDrawingPreview(
   if (element.querySelector('[data-docx-unsupported]')) return;
   const issues = [
     ...drawingSourceIssues(source, drawing.drawingNodeId),
-    // A group that paints without some members renders, but not as authored.
-    ...(drawing.groupMembersNotShown
+    // A group that paints without some members renders, but not as authored. A picture whose
+    // image cannot paint is such a member.
+    ...(drawing.groupMembersNotShown || failedGroupPictureCount(drawing) > 0
       ? [
           Object.freeze({
             ...supportIssue(source, 'projection-diagnostic', 'group-member-not-shown'),

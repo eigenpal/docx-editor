@@ -30,7 +30,7 @@ import type { VectorShapeComponent } from '../store/package/drawing-shape-projec
  * The paint band of a vector component among `pictureCount` pictures: band `n` paints above
  * the first `n` pictures and below the rest. A drawing paints band 0, then picture 0, then
  * band 1, and so on, so pictures and shapes keep their document order (`wpg:grpSp`,
- * CT_GroupShape; ECMA-376 Part 1, 20.1.2.2.20). A picture frame's `belowPicture` components
+ * CT_WordprocessingGroup; ECMA-376 Part 1, 20.4.2.32). A picture frame's `belowPicture` components
  * are band 0, and a component with no `picturesBelow` paints above every picture.
  *
  * @internal
@@ -285,4 +285,21 @@ export function groupPictureInkReach(
   )
     return ink;
   return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * How many pictures of a group cannot paint: their image is missing, external, or in a format
+ * that the engine does not decode. A pending picture is not counted. 0 for other drawings.
+ *
+ * @internal
+ */
+export function failedGroupPictureCount(
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord
+): number {
+  if (!drawing.groupPicture) return 0;
+  const states = [
+    drawing.resource,
+    ...(drawing.groupPictureLayers ?? []).map((layer) => layer.resource),
+  ];
+  return states.filter((state) => state.kind !== 'ready' && state.kind !== 'pending').length;
 }

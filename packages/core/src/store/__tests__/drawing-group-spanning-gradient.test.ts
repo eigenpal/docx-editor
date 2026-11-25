@@ -3,7 +3,7 @@
 // part of a group and should inherit the fill properties of the group"). Such members paint
 // ONE gradient that spans the box of the group that sets the fill, so each member shows its
 // own part of it. The root group (`wpg:wgp`) spans the whole drawing extent. A nested group
-// (`wpg:grpSp`, CT_GroupShape; Part 1, 20.1.2.2.20) with a gradient of its own spans its own
+// (`wpg:grpSp`, CT_WordprocessingGroup; Part 1, 20.4.2.32) with a gradient of its own spans its own
 // box. A member with a fill of its own is not changed. The standard does not state the span;
 // it follows the Word render that `spanningGroupGradient` records.
 

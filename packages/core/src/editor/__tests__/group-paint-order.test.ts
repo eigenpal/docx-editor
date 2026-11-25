@@ -3,8 +3,8 @@
 // rule (custom geometry). The members overlap, so their order shows: the band covers the
 // bottom of the background picture, and the logo sits on the band.
 //
-// A group paints its members in document order (`wpg:grpSp`, CT_GroupShape; ECMA-376 Part 1,
-// 20.1.2.2.20). The group used to show an "Unsupported shape group" placeholder over the whole
+// A group paints its members in document order (`wpg:grpSp`, CT_WordprocessingGroup; ECMA-376 Part 1,
+// 20.4.2.32). The group used to show an "Unsupported shape group" placeholder over the whole
 // page, because a picture came after a shape.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';

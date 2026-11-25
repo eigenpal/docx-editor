@@ -1,4 +1,4 @@
-// A drawing group (`wpg:wgp`, CT_GroupShape; ECMA-376 Part 1, 20.1.2.2.20) paints each member
+// A drawing group (`wpg:wgp`, CT_WordprocessingGroup; ECMA-376 Part 1, 20.4.2.39) paints each member
 // that it can, in document order:
 //
 // - Shapes and pictures interleave: shape, picture, shape, picture, shape paints five layers
@@ -25,7 +25,14 @@ import {
   REL_NS,
   decodeBytes,
   mountWithImages,
+  settle,
 } from './image-decode-harness.ts';
+import { observeUnsupportedElements, type UnsupportedElement } from '../index.ts';
+import { mountPaginatedSurface } from '../paginated-surface.ts';
+import {
+  furnitureHasHiddenWrap,
+  type ContinuedPageFurniture,
+} from '../../layout/furniture-drawing-exclusion.ts';
 import type { AnchoredDrawingRecord } from '../../layout/drawing-layout.ts';
 import type { ImageDecodePort } from '../../store/package/image-resources.ts';
 import type { PaginatedSurface } from '../paginated-surface.ts';
@@ -45,6 +52,8 @@ interface PictureOptions {
   readonly xfrmAttributes?: string;
   readonly geometry?: string;
   readonly blipChildren?: string;
+  /** Children of `pic:spPr` after the geometry, such as an outline. */
+  readonly frame?: string;
 }
 
 /** A 100pt x 50pt picture at (x, y) points in the group. */
@@ -55,7 +64,10 @@ function picture(x: number, y: number, options: PictureOptions = {}): string {
     '</a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
     `<pic:spPr><a:xfrm${options.xfrmAttributes ?? ''}><a:off x="${x * PT}" y="${y * PT}"/>` +
     `<a:ext cx="${100 * PT}" cy="${50 * PT}"/></a:xfrm>` +
-    `<a:prstGeom prst="${options.geometry ?? 'rect'}"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>`
+    (options.geometry === 'none'
+      ? ''
+      : `<a:prstGeom prst="${options.geometry ?? 'rect'}"><a:avLst/></a:prstGeom>`) +
+    `${options.frame ?? ''}</pic:spPr></pic:pic>`
   );
 }
 
@@ -395,5 +407,127 @@ describe('a:biLevel on a group picture', () => {
       },
       portFailing('image/png')
     );
+  });
+});
+
+// The frame of a picture member is its fill and outline (`a:ln`, CT_LineProperties; Part 1,
+// 20.1.2.2.24). It turns with the picture, and paints whole past the group extent.
+describe('the outline of a picture member', () => {
+  const OUTLINE = '<a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>';
+
+  test('a turned picture paints its outline whole, past the group extent', async () => {
+    const members = picture(0, 0, { xfrmAttributes: ' rot="1800000"', frame: OUTLINE });
+    await withMounted(docx(members), (surface, container) => {
+      const record = groupRecord(surface);
+      expect(record.vectorShape?.overflowVisible).toBe(true);
+      const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+      const insets = /inset\((.+)\)/.exec(outer.style.clipPath)![1]!.split(' ').map(parseFloat);
+      // Corners of the turned picture reach 21.65pt above the extent and 5.80pt to the left.
+      // The outline is 3pt wide, so its ink reaches 1.5pt further.
+      expect(insets[0]!).toBeLessThanOrEqual(-23.1);
+      expect(insets[3]!).toBeLessThanOrEqual(-7.3);
+    });
+  });
+
+  test('an upright picture keeps its outline in the group extent', async () => {
+    await withMounted(docx(picture(0, 0, { frame: OUTLINE })), (surface) => {
+      expect(groupRecord(surface).vectorShape?.overflowVisible).toBeUndefined();
+    });
+  });
+
+  test('an outline with no geometry does not paint, and the report names the member', async () => {
+    const members = picture(0, 0, { geometry: 'none', frame: OUTLINE }) + bar(0, 90, '111111');
+    await withMounted(docx(members), (surface, container) => {
+      expect(groupRecord(surface).groupMembersNotShown).toBe(1);
+      expect(layersOf(container).length).toBeGreaterThan(0);
+    });
+  });
+
+  test('a picture with no geometry and no frame is not reported', async () => {
+    const members = picture(0, 0, { geometry: 'none' }) + bar(0, 90, '111111');
+    await withMounted(docx(members), (surface) => {
+      expect(groupRecord(surface).groupMembersNotShown).toBeUndefined();
+    });
+  });
+});
+
+// A turned picture widens the clip of the group for the picture. A vector member that reaches
+// past the group extent stays cut at the extent, as it is without the picture.
+test('a turned picture does not widen the clip of the vector members', async () => {
+  const members = picture(150, 140, { xfrmAttributes: ' rot="2700000"' }) + bar(350, 20, '111111');
+  await withMounted(docx(members), (_surface, container) => {
+    const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+    expect(outer.style.clipPath).toContain('inset(');
+    const frames = Array.from(outer.querySelectorAll<HTMLElement>('.docx-drawing-image-frame'));
+    const vector = frames.filter((frame) => frame.querySelector('svg'));
+    expect(vector.length).toBeGreaterThan(0);
+    for (const frame of vector) expect(frame.style.clipPath).toBe('inset(0px 0px 0px 0px)');
+  });
+});
+
+// A picture whose image cannot paint is a member that the group paints without.
+describe('a picture of a group that cannot paint', () => {
+  const SHAPES_AND_PICTURES =
+    bar(0, 0, '111111') + picture(0, 20) + picture(150, 60, { rel: 'rIdGif' });
+  const failAll: ImageDecodePort = Object.freeze({
+    async decode() {
+      throw new Error('decode failed');
+    },
+  }) as ImageDecodePort;
+
+  async function partial(port?: ImageDecodePort): Promise<UnsupportedElement[]> {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, docx(SHAPES_AND_PICTURES), {
+      scale: 1,
+      imageDecodePort: port ?? portFailing('none'),
+      unsupportedElementRules: [{ includePartial: true }],
+    });
+    if (!opened.ok) throw new Error(opened.reason);
+    await settle();
+    let elements: UnsupportedElement[] = [];
+    const stop = observeUnsupportedElements(container, (hosts) => {
+      elements = hosts.map((host) => host.unsupported);
+    });
+    stop();
+    opened.surface.destroy();
+    container.remove();
+    return elements;
+  }
+
+  test('the editor offers the group as partial', async () => {
+    const elements = await partial(failAll);
+    expect(elements).toHaveLength(1);
+    expect(elements[0]!.support).toBe('partial');
+    expect(elements[0]!.drawingIssues).toEqual([
+      expect.objectContaining({ code: 'projection-diagnostic', detail: 'group-member-not-shown' }),
+    ]);
+  });
+
+  test('one failed picture of two also makes the group partial', async () => {
+    expect(await partial(portFailing('image/gif'))).toHaveLength(1);
+  });
+
+  test('a group whose pictures all paint is not offered', async () => {
+    expect(await partial()).toEqual([]);
+  });
+
+  /** Whether layout treats the group, as a wrapping header drawing, as a placeholder. */
+  const placeholderWrap = (surface: PaginatedSurface): boolean =>
+    furnitureHasHiddenWrap(undefined, {
+      header: { anchoredDrawings: [{ ...groupRecord(surface), wrap: 'square' }] },
+    } as unknown as ContinuedPageFurniture);
+
+  test('a group that still paints its shapes keeps its wrap zone on a layout retry', async () => {
+    await withMounted(
+      docx(SHAPES_AND_PICTURES),
+      (s) => expect(placeholderWrap(s)).toBe(false),
+      failAll
+    );
+  });
+
+  test('a group with only failed pictures is a placeholder on a layout retry', async () => {
+    const pictures = picture(0, 20) + picture(150, 60, { rel: 'rIdGif' });
+    await withMounted(docx(pictures), (s) => expect(placeholderWrap(s)).toBe(true), failAll);
   });
 });

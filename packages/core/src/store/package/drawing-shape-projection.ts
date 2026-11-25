@@ -167,7 +167,7 @@ export interface VectorShapeComponent {
   /**
    * In a group with pictures: the number of the group's pictures that paint under this
    * component. Absent when every picture paints under it. Members paint in document order
-   * (`wpg:grpSp`, CT_GroupShape; ECMA-376 Part 1, 20.1.2.2.20), so a picture after a shape
+   * (`wpg:grpSp`, CT_WordprocessingGroup; ECMA-376 Part 1, 20.4.2.32), so a picture after a shape
    * paints over that shape.
    */
   readonly picturesBelow?: number;

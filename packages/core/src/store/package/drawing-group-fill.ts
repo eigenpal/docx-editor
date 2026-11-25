@@ -81,3 +81,21 @@ export function groupFillSpansMembers(
 export function ownFillIsPicture(spPr: OoxmlElement | null): boolean {
   return spPr !== null && firstFill(spPr)?.localName === 'blipFill';
 }
+
+/**
+ * Whether `spPr` authors a colour, gradient, or pattern fill, or a line that is not `a:noFill`
+ * (`a:ln`, CT_LineProperties; ECMA-376 Part 1, 20.1.2.2.24). A picture member with neither
+ * has no frame to paint around its picture.
+ *
+ * @internal
+ */
+export function hasOwnFrameInk(spPr: OoxmlElement): boolean {
+  const fill = firstFill(spPr)?.localName;
+  if (fill === 'solidFill' || fill === 'gradFill' || fill === 'pattFill') return true;
+  for (const node of spPr.children) {
+    if (node.kind === 'textValue') continue;
+    if (node.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || node.localName !== 'ln') continue;
+    return firstFill(node)?.localName !== 'noFill';
+  }
+  return false;
+}

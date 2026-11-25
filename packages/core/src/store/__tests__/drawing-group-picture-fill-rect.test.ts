@@ -1,5 +1,5 @@
-// A picture member of a drawing group (`wpg:wgp`, with nested `wpg:grpSp`, CT_GroupShape;
-// ECMA-376 Part 1, 20.1.2.2.20) keeps the placement, the clip and the colour effects of its fill:
+// A picture member of a drawing group (`wpg:wgp`, with nested `wpg:grpSp`, CT_WordprocessingGroup;
+// ECMA-376 Part 1, 20.4.2.39 and 20.4.2.32) keeps the placement, the clip and the colour effects of its fill:
 //
 // - `a:stretch/a:fillRect` (CT_RelativeRect; Part 1, 20.1.8.30) insets the picture in the
 //   member's box, or lets it reach past the box. A positive percentage is an inset and a

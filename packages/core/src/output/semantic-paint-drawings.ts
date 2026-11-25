@@ -43,6 +43,7 @@ import type { VectorShapeComponent } from '../store/package/drawing-shape-projec
 import { appendReflection, applySoftEdge } from './semantic-paint-picture-effects.ts';
 import {
   applyVectorInkReach,
+  clipVectorFrameToInk,
   isFramedPicture,
   vectorShapeFrame,
 } from './semantic-paint-vector-shape.ts';
@@ -576,7 +577,8 @@ function paintReadyImage(
     // A picture's frame paints its shadow and fill under the picture and its outline over it.
     // A group's members paint in document order, in bands between its pictures.
     const framed = isFramedPicture(drawing) || drawing.groupPicture !== undefined;
-    const ink = groupPictureInkReach(drawing, vectorShapeInkClip(drawing, drawing.paintBounds));
+    const vectorInk = vectorShapeInkClip(drawing, drawing.paintBounds);
+    const ink = groupPictureInkReach(drawing, vectorInk);
     const bandOf = (component: VectorShapeComponent) =>
       vectorPictureBand(component, pictures.length);
     const frame = vectorShapeFrame(
@@ -586,12 +588,14 @@ function paintReadyImage(
       framed ? (component) => bandOf(component) === pictures.length : undefined
     );
     applyVectorInkReach(outer, frame, drawing.paintBounds, ink, ctx.scale);
+    if (ink !== vectorInk) clipVectorFrameToInk(frame, drawing, vectorInk, ctx.scale);
     outer.append(frame);
     for (let band = 0; framed && band < pictures.length; band += 1) {
       const inBand = (component: VectorShapeComponent) => bandOf(component) === band;
       if (!drawing.vectorShape.components.some(inBand)) continue;
       const under = vectorShapeFrame(document, drawing, ctx.scale, inBand);
       under.style.pointerEvents = 'none';
+      if (ink !== vectorInk) clipVectorFrameToInk(under, drawing, vectorInk, ctx.scale);
       // Under the picture of this band, or the next one that paints.
       outer.insertBefore(under, pictures.slice(band).find((picture) => picture !== null) ?? frame);
     }

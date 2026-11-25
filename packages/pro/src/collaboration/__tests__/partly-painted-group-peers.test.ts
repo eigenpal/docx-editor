@@ -4,8 +4,8 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // A group with a member that paint cannot represent: both peers paint the other members in
-// document order and keep the member in the saved XML (`wpg:grpSp` members, CT_GroupShape;
-// ECMA-376 Part 1, 20.1.2.2.20). One peer recolours a shape of the group, and the edit
+// document order and keep the member in the saved XML (`wpg:grpSp` members, CT_WordprocessingGroup;
+// ECMA-376 Part 1, 20.4.2.32). One peer recolours a shape of the group, and the edit
 // converges, undoes, and survives a concurrent delete of the whole group and a save on both
 // peers.
 import { expect, test } from 'bun:test';

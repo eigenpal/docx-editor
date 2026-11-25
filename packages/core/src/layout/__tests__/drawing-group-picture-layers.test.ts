@@ -1,7 +1,7 @@
 // The helpers that order and place the picture members of a drawing group.
 //
-// A group paints its members in document order (`wpg:grpSp`, CT_GroupShape; ECMA-376 Part 1,
-// 20.1.2.2.20). `vectorPictureBand` puts each vector component in a band between the pictures:
+// A group paints its members in document order (`wpg:grpSp`, CT_WordprocessingGroup; ECMA-376 Part 1,
+// 20.4.2.32). `vectorPictureBand` puts each vector component in a band between the pictures:
 // band `n` paints above the first `n` pictures and below the rest. `turnedPictureCorners` gives
 // the corners of a picture that mirrors left to right and then turns clockwise about the
 // centre of its box (`a:xfrm`, CT_Transform2D; Part 1, 20.1.7.6). `pictureCornerFrame` reads
