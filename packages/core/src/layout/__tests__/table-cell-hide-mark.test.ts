@@ -294,6 +294,25 @@ test('merged empty cells with hidden marks keep only the head row line', () => {
   expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(10);
 });
 
+// The head row's line comes from the document's default run properties: their size, and none
+// when they are hidden text.
+test('a hidden head mark takes the line of the default run properties', () => {
+  const defaults = (rPr: string) =>
+    buildStyleCascadeTable(
+      part(
+        `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>${rPr}</w:rPr></w:rPrDefault>` +
+          '<w:pPrDefault/></w:docDefaults></w:styles>',
+        '/word/styles.xml'
+      ).root
+    );
+  const merged = table(
+    row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
+      row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
+  );
+  expect(rows(run(merged, defaults('<w:sz w:val="24"/>')))[0]!.box.height).toBe(12);
+  expect(rows(run(merged, defaults('<w:vanish/><w:sz w:val="24"/>')))[0]!.box.height).toBe(0);
+});
+
 // `w:hideMark` is per cell. A head that hides its own mark says nothing about the cells
 // that continue it, and this row has nothing but continuations, so its end-of-cell
 // paragraph is what is left to size it.
