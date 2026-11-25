@@ -113,6 +113,8 @@ export async function POST(request: Request): Promise<Response> {
     revisionMarkup: view.revisionMarkup,
     revisionAuthorSlots: view.revisionAuthorSlots,
     comments: view.comments,
+    // JSON carries the date as an ISO string.
+    fieldDate: view.fieldDate ? new Date(view.fieldDate) : undefined,
     fidelityPolicy: 'strict',
     useSystemFonts: false,
   });
@@ -125,7 +127,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-The handler's second argument is a `ChromeExportView`. Forward all four fields to `exportPdf`:
+The handler's second argument is a `ChromeExportView`. Forward all five fields to `exportPdf`:
 
 | Field                 | Holds                                                              |
 | --------------------- | ------------------------------------------------------------------ |
@@ -133,6 +135,7 @@ The handler's second argument is a `ChromeExportView`. Forward all four fields t
 | `revisionMarkup`      | The resolved markup preferences captured before conversion.        |
 | `revisionAuthorSlots` | Stable author color slots from the editor session.                 |
 | `comments`            | Whether comments print. When absent, the converter shows comments. |
+| `fieldDate`           | The editor's `fieldDate`. When absent, fields show saved results.  |
 
 A one-argument handler still works but uses its own export defaults. The converter validates the display mode and markup preferences.
 

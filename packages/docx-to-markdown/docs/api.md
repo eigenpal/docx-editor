@@ -87,9 +87,7 @@ interface MarkdownReviewBinding {
     readonly precision: 'exact' | 'containing-construct';
   }[];
   readonly unmappedReason?:
-    | 'not-represented-in-markdown'
-    | 'non-linear-structural-change'
-    | 'omitted-story-content';
+    'not-represented-in-markdown' | 'non-linear-structural-change' | 'omitted-story-content';
 }
 ```
 
@@ -164,20 +162,21 @@ Set `images: { syntax: 'html' }` to emit `<img>` tags with each occurrence's dis
 
 `MarkdownExportOptions` contains layout and resource controls for the export snapshot.
 
-| Option                  | Meaning                                                                                       |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| `displayMode`           | Tracked-change projection: `all-markup` (default), `proposed`, or `original`.                 |
-| `signal`                | Aborts resource waits and later layout work.                                                  |
-| `resourceTimeoutMs`     | Deadline applied separately to initial font provisioning and each layout resource wait.       |
-| `reuseAcrossRevisions`  | Retains state for live/caller-measured sessions; document-aware byte sessions reject `true`.  |
-| `fonts`                 | Font configuration or resolver. Earlier entries win. Requires immutable DOCX bytes.           |
-| `fallbackFonts`         | Fallback after bundled fonts. Requires DOCX bytes. Accepts `googleFonts()`.                   |
-| `fontPolicy`            | `best-effort` (default), or `strict` to require all four static faces and no origin failures. |
-| `onFontResolution`      | Receives the font-resolution report.                                                          |
-| `measurer`              | Custom text measurer. Overrides font resolution.                                              |
-| `producer`              | Stable identity for a host-owned measurer and its cache entries.                              |
-| `imageDecodePort`       | Custom image metadata decoder. Defaults to the Node.js decoder.                               |
-| `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                      |
+| Option | Meaning |
+| --- | --- |
+| `displayMode` | Tracked-change projection: `all-markup` (default), `proposed`, or `original`. |
+| `signal` | Aborts resource waits and later layout work. |
+| `resourceTimeoutMs` | Deadline applied separately to initial font provisioning and each layout resource wait. |
+| `reuseAcrossRevisions` | Retains state for live/caller-measured sessions; document-aware byte sessions reject `true`. |
+| `fonts` | Font configuration or resolver. Earlier entries win. Requires immutable DOCX bytes. |
+| `fallbackFonts` | Fallback after bundled fonts. Requires DOCX bytes. Accepts `googleFonts()`. |
+| `fontPolicy` | `best-effort` (default), or `strict` to require all four static faces and no origin failures. |
+| `onFontResolution` | Receives the font-resolution report. |
+| `measurer` | Custom text measurer. Overrides font resolution. |
+| `producer` | Stable identity for a host-owned measurer and its cache entries. |
+| `imageDecodePort` | Custom image metadata decoder. Defaults to the Node.js decoder. |
+| `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format. |
+| `fieldDate` | A valid `Date` shown by DATE and TIME fields with a `\@` picture. Omit for saved results. |
 
 `fontPolicy` and `onFontResolution` require immutable DOCX bytes with the default document-aware font resolution. Both options throw `TypeError` when used with a live `HeadlessDocumentView` or combined with a custom `measurer`, including an explicit `fontPolicy: 'best-effort'`.
 

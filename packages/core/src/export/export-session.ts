@@ -23,6 +23,7 @@ import {
 } from '../layout/document-furniture-source.ts';
 import { createDocumentLinkProjectors } from '../layout/document-link-projector.ts';
 import { createDocumentStyleDependencies } from '../layout/document-style-deps.ts';
+import { copyValidFieldDate } from '../layout/field-date.ts';
 import { createFieldLinkRegistry } from '../layout/field-link-registry.ts';
 import { forEachSemanticDrawing } from '../layout/semantic-record-queries.ts';
 import { TablePaginationError } from '../layout/semantic-table-layout.ts';
@@ -105,6 +106,14 @@ export interface OpenDocumentForExportOptions {
   readonly resourceTimeoutMs?: number;
   /** Retain incremental state for a live view. Defaults to true for views and false for bytes. */
   readonly reuseAcrossRevisions?: boolean;
+  /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local
+   * time (ECMA-376 Part 1, 17.16.5.13, 17.16.5.65, 17.16.4.1), as the editor's `fieldDate` option
+   * does. Pass `ChromeExportView.fieldDate` here to export the dates the editor shows. Absent (the
+   * default), fields show their saved results. Export only: the source is not changed. Refused
+   * with a `TypeError` when it is not a valid `Date`.
+   */
+  readonly fieldDate?: Date;
 }
 
 /**
@@ -306,6 +315,8 @@ export function openDocumentForExport(
     // typed refusal the caller can branch on instead.
     return { ok: false, reason: 'aborted' };
   }
+  // One copy per session: layout compares the installed date by identity.
+  const fieldDate = copyValidFieldDate(options.fieldDate);
   if (
     options.revisionAuthorSlots !== undefined &&
     (!options.revisionAuthorSlots ||
@@ -634,8 +645,8 @@ export function openDocumentForExport(
         bodyBlockLimit: undefined,
         // Export paints every field as one unit; the painted text is the same in both modes.
         fieldResults: 'atomic',
-        // Export shows saved DATE and TIME results, so a file exports the same text everywhere.
-        fieldDate: undefined,
+        // Saved DATE and TIME results unless the caller asked for a moment.
+        fieldDate,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         const restartedBeforePublish = restartOnRevisionDrift();
