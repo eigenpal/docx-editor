@@ -1590,10 +1590,17 @@ When field codes hold paragraph marks, the paragraph that holds `begin` and the 
 - **THEN** each edit lands in the paragraph that holds the text beside the caret
 - **AND** both participants converge on one line through undo, redo, save, and reopen
 
+#### Scenario: Caret stops where the two sides meet
+
+- **GIVEN** the shared line of an `IF` field whose field codes span paragraphs
+- **WHEN** the start of the result side paints at the end of the first side
+- **THEN** the caret has one stop there, and a caret at the start of the result side shows at the end of the first side
+- **AND** when the result side starts a wrapped line, or runs in the other direction, each side keeps its own stop and the caret shows where it is
+
 #### Scenario: An insert at the start of the result side
 
 - **GIVEN** a collapsed caret at the start of the result side of the shared line
-- **WHEN** the user types, presses Enter, pastes lines, inserts a section break, or inserts a table
+- **WHEN** the user types, composes text, presses Enter, pastes lines, inserts a section break, inserts a table, or proposes a tracked insertion, with or without a format armed there
 - **THEN** the insert lands before the field's `begin`, or before the whole line for a table
 - **AND** the field codes keep exactly their paragraph marks
 
