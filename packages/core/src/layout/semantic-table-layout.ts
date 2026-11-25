@@ -124,7 +124,11 @@ import {
   breakPreparedParagraphLazily,
 } from './paragraph-break-request.ts';
 import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
-import { cellReservedMarkHeights, mergedRowFirstCellHeight } from './table-cell-end-mark.ts';
+import {
+  cellReservedMarkHeights,
+  mergedRowFirstCellHeight,
+  mergedRowTakesFirstCellFloor,
+} from './table-cell-end-mark.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import { type StyleCascadeTable, type TableCellStyleFormatting } from './style-cascade.ts';
 import { cellBorderContinuation, paragraphBorderGroupKey } from './cell-border-groups.ts';
@@ -1593,16 +1597,15 @@ export function layoutRowFragmentBounded(
       rowBottom = needed;
     }
   }
-  // A row of merge heads and continuations only has had nothing raise it: the passes above
-  // skip detached heads and continuations on purpose. Its first cell's end paragraph sizes
-  // it (`mergedRowFirstCellHeight`, 17.4.84); an `atLeast` minimum below can only raise it.
-  // A row of continuations alone took its end marks above.
+  // A row that only merge heads, continuations, and waiting `btLr` cells hold has had nothing
+  // raise it: the passes above skip them on purpose. Its first cell's end paragraph sizes it
+  // (`mergedRowFirstCellHeight`, 17.4.84); an `atLeast` minimum below can only raise it.
   const first = flowed[0];
+  const detached = (cell: SemanticTableCell) => detachedSpans?.has(cell.id) === true;
   if (
     first !== undefined &&
     rowBottom <= rowTop + 0.001 &&
-    flowed.some((entry) => !entry.cell.vMergeContinue) &&
-    flowed.every((entry) => entry.cell.vMergeContinue || detachedSpans?.has(entry.cell.id))
+    mergedRowTakesFirstCellFloor(row.cells, detached, waits, atLeastHeightPt)
   ) {
     const { left, right } = first.insets;
     const markPt = mergedRowFirstCellHeight(first.cell, first.width - left - right, flowDeps);

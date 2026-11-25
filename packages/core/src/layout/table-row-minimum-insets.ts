@@ -22,15 +22,19 @@ import { cellContentInsets } from './table-cell-geometry.ts';
 import { withTableContentBorders } from './table-content-borders.ts';
 
 /**
- * Whether the row asks for row-local clearance: it has an `atLeast` minimum, or every cell
- * starts or continues a vertical merge, so its first cell's end paragraph sets a floor
- * (`mergedRowFirstCellHeight`).
+ * Whether the row asks for row-local clearance: it has an `atLeast` minimum, or only merge
+ * heads, continuations, and `btLr` cells hold it, so its first cell's end paragraph can set a
+ * floor (`mergedRowTakesFirstCellFloor`). This reads the authored merge; layout decides later
+ * whether each head is detached. A stamp that layout does not use changes nothing.
  */
 function takesRowMinimum(row: SemanticTableRow): boolean {
   if (row.height.rule === 'atLeast') return true;
   return (
     row.cells.some((cell) => cell.headsVerticalMerge === true) &&
-    row.cells.every((cell) => cell.vMergeContinue || cell.headsVerticalMerge === true)
+    row.cells.every(
+      (cell) =>
+        cell.vMergeContinue || cell.headsVerticalMerge === true || cell.textDirection === 'btLr'
+    )
   );
 }
 

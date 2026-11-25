@@ -271,14 +271,18 @@ test('vertical cells exclude hidden markers but retain printable content', () =>
   expect(height(table(row(cell(paragraph('', '<w:jc w:val="center"/>'), properties))))).toBe(0);
 });
 
-test('merged empty cells with hidden marks take no height across their rows', () => {
+// A row that only a merge head holds takes its first cell's end paragraph
+// (`mergedRowFirstCellHeight`, 17.4.84). A hidden mark there gives the line of the default
+// run properties, here the 10pt fallback, not zero: measured with 20pt hidden marks in one
+// and two columns, each head row was one default line tall.
+test('merged empty cells with hidden marks keep only the head row line', () => {
   const result = run(
     table(
       row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
         row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
     )
   );
-  expect(rows(result).map((r) => r.box.height)).toEqual([0, 0]);
+  expect(rows(result).map((r) => r.box.height)).toEqual([10, 0]);
   expect(rows(result)[0]!.cells[0]!.rowSpan).toBe(2);
   const visible = run(
     table(
@@ -286,7 +290,8 @@ test('merged empty cells with hidden marks take no height across their rows', ()
         row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
     )
   );
-  expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(5);
+  // The 5pt text fits the head row's default line.
+  expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(10);
 });
 
 // `w:hideMark` is per cell. A head that hides its own mark says nothing about the cells
@@ -299,7 +304,7 @@ test('a continuation cell keeps its own visible mark under a hidden head', () =>
         row(cell(paragraph(), '<w:vMerge/>'))
     )
   );
-  expect(rows(result).map((r) => r.box.height)).toEqual([0, 20]);
+  expect(rows(result).map((r) => r.box.height)).toEqual([10, 20]);
 });
 
 test('only the markup view keeps the line of a tracked empty paragraph mark', () => {

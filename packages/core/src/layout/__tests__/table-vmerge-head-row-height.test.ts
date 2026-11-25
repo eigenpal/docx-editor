@@ -244,3 +244,61 @@ test('the end line of a row of merge heads takes the row-local border clearance'
   expect(rowHeights(ruled(''))[1]).toBeCloseTo(LINE_8PT + 3, 6);
   expect(rowHeights(ruled('<w:trHeight w:val="100"/>'))[1]).toBeCloseTo(LINE_8PT + 3, 6);
 });
+
+test('a waiting btLr cell beside a merge head takes the end line, or the atLeast height', () => {
+  const vertical = tc(2993, p('vertical text'), undefined).replace(
+    '</w:tcPr>',
+    '<w:textDirection w:val="btLr"/></w:tcPr>'
+  );
+  const row = (height: string) =>
+    band([tc(7767, twoLines, 'restart'), vertical], height, undefined, ['continue', undefined]);
+  expect(rowHeights(row(''))[1]).toBeCloseTo(LINE_8PT, 6);
+  // A minimum takes the row; the head's end line does not floor it.
+  expect(rowHeights(row(low))[1]).toBeCloseTo(5, 6);
+});
+
+test('a first cell with hideMark gives the line of the default run properties', () => {
+  const hidden = tc(7767, p('', 0, 24), 'restart').replace('</w:tcPr>', '<w:hideMark/></w:tcPr>');
+  // No styles part: the default run is 10pt.
+  const heights = rowHeights(band([hidden, tc(2993, p('Big', 0, 24), 'restart')], low));
+  expect(heights[1]).toBeCloseTo((14 * 10) / 11, 6);
+});
+
+test('the first cell in document order decides in a right-to-left table', () => {
+  const rtl = band(
+    [tc(7767, p('Big', 0, 24), 'restart'), tc(2993, p('b'), 'restart')],
+    low
+  ).replace('<w:tblLayout w:type="fixed"/>', '<w:tblLayout w:type="fixed"/><w:bidiVisual/>');
+  expect(rowHeights(rtl)[1]).toBeCloseTo(LINE_12PT, 6);
+});
+
+test('cell spacing adds its gap above the end line', () => {
+  const heads = [tc(7767, twoLines, 'restart'), tc(2993, p('Code'), 'restart')];
+  const spaced = band(heads, low).replace(
+    '<w:tblLayout w:type="fixed"/>',
+    '<w:tblLayout w:type="fixed"/><w:tblCellSpacing w:w="100" w:type="dxa"/>'
+  );
+  // 5pt on each side of every cell (`w:tblCellSpacing`, 17.4.45): 10pt between two rows' cells.
+  expect(rowHeights(spaced)[1]).toBeCloseTo(LINE_8PT + 10, 6);
+});
+
+test('a repeated header row of merge heads keeps its end line on the next page', () => {
+  const heads = [tc(7767, twoLines, 'restart'), tc(2993, p('Code'), 'restart')];
+  const header = band(heads, low)
+    .replaceAll('<w:trPr>', '<w:trPr><w:tblHeader/>')
+    .replace('</w:tbl>', '');
+  const body = Array.from({ length: 80 }, (_, index) =>
+    tr('', [tc(7767, p(`Row ${index}`)), tc(2993, p(''))])
+  ).join('');
+  const source = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>${header}${body}</w:tbl>${p('After')}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!source.ok) throw new Error(source.reason);
+  const layout = layoutSemanticDocument(source.part, 0, { measurer });
+  expect(layout.pages.length).toBeGreaterThan(1);
+  for (const page of layout.pages.slice(0, 2)) {
+    const table = page.fragments.find((f): f is TableFragmentRecord => f.kind === 'table')!;
+    expect(table.rows[1]!.box.height).toBeCloseTo(LINE_8PT, 6);
+  }
+});
