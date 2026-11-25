@@ -1260,9 +1260,12 @@ export interface FieldAtomMarker {
     };
     readonly formField: boolean;
     readonly pageField?: {
+        readonly formula?: PageFieldMarker['formula'];
         readonly kind: AllowlistedPageField;
         readonly numberFormat?: PageFieldNumberFormat;
         readonly picture?: string;
+        readonly savedResult?: string;
+        readonly segments?: PageFieldMarker['segments'];
     };
     readonly pageRef?: PageRefFieldProjection;
     readonly resultEnd?: number;

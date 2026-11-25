@@ -25,7 +25,7 @@ import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField, AllowlistedPageFieldMatch } from './field-instruction.ts';
-import type { PageFieldSwitches } from './field-page-switches.ts';
+import type { PageFieldNumberFormat, PageFieldSwitches } from './field-page-switches.ts';
 import type { PageFieldMarker } from './field-page-furniture.ts';
 import type { DeferredPageSegment } from './field-nested-page.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
@@ -110,7 +110,28 @@ export interface FieldAtomMarker {
    * (`substituteBodyPageFields`) reads this marker and substitutes the real value per page.
    * Absent in headers/footers, which evaluate live through their own per-page projector.
    */
-  readonly pageField?: PageFieldMarker;
+  readonly pageField?: {
+    readonly kind: AllowlistedPageField;
+    /** The field's `\#` numeric picture, applied when finalize substitutes the value. */
+    readonly picture?: string;
+    /** The field's `\*` number format, applied when finalize substitutes the value. */
+    readonly numberFormat?: PageFieldNumberFormat;
+    /**
+     * A formula field's compiled expression, which finalize evaluates per page.
+     * @internal
+     */
+    readonly formula?: PageFieldMarker['formula'];
+    /**
+     * A formula field's saved result, painted where the formula has no value.
+     * @internal
+     */
+    readonly savedResult?: string;
+    /**
+     * Another field's saved text around the markers of the page fields nested in it.
+     * @internal
+     */
+    readonly segments?: PageFieldMarker['segments'];
+  };
   /**
    * A BODY `PAGEREF` atom whose value is the page number its bookmark target lands on.
    *
