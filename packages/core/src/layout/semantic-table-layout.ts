@@ -124,11 +124,8 @@ import {
   breakPreparedParagraphLazily,
 } from './paragraph-break-request.ts';
 import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
-import {
-  cellReservedMarkHeights,
-  mergedRowFirstCellHeight,
-  mergedRowTakesFirstCellFloor,
-} from './table-cell-end-mark.ts';
+import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
+import { unsizedRowFloorPt } from './table-unsized-row-floor.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import { type StyleCascadeTable, type TableCellStyleFormatting } from './style-cascade.ts';
 import { cellBorderContinuation, paragraphBorderGroupKey } from './cell-border-groups.ts';
@@ -1597,26 +1594,21 @@ export function layoutRowFragmentBounded(
       rowBottom = needed;
     }
   }
-  // A row that only merge heads, continuations, and waiting `btLr` cells hold has had nothing
-  // raise it: the passes above skip them on purpose. Its first cell's end paragraph sizes it
-  // (`mergedRowFirstCellHeight`, 17.4.84); an `atLeast` minimum below can only raise it.
-  const first = flowed[0];
-  const detached = (cell: SemanticTableCell) => detachedSpans?.has(cell.id) === true;
-  if (
-    first !== undefined &&
-    rowBottom <= rowTop + 0.001 &&
-    mergedRowTakesFirstCellFloor(row.cells, detached, waits, atLeastHeightPt)
-  ) {
-    const { left, right } = first.insets;
-    const markPt = mergedRowFirstCellHeight(first.cell, first.width - left - right, flowDeps);
-    // Padded with the row-local clearance, as the authored minimum below is.
-    const floorPt = authoredRowMinimumFloorPt(
-      markPt,
+  // The passes above skip detached heads, continuations, and waiting `btLr` cells on purpose.
+  // A row that only they hold has had nothing raise it (`unsizedRowFloorPt`, 17.4.84).
+  if (rowBottom <= rowTop + 0.001) {
+    const floorPt = unsizedRowFloorPt({
+      cells: row.cells,
       flowed,
-      deps.cellMinimumContentInsets,
-      rowGapPt
-    );
-    if (markPt > 0) rowBottom = Math.min(flowMaxBottom, rowTop + floorPt);
+      detached: (cell) => detachedSpans?.has(cell.id) === true,
+      waits,
+      atLeastHeightPt,
+      rowGapPt,
+      defaultLineHeight,
+      minimumInsets: deps.cellMinimumContentInsets,
+      deps: flowDeps,
+    });
+    if (floorPt > 0) rowBottom = Math.min(flowMaxBottom, rowTop + floorPt);
   }
   rowBottom = Math.min(flowMaxBottom, rowBottom);
 

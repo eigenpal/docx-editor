@@ -302,3 +302,21 @@ test('a repeated header row of merge heads keeps its end line on the next page',
     expect(table.rows[1]!.box.height).toBeCloseTo(LINE_8PT, 6);
   }
 });
+
+// Outside merges, a row of `btLr` cells whose marks are hidden text has nothing to size it
+// either. It keeps one line of the default run style (10pt here).
+test('a row of btLr cells with hidden marks keeps the default line', () => {
+  const vanished =
+    '<w:p><w:pPr><w:rPr><w:vanish/><w:sz w:val="16"/></w:rPr></w:pPr>' +
+    '<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>abc</w:t></w:r></w:p>';
+  const vertical = tc(7767, vanished).replace(
+    '</w:tcPr>',
+    '<w:textDirection w:val="btLr"/></w:tcPr>'
+  );
+  const table =
+    '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="7767"/></w:tblGrid>' +
+    tr('', [vertical]) +
+    '</w:tbl>';
+  expect(rowHeights(table)[0]).toBeCloseTo((14 * 10) / 11, 6);
+});

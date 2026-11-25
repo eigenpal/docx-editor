@@ -149,55 +149,25 @@ export function cellReservedMarkHeights(
 }
 
 /**
- * Whether a row takes its first cell's end paragraph as a floor
- * ({@link mergedRowFirstCellHeight}): no ordinary cell sizes it, because each cell starts a
- * vertical merge (`detached`) or continues one (`w:vMerge`, `CT_VMerge`, ECMA-376 Part 1,
- * 17.4.84), and at least one starts one.
- *
- * A `btLr` cell that waits for the row height (`waits`) does not size the row either. Measured
- * beside a merge head: with no `w:trHeight` the row took the head's end line, and with a 5pt
- * `atLeast` minimum (17.4.80) it took 5pt, not that line.
- */
-export function mergedRowTakesFirstCellFloor(
-  cells: readonly SemanticTableCell[],
-  detached: (cell: SemanticTableCell) => boolean,
-  waits: (cell: SemanticTableCell) => boolean,
-  atLeastHeightPt: number | undefined
-): boolean {
-  let head = false;
-  let waiting = false;
-  for (const cell of cells) {
-    if (cell.vMergeContinue) continue;
-    if (detached(cell)) head = true;
-    else if (waits(cell)) waiting = true;
-    else return false;
-  }
-  return head && !(waiting && (atLeastHeightPt ?? 0) > 0);
-}
-
-/**
- * The height a row that {@link mergedRowTakesFirstCellFloor} asks of its FIRST cell. The
- * merged text belongs to the span, so it does not count.
+ * The height a row asks of its FIRST cell when no ordinary cell sizes it
+ * (`unsizedRowFloorPt`). The merged text belongs to the span, so it does not count.
  *
  * Measured with two cells of different end-paragraph boxes in either order, heads and
  * continuations mixed, and in a `w:bidiVisual` table: only the first cell in document order
  * set the row, never the larger of the two. A merge head gives its mark's line and its spacing
  * after, but not its spacing before: a one-paragraph head with 4pt before still gave the bare
- * line. A continuation gives its whole box ({@link cellContinuationHeight}). A head whose first
- * line is 12pt over an 8pt end paragraph gave the 8pt line. A first cell with `w:hideMark`
- * (17.4.21) gave the line of the document's default run properties, whatever the other cells
- * held.
- *
- * An `atLeast` `w:trHeight` (`CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37) can raise the
- * row above this floor but never lowers it. 0 when the mark is hidden text or its face did not
- * resolve.
+ * line. A continuation gives its whole box, as {@link cellContinuationHeight} does. A head
+ * whose first line is 12pt over an 8pt end paragraph gave the 8pt line. A first cell with
+ * `w:hideMark` (17.4.21) gave the line of the document's default run properties, whatever the
+ * other cells held. A hidden or unmeasurable mark takes that line too (not measured).
  */
 export function mergedRowFirstCellHeight(
   cell: SemanticTableCell,
   widthPt: number,
   deps: TableFlowDeps
 ): number {
-  if (cellHidesEndMark(cell, deps.documentFirstParagraphId)) {
+  const box = endMarkBox(cell, widthPt, deps);
+  if (box === null) {
     const defaults = deps.styleCascade?.docDefaultsRun ?? [];
     const style =
       defaults.length > 0
@@ -206,7 +176,6 @@ export function mergedRowFirstCellHeight(
     if (style.hidden || deps.measurer.hasResolvedFont?.(style) === false) return 0;
     return deps.measurer.lineMetrics(style).height;
   }
-  if (cell.vMergeContinue) return cellContinuationHeight(cell, widthPt, deps);
-  const box = endMarkBox(cell, widthPt, deps);
-  return box === null ? 0 : box.linePt + Math.max(0, box.spacing.after);
+  const before = cell.vMergeContinue ? Math.max(0, box.spacing.before) : 0;
+  return before + box.linePt + Math.max(0, box.spacing.after);
 }
