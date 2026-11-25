@@ -2286,6 +2286,7 @@ export interface DocxEditorConfig {
     container?: HTMLElement;
     contentLockPolicy?: ContentLockPolicy;
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
@@ -3843,6 +3844,7 @@ export interface PaginatedSurfaceOptions {
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
+    readonly fieldDate?: Date;
     readonly fieldResults?: FieldResultsMode;
     readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;

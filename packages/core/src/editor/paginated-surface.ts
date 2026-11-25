@@ -1515,7 +1515,7 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context && !context.live ? false : showFieldCodes,
-      fieldResults: fieldScope.mode,
+      ...fieldScope.layout, // `fieldResults`, and a copy of `fieldDate` the host cannot mutate
       revisionAuthorFilter: activeAuthorFilter,
       bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);

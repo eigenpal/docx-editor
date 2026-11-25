@@ -46,7 +46,7 @@ import { createNestedPageTracker } from './field-nested-page.ts';
 import { formulaOperandIsNumber } from './field-page-furniture.ts';
 import { modelTextOfRunChild, hyphenDisplayOf, runPropertiesOf } from './field-run-text.ts';
 import { captureInstructionSpecs, formControlMarkerOf } from './field-form.ts';
-import { synthesizeAtomicField } from './field-synthesis.ts';
+import { noteInstructionLanguage, synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
@@ -535,6 +535,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
       }
 
       if (isInstrText(grand)) {
+        if (pending) noteInstructionLanguage(pending, field, grand, props);
         ingestInstrTextBounded(field, grand, budget, runDepth + 1);
         continue;
       }

@@ -1757,6 +1757,7 @@ export interface DocxEditorProps {
     contentLockPolicy?: ContentLockPolicy;
     contextMenu?: boolean | DocxEditorContextMenuProps;
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
@@ -1878,6 +1879,7 @@ export interface DocxEditorRootProps {
     colorMode?: 'light' | 'dark' | 'system';
     contentLockPolicy?: ContentLockPolicy;
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;

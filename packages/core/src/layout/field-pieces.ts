@@ -515,6 +515,18 @@ export interface PendingFieldProjection {
    */
   docPropertySpec: DocPropertyField | null;
   /**
+   * Recognized DATE or TIME instruction with a `\@` picture, or absent/null. When the layout
+   * call has a field date, the field shows it through the picture, over a non-empty cache.
+   */
+  dateSpec?: import('./field-date.ts').DateFieldSpec | null;
+  /**
+   * The cascaded properties of the first live run with level-1 instruction text. A DATE or
+   * TIME picture shows day and month names in that run's language (ECMA-376 Part 1, 17.16.4.1).
+   */
+  instructionProps?: readonly OoxmlProperty[];
+  /** The same for the first `w:delInstrText` run; used only when no live instruction exists. */
+  deletedInstructionProps?: readonly OoxmlProperty[];
+  /**
    * Recognized REF cross-reference instruction, or null when the field is not one.
    *
    * Captured at the same points as {@link symbolSpec}. Unlike {@link buttonSpec}, a resolved

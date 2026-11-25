@@ -165,15 +165,54 @@ export function scopeSession<T extends object>(session: T, scope: FieldResultsSc
 
 /**
  * The scope a paginated surface opens with. An `editable` request with a collaboration model is
- * refused, not approximated: shared paragraph text keeps every field one unit.
+ * refused, not approximated: shared paragraph text keeps every field one unit. A `fieldDate`
+ * that is not a valid `Date` is refused, and so is a `fieldDate` with the `editable` mode,
+ * where a DATE field's saved result is text the user edits.
  */
 export function surfaceFieldResultsScope(options: {
   readonly fieldResults?: unknown;
   readonly collaborationModel?: unknown;
-}): FieldResultsScope {
+  readonly fieldDate?: Date;
+}): SurfaceFieldResultsScope {
   const mode = fieldResultsModeOf(options.fieldResults);
   if (mode === 'editable' && options.collaborationModel) {
     throw new TypeError(COLLABORATION_FIELD_RESULTS_REFUSAL);
   }
-  return createFieldResultsScope(mode);
+  if (options.fieldDate !== undefined) {
+    if (!isValidFieldDate(options.fieldDate)) throw new TypeError(INVALID_FIELD_DATE_REFUSAL);
+    if (mode === 'editable') throw new TypeError(EDITABLE_FIELD_DATE_REFUSAL);
+  }
+  // One copy per surface: layout compares the installed date by identity, and a host that
+  // mutates its own `Date` later cannot desynchronize layout caches.
+  const layout = { fieldResults: mode, fieldDate: copyFieldDate(options.fieldDate) };
+  return { ...createFieldResultsScope(mode), layout };
+}
+
+/** A surface's field scope, with the field options its layout passes. */
+export interface SurfaceFieldResultsScope extends FieldResultsScope {
+  readonly layout: {
+    readonly fieldResults: FieldResultsMode;
+    readonly fieldDate: Date | undefined;
+  };
+}
+
+const INVALID_FIELD_DATE_REFUSAL = 'Invalid fieldDate: use a valid Date';
+const EDITABLE_FIELD_DATE_REFUSAL =
+  "fieldDate is not supported with fieldResults: 'editable'; saved results are editable text";
+
+/**
+ * A copy of a validated `fieldDate`, in this realm, or undefined without one. The surface keeps
+ * the copy, so a host that mutates its own `Date` later cannot desynchronize layout caches.
+ */
+export function copyFieldDate(value: Date | undefined): Date | undefined {
+  return value === undefined ? undefined : new Date(Date.prototype.getTime.call(value));
+}
+
+/** A valid `Date`, also one from another window (no `instanceof`). */
+function isValidFieldDate(value: unknown): boolean {
+  try {
+    return !Number.isNaN(Date.prototype.getTime.call(value));
+  } catch {
+    return false;
+  }
 }

@@ -2,7 +2,6 @@ import { sectionPrepassInputsMatch } from './section-prepass-inputs.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
 import { carryLayoutReadCaches } from './layout-read-caches.ts';
-import { withFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorToken } from './style-separator-group.ts';
 import {
@@ -226,7 +225,12 @@ import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import { convergeExclusionLayout } from './exclusion-layout-steps.ts';
 import { withAlignedProgress, withInterimLayout, withRelabeledProgress } from './interim-layout.ts';
 import { layoutWithFurnitureRetry } from './furniture-retry-layout.ts';
-import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
+import {
+  drainLayoutSteps,
+  stepsInFieldScope,
+  withFieldScope,
+  type LayoutSteps,
+} from './layout-steps.ts';
 import { preparedBlocks } from './prepared-block-memo.ts';
 import { tableTopLeads } from './cell-edge-neighbours.ts';
 import {
@@ -259,7 +263,7 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  return withFieldResultsMode(options.fieldResults, () =>
+  return withFieldScope(options, () =>
     drainLayoutSteps(layoutSemanticDocumentSteps(part, revision, options))
   );
 }
@@ -279,7 +283,7 @@ export function layoutSemanticDocumentSteps(
   // reuse the last one's work, as a cold open with a session does.
   const opts =
     options.notes && !options.session ? { ...options, session: createLayoutSession() } : options;
-  return stepsInFieldResultsMode(options.fieldResults, layoutInModeSteps(part, revision, opts));
+  return stepsInFieldScope(options, layoutInModeSteps(part, revision, opts));
 }
 
 function* layoutInModeSteps(
