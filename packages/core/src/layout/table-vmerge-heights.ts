@@ -108,7 +108,10 @@
 // is placed, so a surplus that a later span adds to a shared row only makes it taller. The
 // decision's rows are all held to the fragment of its first head, so a span that runs past
 // the first head's own span still lands whole with it. Anything that lets two decisions share
-// a row has to add a guard for that.
+// a row has to add a guard for that. `fixedSpanBeside` is the one exception: it adds a second
+// decision inside the rows of the first, at the same head row. That is safe because all its rows
+// are `hRule="exact"`, so it adds no floor or surplus, and its rows lie inside the first span,
+// so `heldRows` already keeps them with the first head.
 //
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
@@ -199,7 +202,9 @@ export interface VMergeRowHeights {
    *
    * Sound because overlapping accepted spans were decided together: the rows a decision
    * covers are covered by nothing else, so withdrawing it at its first head row takes back
-   * every span, floor and surplus in those rows.
+   * every span, floor and surplus in those rows. A `fixedSpanBeside` span shares its head row
+   * with the decision it sits inside, so the same call withdraws it, and its fixed rows hold no
+   * floor or surplus to take back.
    *
    * A span headed BELOW a decision's first head row, withdrawn on its own, only stops
    * detaching its heads. Its rows keep every floor, because the heads above were already

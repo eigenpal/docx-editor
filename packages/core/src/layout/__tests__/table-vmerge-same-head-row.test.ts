@@ -115,3 +115,53 @@ test('a footer table places every line of the shorter merge', () => {
   const footerTable = story.fragments.find((f): f is TableFragmentRecord => f.kind === 'table')!;
   expect(linesOf(footerTable)).toHaveLength(3);
 });
+
+function customTable(rows: readonly string[]): TableFragmentRecord {
+  const xml =
+    '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+    `${rows.join('')}</w:tbl>`;
+  const source = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>${xml}${p('After')}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!source.ok) throw new Error(source.reason);
+  const layout = layoutSemanticDocument(source.part, 0, { measurer: createFixedMeasurer() });
+  return layout.pages[0]!.fragments.find((f): f is TableFragmentRecord => f.kind === 'table')!;
+}
+const cellLines = (table: TableFragmentRecord, column: number) =>
+  table.rows[0]!.cells[column]!.blocks.flatMap((block) =>
+    block.kind === 'paragraph' ? block.lines : []
+  );
+
+test('three merges of different lengths from one head row each place every line', () => {
+  const result = customTable([
+    tr(exact(113), [tc(threeLines, RESTART), tc(threeLines, RESTART), tc(threeLines, RESTART)]),
+    tr(exact(300), [tc('<w:p/>', CONTINUE), tc('<w:p/>', CONTINUE), tc('<w:p/>', CONTINUE)]),
+    tr(exact(300), [tc(p('Plain 2')), tc('<w:p/>', CONTINUE), tc('<w:p/>', CONTINUE)]),
+    tr(exact(300), [tc(p('Plain 3')), tc(p('Plain 3')), tc('<w:p/>', CONTINUE)]),
+  ]);
+  for (const column of [0, 1, 2]) expect(cellLines(result, column)).toHaveLength(3);
+  const heights = result.rows.map((row) => row.box.height);
+  [5.65, 15, 15, 15].forEach((height, index) => expect(heights[index]).toBeCloseTo(height, 6));
+});
+
+// The longer merge ends in a row without a fixed height, so it still hands its surplus to that
+// row. The shorter merge covers only fixed rows and joins the plan beside it.
+test('a shorter fixed merge beside a longer merge with a growable last row', () => {
+  const tall = Array.from({ length: 10 }, (_unused, index) => p(`Long ${index}`)).join('');
+  const result = customTable([
+    tr(exact(113), [tc(threeLines, RESTART), tc(p('Middle 0')), tc(tall, RESTART)]),
+    tr(exact(600), [tc('<w:p/>', CONTINUE), tc(p('Middle 1')), tc('<w:p/>', CONTINUE)]),
+    tr('', [tc(p('Plain 2')), tc(p('Middle 2')), tc('<w:p/>', CONTINUE)]),
+  ]);
+  expect(cellLines(result, 0)).toHaveLength(3);
+  expect(cellLines(result, 2)).toHaveLength(10);
+  const [head, middle, last] = result.rows.map((row) => row.box.height);
+  expect(head).toBeCloseTo(5.65, 6);
+  expect(middle).toBeCloseTo(30, 6);
+  // The longer merge's ten lines need more than the two fixed rows, so the last row grows.
+  expect(head! + middle! + last!).toBeGreaterThanOrEqual(
+    cellLines(result, 2).reduce((sum, line) => sum + line.box.height, 0) - 0.01
+  );
+});
