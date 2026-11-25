@@ -22,7 +22,7 @@
     "@embedpdf/pdfium": "^2.15.0",
     "@embedpdf/plugin-document-manager": "^2.15.0",
     "@embedpdf/plugin-interaction-manager": "^2.15.0",
-    "@embedpdf/plugin-render": "^2.15.0",
+    "@embedpdf/plugin-render": "^3.1.0",
     "@embedpdf/plugin-rotate": "^2.15.0",
     "@embedpdf/plugin-scroll": "^2.15.0",
     "@embedpdf/plugin-search": "^2.15.0",
