@@ -389,3 +389,42 @@ test('a localized family name that the host serves covers its English name too',
     'Liberation Mono',
   ]);
 });
+
+test('a missing bold italic stands in through the italic, which paint picks first', () => {
+  // The host serves the regular, bold, and italic faces through one family, and no bold italic.
+  // Paint matches the style before the weight, so measurement takes the italic and adds the
+  // synthesized bold, as paint does.
+  const document = documentWith(
+    'Brand Light',
+    '<w:font w:name="Brand Light"><w:family w:val="swiss"/></w:font><w:font w:name="Times New Roman"><w:family w:val="roman"/></w:font>',
+    undefined,
+    'Times New Roman'
+  );
+  const plan = documentFontSubstitutionPlan(document, ['Brand Light'], [], 'Times New Roman');
+  const host = hostFonts();
+  const served = [
+    [400, 'normal'],
+    [700, 'normal'],
+    [400, 'italic'],
+  ] as const;
+  const fonts = applyDocumentFontSubstitutions(
+    composeFontConfiguration({
+      sources: [
+        ...served.map(([weight, style]) => source('Stand In', weight, style)),
+        ...host.sources,
+      ],
+      substitutions: [
+        ...served.map(([weight, style]) => ({
+          from: { family: 'Brand Light', weight, style },
+          to: { family: 'Stand In', weight, style },
+        })),
+        ...host.substitutions!,
+      ],
+    }),
+    plan
+  );
+  const boldItalic = fonts.substitutions?.find(
+    ({ from }) => from.family === 'Brand Light' && from.weight === 700 && from.style === 'italic'
+  );
+  expect(boldItalic?.to).toEqual({ family: 'Stand In', weight: 400, style: 'italic' });
+});

@@ -8,6 +8,7 @@ import {
 } from '../layout/font-resolver.ts';
 import {
   FontResolutionError,
+  fontRequestKey,
   HARD_MAX_FONT_SOURCES,
   trustedFontBytes,
   type FontRequest,
@@ -213,7 +214,9 @@ export function fontResolutionReport(
   resolve?: (request: FontRequest) => ResolvedFont | FontResolutionError,
   droppedEmbeddedFonts: readonly DroppedEmbeddedFont[] = [],
   /** Families drawn in a stand-in reached through a host substitute; see `hostChainedDocumentFallbacks`. */
-  standInFamilies: ReadonlySet<string> = new Set()
+  standInFamilies: ReadonlySet<string> = new Set(),
+  /** Faces drawn as a synthesized style of their family; see `synthesizedServedFaces`. */
+  synthesizedFaces: ReadonlySet<string> = new Set()
 ): ExportFontResolutionReport {
   const familyNames = new Map<string, string>();
   for (const family of [...requestedFamilies, defaultFamily]) {
@@ -238,10 +241,13 @@ export function fontResolutionReport(
         })
       );
     }
-    // A stand-in shows in `faces` as evidence, but does not cover the family.
+    // A stand-in or a synthesized style shows in `faces` as evidence, but does not cover the
+    // family.
+    const synthesized = (face: ExportFontFaceResolution): boolean =>
+      synthesizedFaces.has(fontRequestKey({ family, weight: face.weight, style: face.style }));
     const covering = standInFamilies.has(family.trim().toLowerCase())
       ? faces.filter((face) => face.via === 'direct').length
-      : faces.length;
+      : faces.filter((face) => !synthesized(face)).length;
     return Object.freeze({
       family,
       coverage: covering === 4 ? 'complete' : covering > 0 ? 'partial' : 'none',

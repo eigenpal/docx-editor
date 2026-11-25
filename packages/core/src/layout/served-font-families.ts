@@ -32,8 +32,10 @@ export interface ServedFontFamilies {
   servingName(family: string): string | undefined;
   /**
    * The face that stands in for a face of `family` that nothing serves: the same face of the
-   * family that serves `family`, or its nearest face (same weight, then regular weight; the
-   * requested style first). The renderer synthesizes the missing style from it.
+   * family that serves `family`, else its nearest face. Style decides before weight, as CSS
+   * font matching does when paint picks a face from the family's alias: the requested style at
+   * the regular weight, then the requested weight upright, then the regular face. The renderer
+   * synthesizes the missing bold or italic from it.
    */
   nearestFace(family: string, request: Face): Supplied | undefined;
 }
@@ -98,8 +100,8 @@ export function servedFontFamilies(configuration: FontConfiguration): ServedFont
       const { weight, style } = request;
       for (const [w, s] of [
         [weight, style],
-        [weight, 'normal'],
         [400, style],
+        [weight, 'normal'],
         [400, 'normal'],
       ] as const) {
         const to = sources.get(fontRequestKey({ family: serving.to.family, weight: w, style: s }));

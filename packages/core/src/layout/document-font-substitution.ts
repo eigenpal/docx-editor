@@ -378,7 +378,7 @@ export function applyDocumentFontSubstitutions(
           continue;
         }
         // A served family takes a face that the document names directly (its English name or
-        // its font table alternate, `w:altName`) first. An alternate that reaches bytes only
+        // its font table alternate, `w:altName`, `CT_String`, ECMA-376 Part 1, §17.8.3.1) first. An alternate that reaches bytes only
         // through a host's substitute does not count: one paint alias holds every face of the
         // family, so its other faces stand in through the family that serves it.
         const direct = [english, alternate]
@@ -432,6 +432,29 @@ export function hostChainedDocumentFallbacks(
     if (!planned) families.add(key);
   }
   return families;
+}
+
+/**
+ * Faces of served families that stand in through another weight or style of the serving family
+ * (`fontRequestKey` of the document face). They draw as a synthesized style, so an export
+ * reports them as evidence but not as coverage: strict export still refuses a family that lacks
+ * a face.
+ */
+export function synthesizedServedFaces(
+  before: FontConfiguration,
+  after: FontConfiguration
+): ReadonlySet<string> {
+  const existing = new Set(
+    (before.substitutions ?? []).map((substitution) => fontRequestKey(substitution.from))
+  );
+  const served = servedFontFamilies(before);
+  const faces = new Set<string>();
+  for (const { from, to } of after.substitutions ?? []) {
+    if (existing.has(fontRequestKey(from))) continue;
+    if (served.servingName(from.family) === undefined) continue;
+    if (from.weight !== to.weight || from.style !== to.style) faces.add(fontRequestKey(from));
+  }
+  return faces;
 }
 
 /**

@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { strToU8, zipSync } from 'fflate';
 import { sha256FontBytes } from '../../layout/index.ts';
 import { openFontBackedDocumentForExport } from '../document-export-shaping.ts';
+import { ExportResourceError } from '../export-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -62,8 +63,8 @@ function partialFamilyDocument(): Uint8Array {
   });
 }
 
-test('an italic that the host does not serve exports from the family that serves the rest', async () => {
-  const fonts = {
+function partialFamilyFonts() {
+  return {
     sources: [
       source('Stand In', 400, 'normal', regularBytes),
       source('Stand In', 700, 'normal', boldBytes),
@@ -85,9 +86,19 @@ test('an italic that the host does not serve exports from the family that serves
         from: face('Times New Roman', weight, style),
         to: face('Liberation Serif', weight, style),
       })),
+      // The export default family, so that only the partial family is incomplete.
+      ...FACES.map(([weight, style]) => ({
+        from: face('Calibri', weight, style),
+        to: face('Liberation Sans', weight, style),
+      })),
     ],
   };
-  const opened = await openFontBackedDocumentForExport(partialFamilyDocument(), { fonts });
+}
+
+test('an italic that the host does not serve exports from the family that serves the rest', async () => {
+  const opened = await openFontBackedDocumentForExport(partialFamilyDocument(), {
+    fonts: partialFamilyFonts(),
+  });
   expect(opened.ok).toBe(true);
   if (!opened.ok) return;
   try {
@@ -97,11 +108,33 @@ test('an italic that the host does not serve exports from the family that serves
     expect(drawnFrom(700, 'normal')).toBe('Stand In');
     expect(drawnFrom(400, 'italic')).toBe('Stand In');
     expect(drawnFrom(700, 'italic')).toBe('Stand In');
+    // The italic draws as a synthesized style, which does not complete the family.
     const brand = opened.session.fontResolution.families.find(
       (entry) => entry.family === 'Brand Light'
     );
-    expect(brand?.coverage).toBe('complete');
+    expect(brand?.faces.map(({ weight, style }) => `${weight} ${style}`)).toEqual([
+      '400 normal',
+      '700 normal',
+      '400 italic',
+      '700 italic',
+    ]);
+    expect(brand?.coverage).toBe('partial');
   } finally {
     opened.session.dispose();
   }
+});
+
+test('strict font policy still refuses a family whose italic is synthesized', async () => {
+  let refusal: unknown;
+  try {
+    const opened = await openFontBackedDocumentForExport(partialFamilyDocument(), {
+      fonts: partialFamilyFonts(),
+      fontPolicy: 'strict',
+    });
+    if (opened.ok) opened.session.dispose();
+  } catch (error) {
+    refusal = error;
+  }
+  expect(refusal).toBeInstanceOf(ExportResourceError);
+  expect((refusal as Error).message).toMatch(/incomplete families: Brand Light$/);
 });
