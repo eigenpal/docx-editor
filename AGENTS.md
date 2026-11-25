@@ -216,7 +216,6 @@ Every code PR gets a changeset (`bun changeset`, or a hand-written `.changeset/*
 ## Conventions
 
 - **PRs** — short factual title with a conventional-commit prefix. The body is the minimum the diff does not show. A PR that resolves an issue MUST end its BODY with `Fixes #N`; GitHub never auto-closes from the title. No `@`-mentions, unrelated issue numbers, file lists, tooling footers, or emojis. Use the Google developer documentation style.
-- **No Word references in project text** — do not name Microsoft Word or another word processor in PR titles and bodies, commit messages, changesets, issues, or public documentation. Do not justify a behavior with "as Word does" or with a comparison against Word output. State the behavior and cite ECMA-376 for it. Where the standard does not define the behavior, say so.
 - **Bugs** — `gh issue view <N> --repo eigenpal/docx-editor`. Dev server `bun run dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`. Commit `fix: ... (fixes #N)`. Screenshots → `screenshots/`.
 - **Issues** — every issue gets exactly ONE `area:*` label, ONE `priority:*` label, and a native type: `gh issue create --type Bug|Feature|Task --label "area:...,priority:..."`. Optional `component:*` names the package. The taxonomy is in `README.md` under "Issue conventions". The labels drive the public roadmap board.
 - **ESM only** — no `require()`.
