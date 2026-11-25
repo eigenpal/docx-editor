@@ -22,6 +22,10 @@
 // Merges that share rows take this path only as a family of fixed merges: they start in the
 // same row, and every row they cover is `hRule="exact"` (`fixedFamily`). Each merge carries
 // its own text through its own rows, and the family activates together.
+//
+// Each fragment of a carried merge paints its share of the text in one head row: the placed
+// head row on the first page, and a zero-height carried head row on each later page. A
+// family shares these head rows (`table-vmerge-head-rows.ts`).
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type {
   SemanticTableCell,
@@ -50,6 +54,14 @@ import { withoutZeroHeightBottomEdge } from './table-vmerge-boundary.ts';
 import { isCarriedHeadRow } from './table-carried-head-row.ts';
 import { shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAlignmentShift } from './table-row-vertical.ts';
+import {
+  carriedHeadRow,
+  createHeadRowEdits,
+  withCells,
+  withTopAlignedCells,
+  type HeadRowEdits,
+  type HeadRowKind,
+} from './table-vmerge-head-rows.ts';
 
 const blockBottom = (block: BlockFragmentRecord): number => block.box.y + block.box.height;
 
@@ -192,6 +204,25 @@ function continuesMerge(row: SemanticTableRow): boolean {
   return known;
 }
 
+/**
+ * `sorted` (by first row) split into runs of merges that share rows. `last` is the last row
+ * that a run covers.
+ */
+function overlappingClusters(sorted: readonly Group[]): { members: Group[]; last: number }[] {
+  const clusters: { members: Group[]; last: number }[] = [];
+  for (const group of sorted) {
+    const open = clusters.at(-1);
+    if (open && group.first <= open.last) {
+      open.members.push(group);
+      open.last = Math.max(open.last, group.last);
+    } else clusters.push({ members: [group], last: group.last });
+  }
+  return clusters;
+}
+
+/** Whether `group` decides activation for its family: the first member, or a lone merge. */
+const leadsFamily = (group: Group): boolean => (group.family?.[0] ?? group) === group;
+
 /** A protected, text-only merge whose rows can cross a page while its text uses a cursor. */
 export function createVMergeFragmentCarry(
   structure: SemanticTableStructure,
@@ -265,19 +296,11 @@ export function createVMergeFragmentCarry(
     };
     // Merges that share a row form one cluster. A cluster of one merge group takes this path
     // alone. A larger cluster takes it only as a family of fixed merges (`fixedFamily`).
-    for (let start = 0; start < candidates.length;) {
-      let end = start + 1;
-      let clusterLast = candidates[start]!.last;
-      while (end < candidates.length && candidates[end]!.first <= clusterLast) {
-        clusterLast = Math.max(clusterLast, candidates[end]!.last);
-        end++;
-      }
-      const cluster = candidates.slice(start, end);
-      start = end;
-      if (cluster.length > 1 && !fixedFamily(cluster, clusterLast)) continue;
-      if (!cluster.every(validGroup)) continue;
-      for (const group of cluster) {
-        if (cluster.length > 1) group.family = cluster;
+    for (const { members, last } of overlappingClusters(candidates)) {
+      if (members.length > 1 && !fixedFamily(members, last)) continue;
+      if (!members.every(validGroup)) continue;
+      for (const group of members) {
+        if (members.length > 1) group.family = members;
         groups.push(group);
         for (let index = group.first; index <= group.last; index++) {
           const here = atRow.get(index);
@@ -337,6 +360,19 @@ export function createVMergeFragmentCarry(
   const activeAt = (index: number): Group[] =>
     (atRow.get(index) ?? []).filter((group) => group.active);
 
+  /** Dependencies for a measuring layout: no caches, sinks, or budgets, and its own line ids. */
+  function probeDepsFor(linePrefix: string): TableFlowDeps {
+    let lineId = 0;
+    return {
+      ...stripAnchorSinksForProbe(deps),
+      cache: undefined,
+      borderOwnershipBudget: undefined,
+      vMergeResolveBudget: undefined,
+      onCellBreakKey: undefined,
+      nextLineId: () => `${linePrefix}-${lineId++}`,
+    };
+  }
+
   function emptied(group: Group, row: SemanticTableRow): SemanticTableRow {
     const headIds = new Set(group.heads.map((head) => head.cell.id));
     return {
@@ -352,15 +388,7 @@ export function createVMergeFragmentCarry(
   const fixedRowHeight = new Map<number, number>();
 
   function prepare(group: Group): boolean {
-    let lineId = 0;
-    const probeDeps: TableFlowDeps = {
-      ...stripAnchorSinksForProbe(deps),
-      cache: undefined,
-      borderOwnershipBudget: undefined,
-      vMergeResolveBudget: undefined,
-      onCellBreakKey: undefined,
-      nextLineId: () => `probe-vmerge-fragment-${lineId++}`,
-    };
+    const probeDeps = probeDepsFor('probe-vmerge-fragment');
     const cols = structure.columnWidthsPt;
     const spacing = structure.cellSpacingPt;
     const heights: number[] = [];
@@ -484,15 +512,7 @@ export function createVMergeFragmentCarry(
     let grow = group.last;
     while (grow >= index && rows[grow]!.height.rule === 'exact') grow--;
     if (grow < index) return;
-    let lineId = 0;
-    const probeDeps: TableFlowDeps = {
-      ...stripAnchorSinksForProbe(deps),
-      cache: undefined,
-      borderOwnershipBudget: undefined,
-      vMergeResolveBudget: undefined,
-      onCellBreakKey: undefined,
-      nextLineId: () => `probe-vmerge-remainder-${lineId++}`,
-    };
+    const probeDeps = probeDepsFor('probe-vmerge-remainder');
     const available =
       top -
       textTop +
@@ -538,15 +558,7 @@ export function createVMergeFragmentCarry(
     bottom: number
   ): LayoutRowBoundedResult {
     const top = group.fragmentStart?.top ?? placed.record.box.y;
-    let lineId = 0;
-    const probeDeps: TableFlowDeps = {
-      ...stripAnchorSinksForProbe(deps),
-      cache: undefined,
-      borderOwnershipBudget: undefined,
-      vMergeResolveBudget: undefined,
-      onCellBreakKey: undefined,
-      nextLineId: () => `probe-vmerge-final-row-${lineId++}`,
-    };
+    const probeDeps = probeDepsFor('probe-vmerge-final-row');
     let requiredBottom = placed.bottom;
     const pending = group.heads
       .filter((head) => !head.complete)
@@ -649,15 +661,99 @@ export function createVMergeFragmentCarry(
     }
   }
 
+  /** For each active merge, the indexes of its rows' records. A repeated header row is none. */
+  function coveredRecords(records: readonly TableRowFragmentRecord[]): Map<Group, number[]> {
+    const covered = new Map<Group, number[]>();
+    for (const [index, record] of records.entries()) {
+      const authored = rowIndex.get(record.id);
+      if (record.isHeaderRepeat || authored === undefined) continue;
+      for (const group of activeAt(authored)) {
+        const indexes = covered.get(group);
+        if (indexes) indexes.push(index);
+        else covered.set(group, [index]);
+      }
+    }
+    return covered;
+  }
+
+  /**
+   * Place the share of the merged text of `group` that the records at `indexes` hold, and
+   * publish it into the head row of their fragment (`table-vmerge-head-rows.ts`).
+   */
+  function publishGroup(
+    group: Group,
+    records: readonly TableRowFragmentRecord[],
+    indexes: readonly number[],
+    x: number,
+    edits: HeadRowEdits
+  ): void {
+    const firstIndex = indexes[0]!;
+    const first = records[firstIndex]!;
+    const last = records[indexes[indexes.length - 1]!]!;
+    // Only the first fragment of the merge holds the authored head row.
+    const holdsHeadRow = first.id === group.source.id;
+    if (!group.headRecord) {
+      if (!holdsHeadRow)
+        throw new TablePaginationError(
+          'table-row-split-unsupported',
+          'Merged text has no placed head row'
+        );
+      group.headRecord = first;
+    }
+    const bottom = last.box.y + last.box.height;
+    const final = rowIndex.get(last.id) === group.last && !last.hasContinuation;
+    const placed = new Map(
+      group.heads.map((head) => [head.cell.id, placeHead(group, head, first, bottom, x, final)])
+    );
+    group.fragmentStart = undefined;
+    // `w:vAlign` places the merged text only in the fragment that holds the head row. A
+    // fragment that continues the text from an earlier page fills from the top.
+    // ECMA-376 Part 1 §17.4.83: "This element specifies the vertical alignment for text
+    // within the current table cell." The specification does not define alignment for a
+    // cell that breaks across pages, so this split is a layout rule.
+    const continued = !holdsHeadRow || first.isContinuation === true;
+    // When the last row splits while the text goes on, that row ends at its lowest line,
+    // not at the page bottom. The text is aligned here against that line instead.
+    const splitTail =
+      !continued && last.hasContinuation === true && group.heads.some((head) => !head.complete);
+    if (splitTail) alignAboveSplitRow(group, last, placed);
+
+    const kind: HeadRowKind = holdsHeadRow ? 'placed' : 'carried';
+    const previous = edits.current(kind, firstIndex, group.source.id);
+    const base =
+      previous?.record ?? (holdsHeadRow ? first : carriedHeadRow(group.headRecord, first, x));
+    const source = previous?.source ?? group.source;
+    const headIds = new Set(group.heads.map((head) => head.cell.id));
+    edits.publish(
+      kind,
+      firstIndex,
+      {
+        record: withCells(base, placed),
+        source: continued || splitTail ? withTopAlignedCells(source, headIds) : source,
+      },
+      previous
+    );
+
+    if (
+      final &&
+      rows[group.last]!.height.rule !== 'exact' &&
+      group.heads.some((head) => !head.complete)
+    ) {
+      throw new TablePaginationError(
+        'table-row-split-unsupported',
+        'Merged text remains after its authored row span'
+      );
+    }
+  }
+
   return {
     rowAt(index, row, top, bottom) {
       const here = atRow.get(index);
       if (!here) return row;
       for (const group of here) {
         // A family decides once, through its first member: every member starts in this row.
-        if (index !== group.first || group.active || (group.family?.[0] ?? group) !== group)
-          continue;
-        activate(group, top, bottom);
+        if (index === group.first && !group.active && leadsFamily(group))
+          activate(group, top, bottom);
       }
       let placed = row;
       for (const group of here) if (group.active) placed = emptied(group, placed);
@@ -687,15 +783,7 @@ export function createVMergeFragmentCarry(
         group.heads.filter((head) => !head.complete).map((head) => ({ group, head }))
       );
       if (pending.length === 0) return undefined;
-      let lineId = 0;
-      const probeDeps: TableFlowDeps = {
-        ...stripAnchorSinksForProbe(deps),
-        cache: undefined,
-        borderOwnershipBudget: undefined,
-        vMergeResolveBudget: undefined,
-        onCellBreakKey: undefined,
-        nextLineId: () => `probe-vmerge-carried-start-${lineId++}`,
-      };
+      const probeDeps = probeDepsFor('probe-vmerge-carried-start');
       return pending.some(({ group, head }) => {
         const row: SemanticTableRow = {
           ...group.source,
@@ -736,147 +824,13 @@ export function createVMergeFragmentCarry(
     },
     publish(records, sources, insets, x) {
       if (!groups.some((group) => group.active)) return { rows: records, sources };
-      const insertions = new Map<
-        number,
-        { record: TableRowFragmentRecord; source: SemanticTableRow }[]
-      >();
-      const replacements = new Map<number, TableRowFragmentRecord>();
-      const replacementSources = new Map<number, SemanticTableRow>();
-      const coveredByGroup = new Map<Group, number[]>();
-      for (const [index, record] of records.entries()) {
-        const authored = rowIndex.get(record.id);
-        if (record.isHeaderRepeat || authored === undefined) continue;
-        for (const group of activeAt(authored)) {
-          const covered = coveredByGroup.get(group) ?? [];
-          covered.push(index);
-          coveredByGroup.set(group, covered);
-        }
-      }
+      const edits = createHeadRowEdits(records, insets);
+      const covered = coveredRecords(records);
       for (const group of groups) {
-        if (!group.active) continue;
-        const covered = coveredByGroup.get(group) ?? [];
-        if (!covered.length) continue;
-        const firstIndex = covered[0]!;
-        const first = records[firstIndex]!;
-        const last = records[covered[covered.length - 1]!]!;
-        if (!group.headRecord) {
-          if (first.id !== group.source.id)
-            throw new TablePaginationError(
-              'table-row-split-unsupported',
-              'Merged text has no placed head row'
-            );
-          group.headRecord = first;
-        }
-        const bottom = last.box.y + last.box.height;
-        const final = rowIndex.get(last.id) === group.last && !last.hasContinuation;
-        const placed = new Map(
-          group.heads.map((head) => [head.cell.id, placeHead(group, head, first, bottom, x, final)])
-        );
-        group.fragmentStart = undefined;
-        // `w:vAlign` places the merged text only in the fragment that holds the head row. A
-        // fragment that continues the text from an earlier page fills from the top.
-        // ECMA-376 Part 1 §17.4.83: "This element specifies the vertical alignment for text
-        // within the current table cell." The specification does not define alignment for a
-        // cell that breaks across pages, so this split is a layout rule.
-        const continued = first.id !== group.source.id || first.isContinuation === true;
-        // When the last row splits while the text goes on, that row ends at its lowest line,
-        // not at the page bottom. The text is aligned here against that line instead.
-        const splitTail =
-          !continued && last.hasContinuation === true && group.heads.some((head) => !head.complete);
-        if (splitTail) alignAboveSplitRow(group, last, placed);
-        const topAligned = continued || splitTail;
-        // A family's merges share the head row, so each one updates what the one before it
-        // published there.
-        const shared = insertions
-          .get(firstIndex)
-          ?.find((entry) => entry.source.id === group.source.id);
-        const sourceBefore =
-          (first.id === group.source.id ? replacementSources.get(firstIndex) : shared?.source) ??
-          group.source;
-        const headSource: SemanticTableRow = topAligned
-          ? {
-              ...sourceBefore,
-              cells: sourceBefore.cells.map((cell) =>
-                group.heads.some((head) => head.cell.id === cell.id)
-                  ? { ...cell, vAlign: 'top' as const }
-                  : cell
-              ),
-            }
-          : sourceBefore;
-        const headRecord: TableRowFragmentRecord = {
-          ...group.headRecord,
-          ...(first.id === group.source.id ? {} : { isContinuation: true }),
-          box: first.id === group.source.id ? first.box : { ...first.box, height: 0 },
-          cells: group.headRecord.cells.map(
-            (cell) =>
-              placed.get(cell.id) ?? {
-                ...cell,
-                blocks: [],
-                box: {
-                  ...cell.box,
-                  x: cell.box.x + x - group.headRecord!.box.x,
-                  y: first.box.y,
-                  height: 0,
-                },
-              }
-          ),
-        };
-        if (first.id === group.source.id) {
-          // Nonmerged head-row cells were already placed and keep their original records.
-          replacementSources.set(firstIndex, headSource);
-          const recordBefore = replacements.get(firstIndex) ?? first;
-          replacements.set(firstIndex, {
-            ...recordBefore,
-            cells: recordBefore.cells.map((cell) => placed.get(cell.id) ?? cell),
-          });
-        } else if (shared) {
-          const record = shared.record;
-          shared.record = {
-            ...record,
-            cells: record.cells.map((cell) => placed.get(cell.id) ?? cell),
-          };
-          shared.source = headSource;
-          const sharedInsets = insets.get(record);
-          if (sharedInsets) insets.set(shared.record, sharedInsets);
-        } else {
-          const pending = insertions.get(firstIndex) ?? [];
-          pending.push({ record: headRecord, source: headSource });
-          insertions.set(firstIndex, pending);
-          const originalInsets = insets.get(first);
-          if (originalInsets) insets.set(headRecord, originalInsets);
-        }
-        if (
-          rowIndex.get(last.id) === group.last &&
-          !last.hasContinuation &&
-          rows[group.last]!.height.rule !== 'exact' &&
-          group.heads.some((head) => !head.complete)
-        ) {
-          throw new TablePaginationError(
-            'table-row-split-unsupported',
-            'Merged text remains after its authored row span'
-          );
-        }
+        const indexes = covered.get(group);
+        if (group.active && indexes) publishGroup(group, records, indexes, x, edits);
       }
-      const outRows: TableRowFragmentRecord[] = [];
-      const outSources: SemanticTableRow[] = [];
-      for (const [index, record] of records.entries()) {
-        for (const insertion of insertions.get(index) ?? []) {
-          outRows.push(insertion.record);
-          outSources.push(insertion.source);
-        }
-        const replacement = replacements.get(index) ?? record;
-        outRows.push(replacement);
-        const sourceIndex = rowIndex.get(record.id);
-        outSources.push(
-          replacementSources.get(index) ??
-            (replacements.has(index) && sourceIndex !== undefined
-              ? rows[sourceIndex]!
-              : sources[index]!)
-        );
-        const originalInsets = insets.get(record);
-        if (replacement !== record && originalInsets) insets.set(replacement, originalInsets);
-      }
-      return { rows: outRows, sources: outSources };
+      return edits.assemble(sources);
     },
   };
 }
