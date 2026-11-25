@@ -90,7 +90,8 @@ export function cellEndMarkHeight(
 }
 
 /**
- * What a row asks of a `w:vMerge` continuation cell when NOTHING ELSE can size it.
+ * The end-of-cell paragraph box of a `w:vMerge` continuation cell, which a row asks for when
+ * NOTHING ELSE can size it.
  *
  * A continuation cell is excluded from its row's height, the same way it is excluded from
  * painting: `vmerge-continuation-control.docx` t8 puts a continuation authoring 18pt of
@@ -116,7 +117,9 @@ export function cellEndMarkHeight(
  * every mixed row in the corpus where it already is.
  *
  * A row of continuations only takes this box from its FIRST cell, and a first cell with
- * `w:hideMark` takes a default line instead ({@link mergedRowFirstCellHeight}). t6 gives a
+ * `w:hideMark` takes a default line instead ({@link mergedRowFirstCellHeight}). A row that
+ * also holds waiting `btLr` cells, or heads that a merged-text carry emptied, still takes
+ * the largest box of its cells (not measured). t6 gives a
  * continuation `w:hideMark` and its row is 23.52pt, which that rule does not derive; later
  * controls varied the mark size, its spacing, and the paragraph styles, and each gave the
  * default line.

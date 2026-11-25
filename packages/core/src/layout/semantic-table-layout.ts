@@ -1448,7 +1448,8 @@ export function layoutRowFragmentBounded(
   const markSizedRow =
     row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
   // A row of continuations only takes its first cell's box (`cellReservedMarkHeights`,
-  // 17.4.84). Heads a merged-text carry emptied hold no end paragraph and keep the old rule.
+  // 17.4.84). A cell with no end paragraph (a head a merged-text carry emptied, or an invalid
+  // empty `w:tc`) keeps the row on the largest box of its cells.
   const onlyContinuations = row.cells.every(
     (cell) => cell.vMergeContinue && cell.blocks.length > 0
   );

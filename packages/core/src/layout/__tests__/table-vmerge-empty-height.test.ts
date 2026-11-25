@@ -87,7 +87,8 @@ test('a continuation cell measures its mark, never the content it does not paint
 
 // `w:hideMark` (17.4.21) excludes the end-of-cell glyph, so the row takes one line of the
 // default paragraph style instead of the mark (`mergedRowFirstCellHeight`). No styles part
-// here, so that is the default run style.
+// here, so that is the default run style. Synthetic controls with hidden marks of several
+// sizes and spacings each gave that line; the older t6 control (23.52pt) is not derived.
 test('w:hideMark gives a continuation-only row one default line', () => {
   const result = table('', p('Head'), cell('', 'Ignored', '<w:hideMark/>'));
   expect(result.rows[1]!.box.height).toBeCloseTo(MARK_LINE_PT, 6);

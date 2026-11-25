@@ -17,6 +17,7 @@ import {
   layoutSemanticDocument,
 } from '../index.ts';
 import type { BlockFragmentRecord, TableFragmentRecord } from '../semantic-records.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer();
@@ -182,6 +183,36 @@ test("the row's largest top and bottom margins pad the first cell's box", () => 
   expect(padded(margins(0, 0), margins(400, 400))).toBeCloseTo(20 + line(8) + 20, 6);
   expect(padded(margins(400, 400), margins(0, 0))).toBeCloseTo(20 + line(8) + 20, 6);
   expect(padded(margins(0, 0), margins(0, 400))).toBeCloseTo(line(8) + 20, 6);
+});
+
+// A hidden default paragraph style gives no default line: the row then takes only its 5pt
+// minimum, as a row of merge heads does (not measured). The head and closing rows show.
+test('a hidden first mark under a hidden default paragraph style gives no line', () => {
+  const styles = readOoxmlPart(
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="16"/></w:rPr>` +
+      '</w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' +
+      '</w:pPr></w:pPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">' +
+      '<w:rPr><w:vanish/></w:rPr></w:style></w:styles>',
+    { name: '/word/styles.xml', contentType: 'app/xml' }
+  );
+  if (!styles.ok) throw new Error(styles.reason);
+  const source = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p/>${continuationTable([
+      { body: mark(40), properties: HIDE },
+      big,
+    ]).replaceAll(
+      '<w:rPr><w:sz w:val="16"/></w:rPr>',
+      '<w:rPr><w:vanish w:val="0"/><w:sz w:val="16"/></w:rPr>'
+    )}<w:p/></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!source.ok) throw new Error(source.reason);
+  const layout = layoutSemanticDocument(source.part, 0, {
+    measurer,
+    styleCascade: buildStyleCascadeTable(styles.part.root),
+  });
+  expect(tableOf(layout.pages[0]!.fragments).rows[1]!.box.height).toBeCloseTo(5, 6);
 });
 
 // A `w:vanish` mark is not measured, so it takes the default line as a hidden mark does.
