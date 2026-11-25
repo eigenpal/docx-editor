@@ -27,11 +27,12 @@ async function bodyXml(r: DocxEditorServerRuntime): Promise<string> {
   return xml.slice(xml.indexOf('<w:body>'), xml.indexOf('</w:body>'));
 }
 
-async function refusal(work: (c: RequestContext) => void): Promise<unknown> {
-  const runtime = await DocxEditor.createServer(docx(FIELD));
+async function refusal(work: (c: RequestContext) => void, tracked = false): Promise<unknown> {
+  const runtime = await DocxEditor.createServer(docx(FIELD), { author: 'Agent' });
   const before = await bodyXml(runtime);
   let code: unknown = null;
   await runtime.run(async (c) => {
+    if (tracked) c.document.changeTrackingMode = 'TrackMineOnly';
     c.document.body.paragraphs.load('items');
     await c.sync();
     work(c);
@@ -82,6 +83,53 @@ describe('a write that would add a paragraph mark inside field codes', () => {
     const xml = await bodyXml(runtime);
     expect(xml.indexOf('before')).toBeLessThan(xml.indexOf('fldCharType="begin"'));
     expect(xml.indexOf('>after<')).toBeGreaterThan(xml.indexOf('fldCharType="end"'));
+    runtime.dispose();
+  });
+});
+
+describe('a delete that would remove a paragraph mark inside field codes', () => {
+  const item = (c: RequestContext, index: number) => c.document.body.paragraphs.items[index]!;
+  const deletes: [string, (c: RequestContext) => void][] = [
+    ['Paragraph.delete on a paragraph inside the field codes', (c) => item(c, 2).delete()],
+    ['Paragraph.delete on the paragraph that holds begin', (c) => item(c, 1).delete()],
+    [
+      'Range.delete from the begin paragraph into the result',
+      (c) => item(c, 1).getRange('Whole').expandTo(item(c, 3).getRange('Start')).delete(),
+    ],
+    [
+      'Range.delete from the field codes past the field',
+      (c) => item(c, 2).getRange('Whole').expandTo(item(c, 4).getRange('Whole')).delete(),
+    ],
+  ];
+  for (const [label, remove] of deletes) {
+    test(`${label} is refused`, async () => {
+      expect(await refusal(remove)).toBe('InvalidArgument');
+    });
+    // A tracked range delete across paragraphs that hold field characters already refuses
+    // with NotSupported; either way nothing commits.
+    test(`${label} is refused while tracking`, async () => {
+      expect(['InvalidArgument', 'NotSupported']).toContain(String(await refusal(remove, true)));
+    });
+  }
+
+  test('Range.delete over the whole field is refused too', async () => {
+    const remove = (c: RequestContext) =>
+      item(c, 1).getRange('Whole').expandTo(item(c, 3).getRange('Whole')).delete();
+    expect(await refusal(remove)).toBe('InvalidArgument');
+  });
+
+  test('a range delete that ends before the field still applies', async () => {
+    const runtime = await DocxEditor.createServer(docx(FIELD));
+    await runtime.run(async (c) => {
+      const paragraphs = c.document.body.paragraphs;
+      paragraphs.load('items');
+      await c.sync();
+      item(c, 0).getRange('Whole').expandTo(item(c, 1).getRange('Start')).delete();
+      await c.sync();
+    });
+    const xml = await bodyXml(runtime);
+    expect(xml).not.toContain('Top');
+    expect(xml.match(/instrText/g)).toHaveLength(6);
     runtime.dispose();
   });
 });

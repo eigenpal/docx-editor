@@ -1,13 +1,14 @@
-// A paragraph split that would add a paragraph mark inside a complex field's field codes,
-// refused before the write.
+// A paragraph split or delete that would add or remove a paragraph mark inside a complex
+// field's field codes, refused before the write.
 //
 // When a field's field codes (`w:instrText`, ECMA-376 Part 1, 17.16.23) hold paragraph marks,
 // a split inside them, or at offset 0 of the paragraph where they end, adds one more mark to
 // the field instruction (`w:fldChar`, CT_FldChar, 17.16.18). Layout shows no change for it, so
-// the write would change the field silently. The planners refuse it instead.
+// the write would change the field silently. The planners refuse it instead. A delete that
+// removes such a mark is refused for the same reason.
 
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { splitInsideFieldCodes } from '../layout/field-code-marks.ts';
+import { markIsFieldCode, splitInsideFieldCodes } from '../layout/field-code-marks.ts';
 import type { PlannedOperation } from './plan-types.ts';
 
 /** The refusal for a split at any of `offsets` of `paragraphId` inside field codes, or null. */
@@ -17,12 +18,32 @@ export function fieldCodeSplitRefusal(
   offsets: readonly number[]
 ): PlannedOperation | null {
   if (!offsets.some((offset) => splitInsideFieldCodes(part, paragraphId, offset))) return null;
-  return {
-    ok: false,
-    error: {
-      code: 'unsupported-content',
-      message: 'a paragraph break here would add a paragraph mark inside a field instruction',
-      detail: 'field-code-mark',
-    },
-  };
+  return refusal('a paragraph break here would add a paragraph mark inside a field instruction');
+}
+
+/**
+ * The refusal for a delete across `ids`, the paragraphs it spans in order, when a mark it
+ * removes (every mark but the last one) is field code, or null. A text delete keeps the field
+ * characters, so even a delete over the whole field would join its field codes and drop the
+ * paragraphs inside them, changing the instruction.
+ */
+export function fieldCodeDeleteRefusal(
+  part: OoxmlPart,
+  ids: readonly string[]
+): PlannedOperation | null {
+  if (!ids.slice(0, -1).some((id) => markIsFieldCode(part, id))) return null;
+  return refusal('this delete would remove a paragraph mark inside a field instruction');
+}
+
+/** The refusal for deleting paragraph `paragraphId` when its mark is field code, or null. */
+export function fieldCodeParagraphDeleteRefusal(
+  part: OoxmlPart,
+  paragraphId: string
+): PlannedOperation | null {
+  if (!markIsFieldCode(part, paragraphId)) return null;
+  return refusal('this paragraph holds a paragraph mark inside a field instruction');
+}
+
+function refusal(message: string): PlannedOperation {
+  return { ok: false, error: { code: 'unsupported-content', message, detail: 'field-code-mark' } };
 }

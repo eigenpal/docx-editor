@@ -1564,6 +1564,13 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 - **THEN** the planner refuses with `unsupported-content` and the detail `field-code-mark`
 - **AND** the document does not change
 
+#### Scenario: An automation delete removes a field-code mark
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** an automation delete of a paragraph or a range would remove one of those marks, or the mark of the paragraph that holds `begin`, also when it covers the whole field
+- **THEN** the planner refuses with `unsupported-content` and the detail `field-code-mark`
+- **AND** the document does not change
+
 #### Scenario: A malformed field keeps its paragraphs
 
 - **GIVEN** a field without an `end`, or a field whose field codes hold `w:t` text outside a nested field's result

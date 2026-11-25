@@ -172,7 +172,11 @@ interface Slot {
 }
 
 import type { BatchPlanner, BatchPlannerHost } from './plan-planner-types.ts';
-import { fieldCodeSplitRefusal } from './field-code-split-refusal.ts';
+import {
+  fieldCodeDeleteRefusal,
+  fieldCodeParagraphDeleteRefusal,
+  fieldCodeSplitRefusal,
+} from './field-code-split-refusal.ts';
 export type { BatchPlanner, BatchPlannerHost };
 
 /** A handle whose object an edit, a peer, or an undo removed: reading again finds a fresh one. */
@@ -614,6 +618,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       // is left of the two ends, because that is what deleting a stretch of a document means.
       // The join is the canonical `joinParagraphs`, so a span that spills across a table cell
       // is refused there and the whole batch with it.
+      const fieldCode = fieldCodeDeleteRefusal(reads.part, ids);
+      if (fieldCode) return fieldCode;
       for (const paragraphId of ids) {
         const conflict = claim(plan, paragraphId);
         if (conflict) return conflict;
@@ -924,6 +930,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const planDeleteParagraph = (plan: StoryPlan, paragraph: ResolvedPoint): PlannedOperation => {
     const pin = pinWrite(plan);
     if (pin) return pin;
+    const fieldCode = fieldCodeParagraphDeleteRefusal(plan.reads.part, paragraph.paragraphId);
+    if (fieldCode) return fieldCode;
     const conflict = claim(plan, paragraph.paragraphId);
     if (conflict) return conflict;
     const slot = plan.slotById.get(paragraph.paragraphId);

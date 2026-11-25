@@ -181,6 +181,7 @@ Generated TOC rows are read-only. Delete and Backspace do not remove them. Conte
 - Paragraphs inside a field instruction do not display and do not advance list numbers. This also applies in table cells and content controls. They also stay hidden when field instructions show.
 - Backspace, Delete, and the `mergeParagraphs` command do not join across a paragraph mark inside a field instruction. `mergeParagraphs` refuses with the `unsupported` code.
 - Enter and the `splitParagraph` command refuse to add a paragraph mark inside a field instruction, including at the start of the field result.
+- Automation writes refuse to add or remove a paragraph mark inside a field instruction. This includes paragraph and range deletes, also over the whole field.
 - `LISTNUM` and `REF` in headers, footers, and text boxes keep their saved result.
 - `NOTEREF` with `\p` or `\f` keeps its saved result.
 - `STYLEREF` results longer than 4,096 characters keep their saved result.
