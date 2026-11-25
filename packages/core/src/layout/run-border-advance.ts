@@ -10,7 +10,12 @@
 // testing and both painters place it without a rule of their own. The side that closes a line
 // has no span after it: it is added to the line's width when the line closes.
 
-import { borderStrokeWidthPt, sameBorderEdge } from './border-metrics.ts';
+import {
+  borderStrokeWidthPt,
+  runBorderStart,
+  sameBorderEdge,
+  withRunBorderJoin,
+} from './border-metrics.ts';
 import type { ParagraphBorderEdge } from './paragraph-style.ts';
 import type { PendingLine } from './pending-line.ts';
 import { growRunBorderLineMetrics } from './run-border-strokes.ts';
@@ -50,13 +55,27 @@ export function runBorderGapBetween(last: Placed | undefined, next: Placed): num
     opens &&
     sameBorderEdge(last!.style.border!, next.style.border!) &&
     last!.range.paragraphId === next.range.paragraphId &&
-    last!.range.end === next.range.start
+    last!.range.end === runBorderStart(next)
   )
     return 0;
   return (
     (closes ? runBorderPad(last!.style.border!) : 0) +
     (opens ? runBorderPad(next.style.border!) : 0)
   );
+}
+
+/**
+ * {@link runBorderGapBetween} for two spans that sit side by side after bidi reordering: text
+ * that continues on either side shares the outline, as the strokes group it.
+ */
+export function runBorderGapBeside(left: Placed | undefined, right: Placed): number {
+  if (
+    left &&
+    runBorderStart(left) === right.range.end &&
+    left.range.paragraphId === right.range.paragraphId
+  )
+    return runBorderGapBetween(right, left);
+  return runBorderGapBetween(left, right);
 }
 
 type Gap = (text?: string, start?: number) => number;
@@ -94,31 +113,33 @@ const SPACES_ONLY = /^ +$/;
 
 /**
  * The border room of a paragraph with these pieces. A paragraph without a character border
- * takes none and keeps its gaps as they are. A right-to-left paragraph, and one with
- * right-to-left text, keeps its borders outside the advance: its spans are reordered after
- * the break, where a gap is not carried.
+ * takes none and keeps its gaps as they are. The gaps follow the logical order; a line with
+ * right-to-left text places them again in its visual order ({@link runBorderGapBeside}).
  */
 export function runBorderAdvance(
-  pieces: readonly { readonly style: ResolvedRunStyle; readonly end: number }[],
-  paragraphRtl: boolean,
+  pieces: readonly {
+    readonly style: ResolvedRunStyle;
+    readonly start: number;
+    readonly end: number;
+  }[],
   paragraphId: string,
   line: () => PendingLine,
   measurer: TextMeasurer
 ): RunBorderAdvance {
   const bordered = pieces.some((piece) => piece.style.border);
-  if (
-    paragraphRtl ||
-    !bordered ||
-    pieces.some((piece) => piece.style.shaping?.direction === 'rtl')
-  ) {
-    return {
-      trailing: 0,
-      gapBefore: (gap) => gap,
-      beforeObject: () => {},
-      closeLine: bordered ? (closing) => growRunBorderLineMetrics(closing, measurer) : () => {},
-    };
+  if (!bordered) {
+    return { trailing: 0, gapBefore: (gap) => gap, beforeObject: () => {}, closeLine: () => {} };
   }
   const paragraphEnd = pieces.at(-1)?.end ?? 0;
+  const joins = new Map<number, number>();
+  for (let index = 1; index < pieces.length; index++) {
+    const [before, piece] = [pieces[index - 1]!, pieces[index]!];
+    if (piece.start > before.end) joins.set(piece.start, before.end);
+  }
+  const joined = <T extends Placed>(value: T): T => {
+    const from = joins.get(value.range.start);
+    return from === undefined ? value : withRunBorderJoin(value, from);
+  };
   // The model offset where a border closed before an inline object. The span that ends there
   // has its closing side on the line already.
   let closedAt = -1;
@@ -130,11 +151,10 @@ export function runBorderAdvance(
       advance.trailing = paintsRunBorder(style, candidate) ? runBorderPad(style.border!) : 0;
       return (text = candidate, start = candidateStart) =>
         gap(text, start) +
-        runBorderGapBetween(open(line().spans.at(-1)), {
-          style,
-          text,
-          range: { paragraphId, start, end: start + text.length },
-        });
+        runBorderGapBetween(
+          open(line().spans.at(-1)),
+          joined({ style, text, range: { paragraphId, start, end: start + text.length } })
+        );
     },
     beforeObject: () => {
       advance.trailing = 0;
@@ -148,6 +168,7 @@ export function runBorderAdvance(
     closeLine: (closing) => {
       growRunBorderLineMetrics(closing, measurer);
       const spans = closing.spans;
+      if (joins.size > 0) for (const [at, span] of spans.entries()) spans[at] = joined(span);
       let index = spans.length - 1;
       // A break that ends the line is no text: the border closes before it, with its spaces.
       const endsInBreak = index >= 0 && BREAK_ONLY.test(spans[index]!.text);

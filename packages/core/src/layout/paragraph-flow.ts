@@ -472,7 +472,7 @@ export function breakParagraph(
   // Where the line being built starts, and how much room it has. Only the first differs.
   const lineOffset = (): number => (opensFirstLine() ? firstLineOffset : 0);
   const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
-  const borders = runBorderAdvance(pieces, paragraphRtl, paragraphId, () => line, measurer);
+  const borders = runBorderAdvance(pieces, paragraphId, () => line, measurer);
   const baseLineAvailable = (): number => Math.max(1, available - lineOffset() - borders.trailing);
 
   // Closed line heights stay fixed. Accumulate in the same order as a full reduction,

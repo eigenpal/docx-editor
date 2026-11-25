@@ -282,12 +282,80 @@ describe('a border beside an inline object', () => {
   });
 });
 
+/** The outer left and right of each outline on a line. */
+const outlines = (line: ReturnType<typeof lines>[number]) => {
+  const strokes = runBorderStrokesForLine(line);
+  const lefts = strokes.filter((stroke) => stroke.side === 'left').map((stroke) => stroke.box.x);
+  const rights = strokes
+    .filter((stroke) => stroke.side === 'right')
+    .map((stroke) => stroke.box.x + stroke.box.width);
+  return lefts.map((left, index) => [left, rights[index]!]);
+};
+
+describe('text the paragraph does not show', () => {
+  test('a border goes on across hidden text of its own run formatting', () => {
+    const [line] = lines(
+      run('Aa', border()) + run('xx', `${border()}<w:vanish/>`) + run('Bb', border()) + run(' Cc')
+    );
+    expect(xOf(line!, 'Aa')).toBe(3);
+    expect(xOf(line!, 'Bb')).toBe(15);
+    expect(line!.spans.map((span) => [span.text, span.box.x])).toContainEqual([' ', 30]);
+    expect(outlines(line!)).toEqual([[0, 30]]);
+  });
+  test('a border goes on across hidden text without a border', () => {
+    const [line] = lines(
+      run('Aa', border()) + run('xx', '<w:vanish/>') + run('Bb', border()) + run(' Cc')
+    );
+    expect(xOf(line!, 'Bb')).toBe(15);
+    expect(outlines(line!)).toEqual([[0, 30]]);
+  });
+});
+
 describe('right-to-left text', () => {
-  test('a right-to-left paragraph keeps its advances; its border still has its height', () => {
-    const rtl = '<w:bidi/>';
-    const [plain] = lines(run('Aa Bb'), rtl);
-    const [boxed] = lines(run('Aa Bb', border()), rtl);
-    expect(boxed!.box.width).toBe(plain!.box.width);
+  const rtl = '<w:rtl/>';
+  const boxOf = (line: ReturnType<typeof lines>[number], text: string) =>
+    line.spans.find((span) => span.text.includes(text))!.box;
+  test('right-to-left text in a left-to-right paragraph has room for its border', () => {
+    const [line] = lines(run('Aa ') + run('אב', rtl + border()) + run(' Bb'));
+    const boxed = boxOf(line!, 'אב');
+    expect(boxed.x).toBe(21);
+    const after = line!.spans.filter((span) => span.box.x > boxed.x).map((span) => span.box.x);
+    expect(Math.min(...after)).toBeCloseTo(boxed.x + boxed.width + 3, 6);
+    expect(outlines(line!)).toEqual([[18, boxed.x + boxed.width + 3]]);
+  });
+  test('a right-to-left paragraph gives the border its room from the right', () => {
+    const [line] = lines(
+      run('אב ', rtl) + run('גד', rtl + border()) + run(' הו', rtl),
+      '<w:bidi/>'
+    );
+    const [first, boxed] = [boxOf(line!, 'אב'), boxOf(line!, 'גד')];
+    expect(first.x + first.width).toBeCloseTo(200, 6);
+    const [left, right] = [boxed.x - 3, boxed.x + boxed.width + 3];
+    expect(outlines(line!)[0]![0]).toBeCloseTo(left, 6);
+    expect(outlines(line!)[0]![1]).toBeCloseTo(right, 6);
+    // The text on each side of the border starts where the border ends.
+    const ends = line!.spans.map((span) => span.box.x + span.box.width);
+    expect(Math.max(...ends.filter((end) => end < boxed.x))).toBeCloseTo(left, 6);
+    const starts = line!.spans.map((span) => span.box.x);
+    expect(Math.min(...starts.filter((start) => start > boxed.x))).toBeCloseTo(right, 6);
+  });
+  test('a bordered passage that wraps in a right-to-left paragraph stays in the measure', () => {
+    const words = Array.from({ length: 24 }, () => 'אבגד').join(' ');
+    const wrapped = lines(run(words, rtl + border()), '<w:bidi/>');
+    expect(wrapped.length).toBeGreaterThan(2);
+    for (const line of wrapped) {
+      const [[left, right]] = outlines(line) as [[number, number]];
+      // The right side closes at the right margin; the left side stays in the measure, and
+      // the spaces at the wrap hang past it.
+      expect(right).toBeCloseTo(200, 6);
+      expect(left).toBeGreaterThanOrEqual(0);
+      const text = line.spans.filter((span) => span.text.trim() !== '');
+      expect(Math.min(...text.map((span) => span.box.x))).toBeCloseTo(left + 3, 6);
+    }
+  });
+  test('a right-to-left paragraph keeps the height of its border', () => {
+    const [plain] = lines(run('Aa Bb'), '<w:bidi/>');
+    const [boxed] = lines(run('Aa Bb', border()), '<w:bidi/>');
     expect(boxed!.box.height).toBe(plain!.box.height + 6);
   });
 });
