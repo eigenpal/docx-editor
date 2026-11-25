@@ -6,6 +6,12 @@
 // other faces therefore stand in through the family that serves it, as a synthesized style of
 // its nearest face, and never through the class fallback. One family then measures, paints,
 // and exports every face of the document family.
+//
+// A family with bytes under its own name is available in the same way: a host source, or a
+// face that the file embeds (`w:embedRegular`, `w:embedBold`, `w:embedItalic`,
+// `w:embedBoldItalic`, `CT_FontRel`, ECMA-376 Part 1, §17.8.3.6, §17.8.3.3, §17.8.3.5,
+// §17.8.3.4). An omitted embedding stores no face of that style, so a face that the family
+// lacks stands in through its own nearest face, which its own paint alias also holds.
 
 import type { FontConfiguration, FontSourceSubstitution } from '../contracts/editor.ts';
 import { englishFamily } from '../store/package/default-font-faces.ts';
@@ -15,6 +21,26 @@ type Face = FontSourceSubstitution['from'];
 type Supplied = Pick<FontSourceSubstitution, 'to' | 'lineMetrics'>;
 
 const fold = (family: string): string => family.trim().toLowerCase();
+
+/**
+ * The faces of a family that stand in for a face it lacks, nearest first. This is CSS font
+ * matching over the four static faces, which paint applies to the family's alias: the requested
+ * style decides first, then the nearest weight, and the other style comes last. The PDF
+ * converter's stand-in origin keeps the same order (`nearestFaceOrder` in docx-to-pdf).
+ */
+function nearestFaceOrder(
+  weight: number,
+  style: Face['style']
+): readonly (readonly [number, Face['style']])[] {
+  const otherWeight = weight >= 600 ? 400 : 700;
+  const otherStyle = style === 'italic' ? 'normal' : 'italic';
+  return [
+    [weight, style],
+    [otherWeight, style],
+    [weight, otherStyle],
+    [otherWeight, otherStyle],
+  ];
+}
 
 /** The faces of a family in the order that decides which family serves it. */
 const SERVING_ORDER = [
@@ -32,24 +58,30 @@ export interface ServedFontFamilies {
   servingName(family: string): string | undefined;
   /**
    * The face that stands in for a face of `family` that nothing serves: the same face of the
-   * family that serves `family`, else its nearest face. Style decides before weight, as CSS
-   * font matching does when paint picks a face from the family's alias: the requested style at
-   * the regular weight, then the requested weight upright, then the regular face, and last the
-   * bold faces of a family served only in bold. The renderer synthesizes the missing bold or
-   * italic from it.
+   * family that serves `family`, else its nearest face (`nearestFaceOrder`). The renderer
+   * synthesizes the missing bold or italic from it.
    */
   nearestFace(family: string, request: Face): Supplied | undefined;
+  /**
+   * Whether the configuration supplies bytes for at least one face of `family` under its own
+   * name, or under its English name (`メイリオ` supplied as `Meiryo`). Such a family paints
+   * through the alias of those bytes, so its other faces stand in through its own nearest face
+   * (`ownNearestFace`), never through another family.
+   */
+  suppliesOwnFaces(family: string): boolean;
+  /** The nearest face of `family` among its own sources, in `nearestFaceOrder`. */
+  ownNearestFace(family: string, request: Face): Supplied | undefined;
 }
 
 export function servedFontFamilies(configuration: FontConfiguration): ServedFontFamilies {
   const sources = new Map(
     configuration.sources.map((source) => [fontRequestKey(source.request), source.request])
   );
+  const own = new Set(configuration.sources.map((source) => fold(source.request.family)));
   // Each family that a substitution serves, with the face that serves each of its faces. Only a
   // substitution that reaches bytes counts: a resolver names its targets before it fetches
   // them, and a failed fetch must not make a family look served. Bytes under the document's
-  // own name (an embedded or explicit face) do not make the family served here: those faces
-  // resolve directly, and their missing styles keep the planned fallback.
+  // own name are `own` faces instead: see `suppliesOwnFaces`.
   const served = new Map<string, { name: string; faces: Map<string, Supplied> }>();
   const serve = (from: Face, supplied: Supplied): void => {
     const key = fold(from.family);
@@ -88,6 +120,19 @@ export function servedFontFamilies(configuration: FontConfiguration): ServedFont
     }
     return undefined;
   };
+  const nearestSource = (family: string, { weight, style }: Face): Face | undefined => {
+    for (const [w, s] of nearestFaceOrder(weight, style)) {
+      const to = sources.get(fontRequestKey({ family, weight: w, style: s }));
+      if (to) return to;
+    }
+    return undefined;
+  };
+  // The name that holds a family's own bytes: the family itself, else its English name.
+  const ownName = (family: string): string | undefined => {
+    if (own.has(fold(family))) return family;
+    const english = englishFamily(family);
+    return own.has(fold(english)) ? english : undefined;
+  };
   return {
     servingName(family) {
       const key = servingKey(family);
@@ -98,19 +143,15 @@ export function servedFontFamilies(configuration: FontConfiguration): ServedFont
       if (key === undefined) return undefined;
       const serving = servingFamily(key);
       if (!serving) return undefined;
-      const { weight, style } = request;
-      for (const [w, s] of [
-        [weight, style],
-        [400, style],
-        [weight, 'normal'],
-        [400, 'normal'],
-        [700, style],
-        [700, 'normal'],
-      ] as const) {
-        const to = sources.get(fontRequestKey({ family: serving.to.family, weight: w, style: s }));
-        if (to) return serving.lineMetrics ? { to, lineMetrics: serving.lineMetrics } : { to };
-      }
-      return undefined;
+      const to = nearestSource(serving.to.family, request);
+      if (!to) return undefined;
+      return serving.lineMetrics ? { to, lineMetrics: serving.lineMetrics } : { to };
+    },
+    suppliesOwnFaces: (family) => ownName(family) !== undefined,
+    ownNearestFace(family, request) {
+      const name = ownName(family);
+      const to = name === undefined ? undefined : nearestSource(name, request);
+      return to ? { to } : undefined;
     },
   };
 }

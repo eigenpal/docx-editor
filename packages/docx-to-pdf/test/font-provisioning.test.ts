@@ -282,8 +282,8 @@ test('the stand-in origin covers what nothing else did, after the embedded fonts
     from: { family: 'Sagona', weight: 700, style: 'normal' },
     to: { family: 'Liberation Serif', weight: 700, style: 'normal' },
   });
-  // A family whose regular face is covered, by an embedded font say, keeps it: only the
-  // missing bold and italic faces point at that regular face.
+  // A family with covered faces, from an embedded font say, keeps them: each missing face
+  // points at its nearest covered face, so a missing bold italic keeps the bold weight.
   const partial = await standInFonts({
     families: ['Ubuntu', 'Wingdings'],
     defaultFamily: 'Arial',
@@ -301,7 +301,7 @@ test('the stand-in origin covers what nothing else did, after the embedded fonts
     },
     {
       from: { family: 'Ubuntu', weight: 700, style: 'italic' },
-      to: { family: 'Ubuntu', weight: 400, style: 'normal' },
+      to: { family: 'Ubuntu', weight: 700, style: 'normal' },
     },
     {
       from: { family: 'Wingdings', weight: 700, style: 'normal' },

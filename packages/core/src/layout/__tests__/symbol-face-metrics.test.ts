@@ -111,10 +111,21 @@ test('symbol-encoded families never take a text default', () => {
   for (const family of SYMBOL_FAMILIES) expect(substituted).not.toContain(family);
 });
 
-test('an available symbol face is used directly', () => {
+test('an available symbol face is used directly, and stands in for its own missing faces', () => {
   const plan = documentFontSubstitutionPlan(view(['Symbol']), ['Symbol']);
   const fonts = composeFontConfiguration({ sources: [source('Symbol'), source('Calibri')] });
-  expect(applyDocumentFontSubstitutions(fonts, plan).substitutions).toBeUndefined();
+  const substitutions = applyDocumentFontSubstitutions(fonts, plan).substitutions ?? [];
+  // Bold and italic symbol runs draw a synthesized style of the supplied face, never a text face.
+  expect(
+    substitutions
+      .map(({ from, to }) => `${from.weight} ${from.style} > ${to.family} ${to.weight} ${to.style}`)
+      .sort()
+  ).toEqual([
+    '400 italic > Symbol 400 normal',
+    '700 italic > Symbol 400 normal',
+    '700 normal > Symbol 400 normal',
+  ]);
+  expect(substitutions.every(({ from }) => from.family === 'Symbol')).toBe(true);
 });
 
 test('a whole font-table alternate still resolves next to symbol families', () => {
@@ -124,7 +135,8 @@ test('a whole font-table alternate still resolves next to symbol families', () =
   ]);
   expect(plan.families).toContain('Courier New');
   const fonts = composeFontConfiguration({ sources: [source('Courier New')] });
-  expect(applyDocumentFontSubstitutions(fonts, plan).substitutions).toEqual([
+  const substitutions = applyDocumentFontSubstitutions(fonts, plan).substitutions ?? [];
+  expect(substitutions.filter(({ from }) => from.family !== 'Courier New')).toEqual([
     {
       from: { family: 'Unknown Face', weight: 400, style: 'normal' },
       to: { family: 'Courier New', weight: 400, style: 'normal' },

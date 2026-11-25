@@ -347,6 +347,23 @@ export async function importCjkFace(): Promise<NodeURL | null> {
 const CJK_TEXT =
   /[\u1100-\u11ff\u2e80-\u2fdf\u3000-\u9fff\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]|[\u{20000}-\u{3ffff}]/u;
 
+/**
+ * The faces of a family that stand in for a face it lacks, nearest first. This is CSS font
+ * matching over the four static faces, as the editor paints them: the requested style decides
+ * first, then the nearest weight, and the other style comes last. Core resolution keeps the
+ * same order (`served-font-families.ts`), so the editor and this export pick the same face.
+ */
+const nearestFaceOrder = (weight: number, style: FaceStyle): readonly [number, FaceStyle][] => {
+  const otherWeight = weight >= 600 ? 400 : 700;
+  const otherStyle: FaceStyle = style === 'italic' ? 'normal' : 'italic';
+  return [
+    [weight, style],
+    [otherWeight, style],
+    [weight, otherStyle],
+    [otherWeight, otherStyle],
+  ];
+};
+
 /** Whether an earlier origin paints a face, by family (ignoring case), weight, and style. */
 const paintedFaces = (resolvedFaces: readonly FontRequest[] | undefined) => {
   const covered = new Set(
@@ -506,9 +523,10 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * fonts so it can never shadow one of them.
    *
    * Two answers. A family with no face at all renders in a packaged face of its class
-   * ({@link genericSubstituteFor}); the export reports it. A family whose regular face is
-   * covered but whose bold or italic is not points those at the regular face, as Word does
-   * when it emboldens a font that ships in one weight: every symbol face, most CJK faces.
+   * ({@link genericSubstituteFor}); the export reports it. A family with some faces covered
+   * points each other face at its nearest covered face ({@link nearestFaceOrder}), which the
+   * renderer emboldens or slants: every symbol face, most CJK faces, and a family that ships
+   * in bold only.
    * Legacy symbol families never get a text stand-in; their private-use bullets belong to the
    * glyph fallback path.
    */
@@ -523,10 +541,17 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
     const substitutions: FontSourceSubstitution[] = [];
     const wanted = new Set<string>();
     for (const family of families) {
-      if (has(family, 400, 'normal')) {
-        for (const [weight, style] of faces)
-          if (!has(family, weight, style))
-            substitutions.push({ from: face(family, weight, style), to: face(family) });
+      if (faces.some(([weight, style]) => has(family, weight, style))) {
+        for (const [weight, style] of faces) {
+          if (has(family, weight, style)) continue;
+          const [toWeight, toStyle] = nearestFaceOrder(weight, style).find(([w, s]) =>
+            has(family, w, s)
+          )!;
+          substitutions.push({
+            from: face(family, weight, style),
+            to: face(family, toWeight, toStyle),
+          });
+        }
         continue;
       }
       // A Word CJK family reaching here is uncovered: its plan needed a face that did not

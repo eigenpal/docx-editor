@@ -557,8 +557,12 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       },
     });
     await fontsSettled(editor);
-    // The file's OWN face wins, so the composed configuration drops the redirect.
-    expect(captured.configurations.at(-1)?.substitutions ?? []).toEqual([]);
+    // The file's OWN face wins over the redirect, and stands in for the faces it lacks.
+    const substitutions = captured.configurations.at(-1)?.substitutions ?? [];
+    const faces = substitutions.map(({ from }) => `${from.weight} ${from.style}`).sort();
+    expect(faces).toEqual(['400 italic', '700 italic', '700 normal']);
+    const regular = { family: 'Original Face', weight: 400, style: 'normal' };
+    for (const { to } of substitutions) expect(to).toEqual(regular);
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
     editor.destroy();
     captured.restore();

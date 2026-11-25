@@ -365,6 +365,18 @@ export function applyDocumentFontSubstitutions(
           substitutions.push({ from, ...supplied, ...(authored ? { lineMetrics: authored } : {}) });
           return true;
         };
+        if (served.suppliesOwnFaces(family)) {
+          // A family with bytes under its own name paints through the alias of those bytes, so
+          // a face that it lacks stands in through its own nearest face, as a synthesized
+          // style. A host substitution for that exact face keeps the host's answer, although
+          // paint still draws that face from the family's own alias.
+          if (supply(from)) continue;
+          const own = served.ownNearestFace(family, from);
+          // Not a `documentStandInFaces` entry: the stand-in is the family's own face, which
+          // layout can measure, so a probe for a measurable face keeps answering true for it.
+          if (own) push(own);
+          continue;
+        }
         if (servingName === undefined) {
           // Nothing serves the family: its English name, its font table alternate, then its
           // class fallback, each directly or through the host's substitute for that name.
@@ -415,10 +427,11 @@ const standInFacesOf = new WeakMap<FontConfiguration, ReadonlySet<string>>();
 const NO_STAND_INS: ReadonlySet<string> = new Set();
 
 /**
- * The faces (`fontRequestKey`) that `applyDocumentFontSubstitutions` gave a synthesized stand-in
- * when it built `configuration`. They measure and paint, but no face of their own is installed:
- * a probe for an installed face (`TextMeasurer.hasResolvedFont`) must not count them, or a
- * face that loads later looks loaded already.
+ * The faces (`fontRequestKey`) of served families that `applyDocumentFontSubstitutions` gave a
+ * synthesized stand-in from the family that serves them when it built `configuration`. They
+ * measure and paint, but no face of their own is installed: a probe for an installed face
+ * (`TextMeasurer.hasResolvedFont`) must not count them, or a face that loads later looks loaded
+ * already. A stand-in through a family's own faces is not listed.
  */
 export function documentStandInFaces(configuration: FontConfiguration): ReadonlySet<string> {
   return standInFacesOf.get(configuration) ?? NO_STAND_INS;
@@ -441,8 +454,13 @@ export function hostChainedDocumentFallbacks(
   const families = new Set<string>();
   for (const substitution of after.substitutions ?? []) {
     if (existing.has(fontRequestKey(substitution.from))) continue;
-    // A served family's other faces stand in through the family that serves it, not a fallback.
-    if (served.servingName(substitution.from.family) !== undefined) continue;
+    // A served family's other faces stand in through the family that serves it, not a fallback,
+    // and a family with faces of its own stands in through those.
+    if (
+      served.servingName(substitution.from.family) !== undefined ||
+      served.suppliesOwnFaces(substitution.from.family)
+    )
+      continue;
     const key = substitution.from.family.trim().toLowerCase();
     const target = substitution.to.family.trim().toLowerCase();
     const planned = [plan.alternates.get(key), plan.fallbacks.get(key)].some(
@@ -470,7 +488,8 @@ export function synthesizedServedFaces(
   const faces = new Set<string>();
   for (const { from, to } of after.substitutions ?? []) {
     if (existing.has(fontRequestKey(from))) continue;
-    if (served.servingName(from.family) === undefined) continue;
+    if (served.servingName(from.family) === undefined && !served.suppliesOwnFaces(from.family))
+      continue;
     if (from.weight !== to.weight || from.style !== to.style) faces.add(fontRequestKey(from));
   }
   return faces;
