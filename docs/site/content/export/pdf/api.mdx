@@ -103,7 +103,7 @@ Each `PdfDiagnostic` has `code`, `message`, and `severity`. Page diagnostics add
 | `incomplete-font` | `information` | Incomplete coverage or substituted variants in a family. `fontPolicy: 'strict'` rejects incomplete coverage and required source failures. Substituted variants with complete coverage pass. |
 | `font-substitution` | `unsupported` | A generic substitute that can change pagination. |
 | `missing-glyph` | `unsupported` | No source covers a character. |
-| `drawing` | `unsupported` | A drawing cannot render and is left out, for example `Unsupported drawing: chart`. A shape group left out because its picture cannot embed reports `information`. |
+| `drawing` | `unsupported` | A drawing cannot render and is left out, for example `Unsupported drawing: chart`. A shape group that renders without some members reports `Shape group paints without N of its members`. A group picture left out because its format cannot embed reports `information`. |
 | `metafile-limit`, `metafile-record` | `unsupported` | An EMF or WMF picture stopped early at a resource bound or a malformed record. |
 | `metafile-image`, `metafile-text` | `unsupported` | An image or text inside an EMF or WMF picture failed and is left out. |
 | `metafile-font` | `information` | An EMF or WMF picture names an unused font and uses the default font. |
