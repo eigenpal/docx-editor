@@ -1543,6 +1543,13 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 - **THEN** only the field past the cap is left out
 - **AND** the fields around it and the ordinary `IF` field still hide their field-code paragraphs
 
+#### Scenario: The mergeParagraphs command meets a field-code mark
+
+- **GIVEN** a selection whose `mergeParagraphs` join would remove a paragraph mark inside a field instruction, or the mark of the paragraph that holds `begin`
+- **WHEN** `can` or `exec` answers the command
+- **THEN** it refuses with the `unsupported` code and a reason that starts with `field-code-mark`
+- **AND** the document does not change
+
 #### Scenario: An automation write splits inside the field codes
 
 - **GIVEN** field codes that hold paragraph marks
