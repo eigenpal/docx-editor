@@ -11,6 +11,7 @@ import {
   sectionBreakTypeOf,
 } from '../store/store/tree-op-section-address.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import { fieldCodeSplitRefusal } from './field-code-split-refusal.ts';
 
 /**
  * Page/section breaks are structural mutations, with one atomic store transaction.
@@ -76,6 +77,8 @@ export function planBreakOperation(
     return refuseTracked(
       'a tracked next-page section break cannot change how the following section starts'
     );
+  const fieldCode = section && fieldCodeSplitRefusal(story.part, point.paragraphId, [point.offset]);
+  if (fieldCode) return fieldCode;
   const conflict = admit(story, point.paragraphId, section ? 1 : 0);
   if (conflict) return conflict;
   const revision =

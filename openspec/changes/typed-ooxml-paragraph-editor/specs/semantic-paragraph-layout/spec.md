@@ -1543,6 +1543,13 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 - **THEN** only the field past the cap is left out
 - **AND** the fields around it and the ordinary `IF` field still hide their field-code paragraphs
 
+#### Scenario: An automation write splits inside the field codes
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** an automation write would add a paragraph mark in a paragraph inside them, or at the start of the paragraph where they end
+- **THEN** the planner refuses with `unsupported-content` and the detail `field-code-mark`
+- **AND** the document does not change
+
 #### Scenario: A malformed field keeps its paragraphs
 
 - **GIVEN** a field without an `end`, or a field whose field codes hold `w:t` text outside a nested field's result

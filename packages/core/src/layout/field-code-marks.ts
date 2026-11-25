@@ -1,11 +1,12 @@
-// Which paragraph marks in the tree belong to a complex field's field codes.
+// Which paragraph marks and split points in the tree belong to a complex field's field codes.
 //
 // A complex field runs from a `w:fldChar` (CT_FldChar, ECMA-376 Part 1, 17.16.18) of
 // `ST_FldCharType` `begin` (17.18.29) to its `end`, and its field codes (`w:instrText`,
 // 17.16.23) run up to `separate`. When the field codes hold paragraph marks, those marks belong
 // to the field instruction: the marks of the paragraphs inside, and the mark of the paragraph
-// that holds `begin` (see `field-instruction-paragraphs.ts`). The editor asks this question of
-// the tree, so a write never removes such a mark without saying so.
+// that holds `begin` (see `field-instruction-paragraphs.ts`). The editor and the automation
+// planners ask these questions of the tree, so a write never adds or removes such a mark
+// without saying so.
 
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { parentNodeOf } from '@docx-editor.dev/core/store';
@@ -20,6 +21,10 @@ import { scanFieldInstructionParagraphs } from './field-instruction-paragraphs.t
 interface FieldCodeIds {
   /** Paragraphs whose mark is field code: inside the field codes, or holding `begin`. */
   readonly marks: ReadonlySet<string>;
+  /** Paragraphs wholly inside the field codes. */
+  readonly inside: ReadonlySet<string>;
+  /** Paragraphs where field codes that hold paragraph marks end. */
+  readonly closing: ReadonlySet<string>;
 }
 
 /** The container whose blocks a paragraph flows in: its parent, outside any content control. */
@@ -44,7 +49,9 @@ function fieldCodeIdsOf(part: OoxmlPart, id: string): FieldCodeIds | null {
   const idOf = (index: number) => blocks[index]!.id;
   const insideIds = new Set([...inside].map(idOf));
   const ids: FieldCodeIds = {
+    inside: insideIds,
     marks: new Set([...insideIds, ...joins.map((join) => idOf(join.first))]),
+    closing: new Set(joins.map((join) => idOf(join.last))),
   };
   idsByContainer.set(container, ids);
   return ids;
@@ -53,4 +60,15 @@ function fieldCodeIdsOf(part: OoxmlPart, id: string): FieldCodeIds | null {
 /** Whether the mark of paragraph `id` is field code. Each container is scanned once. */
 export function markIsFieldCode(part: OoxmlPart, id: string): boolean {
   return fieldCodeIdsOf(part, id)?.marks.has(id) ?? false;
+}
+
+/**
+ * Whether a paragraph split at `offset` of paragraph `id` adds a paragraph mark inside field
+ * codes: anywhere in a paragraph wholly inside them, or at offset 0 of the paragraph where they
+ * end, which sits before the field codes that continue into it.
+ */
+export function splitInsideFieldCodes(part: OoxmlPart, id: string, offset: number): boolean {
+  const ids = fieldCodeIdsOf(part, id);
+  if (!ids) return false;
+  return ids.inside.has(id) || (offset === 0 && ids.closing.has(id));
 }

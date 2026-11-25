@@ -130,6 +130,7 @@ A write with breaks refuses in these cases, and nothing changes:
 | `NotSupported` | `edit.indivisible-content` | The break lands inside an inline content control. |
 | `ConflictingChanges` | None | Another edit in the sync changes the same paragraph. |
 | `InvalidArgument` | None | The text holds a form feed, U+2028, or U+2029. |
+| `InvalidArgument` | None | The break would add a paragraph mark inside the instruction of a field that spans paragraphs. This also applies to `insertParagraph()` and section breaks. |
 | `InvalidArgument`, or `GeneralException` with tracking | `edit.protected-content` | The range is in content-locked or data-bound content. |
 | `StaleDocument` | None | The range's text moved after you read it. |
 

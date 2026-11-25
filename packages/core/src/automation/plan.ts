@@ -172,6 +172,7 @@ interface Slot {
 }
 
 import type { BatchPlanner, BatchPlannerHost } from './plan-planner-types.ts';
+import { fieldCodeSplitRefusal } from './field-code-split-refusal.ts';
 export type { BatchPlanner, BatchPlannerHost };
 
 /** A handle whose object an edit, a peer, or an undo removed: reading again finds a fresh one. */
@@ -805,7 +806,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (!anchorSlot) return refuse('invalid-handle', 'that paragraph is not in the body');
     const anchorLength = (reads.rawText(anchor.paragraphId) ?? '').length;
     const edge = where === 'after' ? anchorLength : 0;
-    const lineBreak = lineBreakRefusal(reads.part, anchor.paragraphId, edge, edge, text);
+    const lineBreak =
+      lineBreakRefusal(reads.part, anchor.paragraphId, edge, edge, text) ??
+      fieldCodeSplitRefusal(reads.part, anchor.paragraphId, [edge]);
     if (lineBreak) return lineBreak;
     const ops: TreeDocOp[] = [];
     // One paragraph becomes two by splitting one: `splitParagraph` leaves the HEAD on the
@@ -890,6 +893,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       pieces.push(text.slice(previous));
     }
 
+    const fieldCode = fieldCodeSplitRefusal(plan.reads.part, paragraph.paragraphId, offsets);
+    if (fieldCode) return fieldCode;
     if (offsets.length > 0)
       ops.push({ op: 'splitParagraphMany', paragraphId: paragraph.paragraphId, offsets });
 
