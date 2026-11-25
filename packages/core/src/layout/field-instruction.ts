@@ -805,7 +805,8 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
         // Deep-copy the per-level captures: a shallow copy aliases the `inner` array and its
         // level objects, so the nested story's paragraph resets would empty the saved capture
         // too and a level-2 field straddling the drawing would lose its instruction. Level-1
-        // fields are strings/booleans — the spread copies those by value.
+        // fields are strings, booleans, and an immutable formula capture, which the spread
+        // can share.
         const saved: ComplexFieldParseState = {
           ...field,
           inner: field.inner.map((level) => ({ ...level })),

@@ -107,4 +107,17 @@ describe('w:delInstrText NEXT TO live w:instrText', () => {
     );
     expect(pieces.map((piece) => piece.text)).toEqual([]);
   });
+
+  test('a deleted page instruction shows its value in the original view', () => {
+    // The original view rejects the deletion, so the deleted code is the instruction again.
+    const field = fieldWith('<w:r><w:delInstrText> PAGE </w:delInstrText></w:r>');
+    const context = { pageNumber: 2, pageCount: 7 };
+    const shown = (mode: 'all-markup' | 'proposed' | 'original') =>
+      piecesOfParagraph(paragraphOf(field), [], context, undefined, undefined, undefined, mode).map(
+        (piece) => piece.text
+      );
+    expect(shown('original')).toEqual(['2']);
+    expect(shown('proposed')).toEqual([]);
+    expect(shown('all-markup')).toEqual([]);
+  });
 });

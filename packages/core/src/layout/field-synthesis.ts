@@ -41,7 +41,7 @@ import {
   type ComplexFieldParseState,
 } from './field-instruction.ts';
 import { captureInstructionSpecs } from './field-form.ts';
-import { revisionsAreDeletion } from './revision-projection.ts';
+import { revisionsAreDeletion, type RevisionDisplayMode } from './revision-projection.ts';
 import { instrTextValue, isDeletedInstrText } from '../store/package/field-nodes.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
 import { deferredSegmentsMarker } from './field-nested-page.ts';
@@ -146,15 +146,19 @@ export function synthesizeAtomicField(
     // The marker records the switches the placeholder was measured through, so finalize
     // renders the value the same way. The switches do not depend on the section format; a
     // PAGE field without switches measures in it.
+    const measured = pageFieldMeasuredText(
+      pending.pageSwitches,
+      pending.cachedText,
+      pageKind === 'PAGE' ? ctx.bodyPageFields.format : undefined
+    );
+    // A formula with no value on its page paints its saved result only where that result is
+    // what the field was measured at; otherwise it would paint over the text that follows.
+    const savedResult = measured === pending.cachedText ? pending.cachedText : '';
     return {
-      text: pageFieldMeasuredText(
-        pending.pageSwitches,
-        pending.cachedText,
-        pageKind === 'PAGE' ? ctx.bodyPageFields.format : undefined
-      ),
+      text: measured,
       props: pending.props,
       style: pending.style,
-      pageField: pageFieldMarker(pageKind, pending.pageSwitches, pending.cachedText),
+      pageField: pageFieldMarker(pageKind, pending.pageSwitches, savedResult),
     };
   }
   // A REF resolves live from its bookmark target and the resolved numbering — the cached
@@ -229,7 +233,7 @@ export function synthesizeAtomicField(
   if (pending.cachedText.length > 0) {
     const segments = pending.nestedPageSegments;
     const pageField =
-      ctx.bodyPageFields && segments && segments.length > 0
+      ctx.bodyPageFields && segments && segments.length > 0 && !pending.formField
         ? deferredSegmentsMarker(pending.cachedText, segments)
         : null;
     return {
@@ -266,15 +270,20 @@ export function synthesizeAtomicField(
  * fragments the buffer kept.
  *
  * A tracked deletion that leaves a page field with no code shows nothing
- * ({@link trackedDeletionLeavesNoInstruction}), unless the whole field is a tracked deletion.
+ * ({@link trackedDeletionLeavesNoInstruction}), unless the whole field is a tracked deletion or
+ * the view shows the original document.
  */
 export function captureSeparatedInstruction(
   pending: PendingFieldProjection,
   field: ComplexFieldParseState,
-  match: AllowlistedPageFieldMatch | null
+  match: AllowlistedPageFieldMatch | null,
+  displayMode: RevisionDisplayMode
 ): void {
+  // The original view rejects the deletion, so the deleted code is the field's instruction.
   const codeDeleted =
-    !revisionsAreDeletion(pending.resultRevisions) && trackedDeletionLeavesNoInstruction(field);
+    displayMode !== 'original' &&
+    !revisionsAreDeletion(pending.resultRevisions) &&
+    trackedDeletionLeavesNoInstruction(field);
   pending.kind = codeDeleted ? null : (match?.kind ?? null);
   pending.pageSwitches = match ?? {};
   const effective = effectiveFieldInstruction(field);

@@ -299,6 +299,23 @@ describe('a formula in the result of a simple field', () => {
   });
 });
 
+describe('a formula beside a drawing that holds its own story', () => {
+  test('is detected across the drawing', () => {
+    // The drawing's text box story walks with the field state saved and restored around it.
+    const drawing =
+      '<w:r><w:drawing><w:txbxContent><w:p>' +
+      formula([pageOperand('NUMPAGES')], '5') +
+      '</w:p></w:txbxContent></w:drawing></w:r>';
+    const field =
+      BEGIN + instr(' = ') + pageOperand() + drawing + instr(' + 1 ') + SEPARATE + text('9') + END;
+    expect(detectStoryPageFields(footerPart(`<w:p>${field}</w:p>`).root)).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
+  });
+});
+
 describe('a formula whose operand result nests another field', () => {
   test('shows each page its own number', () => {
     // The operand's saved result is replaced, so a field inside it does not change the value.
@@ -485,6 +502,24 @@ describe('a formula with arithmetic', () => {
     expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[20]');
   });
 
+  test('paints nothing in the body where it has no value and its saved result has a space', () => {
+    // The field was measured at one digit, so the saved result would paint over the text after it.
+    const filler = Array.from({ length: 60 }, () => `<w:p>${text('Line')}</w:p>`).join('');
+    const divided =
+      BEGIN +
+      instr(' = 1 / ( ') +
+      pageOperand() +
+      instr(' - 2 ) ') +
+      SEPARATE +
+      text('!Zero Divide') +
+      END;
+    const layout = layoutOf(
+      packageOf(`${filler}<w:p>${text('[')}${divided}${text(']')}</w:p>`, '')
+    );
+    expect(layout.pages.length).toBe(2);
+    expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[]');
+  });
+
   test('keeps the saved result in the body on a page where it has no value', () => {
     const filler = Array.from({ length: 60 }, () => `<w:p>${text('Line')}</w:p>`).join('');
     const divided =
@@ -552,6 +587,12 @@ describe('page fields in another field result in the body', () => {
     );
     expect(page).toContain('a=|ii');
     expect(page).toContain('b=|7');
+  });
+
+  test('keeps a long saved result whole', () => {
+    const long = 'x'.repeat(300);
+    const page = secondPage([text('a=') + outer(formula([pageOperand()], long))]);
+    expect(page.replaceAll('|', '')).toContain(`a=${long}`);
   });
 
   test('keeps the saved result of a formula on a page where it has no value', () => {

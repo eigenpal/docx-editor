@@ -32,9 +32,6 @@ import {
   type PageFieldMarker,
 } from './field-page-furniture.ts';
 
-/** Longest saved result the tracker keeps for a formula with no value on the page. */
-const MAX_TRACKED_SAVED_RESULT = 256;
-
 /** A nested page field the tracker may arm for, and whether it waits for document finalize. */
 export interface NestedPageArming {
   readonly match: AllowlistedPageFieldMatch;
@@ -222,7 +219,8 @@ export function createNestedPageTracker(): NestedPageTracker {
       seen = true;
       if (!wasVisible) return;
       visible = true;
-      if (savedResult.length + text.length <= MAX_TRACKED_SAVED_RESULT) savedResult += text;
+      // Unbounded like the outer field's saved text, which the paragraph scan budget bounds.
+      savedResult += text;
     },
   };
 }

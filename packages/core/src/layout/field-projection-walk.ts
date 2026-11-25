@@ -552,7 +552,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
         const separateLevel = field.nesting;
         const match = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
-          captureSeparatedInstruction(pending, field, match);
+          captureSeparatedInstruction(pending, field, match, displayMode);
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
           pending.style = style;
