@@ -49,7 +49,7 @@ import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.t
 import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import { findContentControl } from '../store/store/tree-op-nodes.ts';
 import { enclosedBookmarkDeletions } from '../store/store/tree-op-bookmarks.ts';
-import { fieldCodeJoinStart, type RevisionView } from './hidden-mark-joins.ts';
+import { fieldCodeInsertLanding, type RevisionView } from './hidden-mark-joins.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
   orderedRangeOf,
@@ -132,8 +132,12 @@ export interface SurfaceRangeEditOps {
   promptIsSelected(): boolean;
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
-  /** Typing keeps an ending prompt when the range starts outside that prompt. */
-  typingSelectionPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string };
+  /**
+   * Typing keeps an ending prompt when the range starts outside that prompt. `composesAsTyping`
+   * says a composition there must commit through typing: past such a prompt, or at the start of
+   * a field's result side, where the insert lands at the end of the first side instead.
+   */
+  typingSelectionPlan(): TypingSelectionPlan;
   retainPromptBoundary(controlId?: string): void;
   clearPromptBoundary(): void;
   promptBoundary(): string | undefined;
@@ -146,14 +150,20 @@ export interface SurfaceRangeEditOps {
   replacementOffset(from: SemanticPosition, to: SemanticPosition, trackedAuthor?: string): number;
 }
 
+/** {@link SurfaceRangeEditOps.typingSelectionPlan}'s answer. */
+export type TypingSelectionPlan = RangeDeletionPlan & {
+  readonly outsidePromptId?: string;
+  readonly composesAsTyping?: true;
+};
+
 export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRangeEditOps {
   const { session } = deps;
   /**
    * Where an insert at a collapsed position belongs instead, or null: the start of a field's
-   * result side moves to the end of the first side (`fieldCodeJoinStart`).
+   * result side moves to the end of the first side (`fieldCodeInsertLanding`).
    */
   const insertLanding = (position: SemanticPosition): SemanticPosition | null =>
-    fieldCodeJoinStart(
+    fieldCodeInsertLanding(
       deps.layout(),
       partOfNodeId(session, position.paragraphId) ?? session.part(),
       position
@@ -458,7 +468,18 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     );
   }
 
-  function typingSelectionPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string } {
+  function typingSelectionPlan(): TypingSelectionPlan {
+    const plan: TypingSelectionPlan = promptTypingPlan();
+    const { anchor, head } = deps.selection();
+    const collapsed = anchor.paragraphId === head.paragraphId && anchor.offset === head.offset;
+    const landed = collapsed && !planCells() && insertLanding(head) !== null;
+    // Assigned, not spread: a spread would read the plan's lazy `replaceAt` getter.
+    if (plan.outsidePromptId !== undefined || landed)
+      Object.assign(plan, { composesAsTyping: true });
+    return plan;
+  }
+
+  function promptTypingPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string } {
     const { from, to } = orderedRange();
     if (planCells()) return deleteSelectionPlan();
     if (typingOutsidePrompt()) return { ...deleteSelectionPlan(), outsidePromptId };

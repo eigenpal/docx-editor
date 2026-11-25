@@ -37,7 +37,8 @@ import type {
 import { paragraphsInsideFieldInstructions } from '../layout/field-instruction-paragraphs.ts';
 import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
-import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
+import { paragraphLinesFor, positionPastDeletion } from '../layout/paragraph-lines.ts';
+import { joinStartShared } from '../layout/field-code-join-stop.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks, paragraphMergeGroupOf } from '../layout/story-roots.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
@@ -373,15 +374,16 @@ function fieldCodeLineOpener(
 }
 
 /**
- * Where an insert at `position` belongs, and where the caret shows, when the position is the
- * start of the result side of a field's shared line (see `layout/field-code-paragraph-merge.ts`).
+ * Where an insert at `position` belongs when the position is the start of the result side of a
+ * field's shared line (see `layout/field-code-paragraph-merge.ts`), or null anywhere else.
  *
  * That offset sits before the field codes that continue into the paragraph, so a split there
  * would add a paragraph mark inside the field instruction (ECMA-376 Part 1, 17.16.18) and the
- * page would not change. The same place on the page is the end of the first side's text,
- * before the field's `begin`, where a split leaves the field codes whole. Null anywhere else.
+ * page would not change. The end of the first side's text, before the field's `begin`, is
+ * outside the field codes, so every insert there lands there instead, also when the result
+ * side starts a wrapped line.
  */
-export function fieldCodeJoinStart(
+export function fieldCodeInsertLanding(
   layout: SemanticLayout,
   part: OoxmlPart,
   position: SemanticPosition
@@ -391,6 +393,33 @@ export function fieldCodeJoinStart(
   return opener === null
     ? null
     : { paragraphId: opener, offset: (paragraphTextOf(part, opener) ?? '').length };
+}
+
+/**
+ * Where the caret shows for `position`: the {@link fieldCodeInsertLanding} while the result
+ * side's start paints at the end of the first side (`layout/field-code-join-stop.ts`), where
+ * the line has one caret stop. Null anywhere else, so a caret at the start of a wrapped result
+ * line, or of a result that runs in the other direction, stays where it is.
+ */
+export function fieldCodeJoinStart(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition
+): SemanticPosition | null {
+  const landing = fieldCodeInsertLanding(layout, part, position);
+  return landing && joinStartShared(layout, position.paragraphId) ? landing : null;
+}
+
+/**
+ * Where an insert at `position` lands: past a deletion the caret rests in
+ * (`positionPastDeletion`), after {@link fieldCodeInsertLanding} moves it out of the field codes.
+ */
+export function insertPointOf(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition
+): SemanticPosition {
+  return positionPastDeletion(layout, fieldCodeInsertLanding(layout, part, position) ?? position);
 }
 
 /**
@@ -421,6 +450,8 @@ export function createHiddenMarkEditing(deps: {
   forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | 'step' | null;
   /** See {@link shownPosition}. */
   shown(position: SemanticPosition): SemanticPosition;
+  /** See {@link insertPointOf}: where an insert, or a format armed for it, lands. */
+  insertPoint(position: SemanticPosition): SemanticPosition;
   /** Where a table or a table of contents at `position` goes: `blockAnchorOutsideFieldCodes`. */
   lineFirst(position: SemanticPosition): string;
   /** A collapsed selection moved to where it shows; a range is left alone. */
@@ -446,6 +477,7 @@ export function createHiddenMarkEditing(deps: {
       absorbRemovedAfter(deps.part(), firstId, deps.view()) ??
       (onlyFieldCodeBetween(deps.part(), firstId, nextId, deps.view()) ? 'step' : null),
     shown,
+    insertPoint: (position) => insertPointOf(deps.layout(), deps.part(), position),
     lineFirst: (position) => blockAnchorOutsideFieldCodes(deps.part(), position.paragraphId),
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),

@@ -91,8 +91,7 @@ test('participants agree on field-code paragraphs through edits, undo, and save'
     peers.resume();
     converged(['A before Yes! after B']);
 
-    // Bob's caret, published through presence, paints on the merged line in Alice's editor:
-    // at the same height on either side of the field codes, further right on the result side.
+    // Bob's caret, published through presence, paints on the merged line in Alice's editor.
     const remoteCaret = async (index: number, offset: number) => {
       caret(bob, index, offset);
       applyAwarenessUpdate(
@@ -105,10 +104,15 @@ test('participants agree on field-code paragraphs through edits, undo, and save'
       expect(painted).not.toBeNull();
       return { top: parseFloat(painted!.style.top), left: parseFloat(painted!.style.left) };
     };
-    const onFirst = await remoteCaret(0, 0);
-    const onLast = await remoteCaret(3, 2);
-    expect(onLast.top).toBeCloseTo(onFirst.top, 3);
-    expect(onLast.left).toBeGreaterThan(onFirst.left);
+    // The end of the first side and the start of the result paint at one spot; the result's
+    // text follows on the same line.
+    const firstEnd = await remoteCaret(0, alice.session.bodyText().split('\n')[0]!.length);
+    const resultStart = await remoteCaret(3, 0);
+    const insideResult = await remoteCaret(3, 2);
+    expect(resultStart.top).toBeCloseTo(firstEnd.top, 3);
+    expect(resultStart.left).toBeCloseTo(firstEnd.left, 1);
+    expect(insideResult.top).toBeCloseTo(firstEnd.top, 3);
+    expect(insideResult.left).toBeGreaterThan(firstEnd.left);
 
     // Delete at the end of the first side takes the first character of the second, in Bob's
     // editor, and shares that edit.

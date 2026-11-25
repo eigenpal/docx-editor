@@ -217,6 +217,12 @@ function mergedTrailingRun(members: readonly OoxmlElement[]): readonly OoxmlElem
  * Last, an empty paragraph whose mark is hidden leaves the flow; see `hidden-paragraph-mark.ts`.
  * A paragraph inside a field instruction leaves it too, and the paragraphs on either side of
  * those field codes merge; see `field-code-paragraph-merge.ts`.
+ *
+ * `excludedParagraphs` names table of contents paragraphs, which lay out their own field chrome
+ * and never take part in a field-code merge. Only `storyBlocks` passes it, for the top-level
+ * blocks of a part's story, where a table of contents lays out that way. Notes, text boxes,
+ * and table cells lay out without it, and so do the editor's callers: they read which
+ * paragraphs are laid out, and both members of a merge are laid out with or without it.
  */
 export function mergedFlowBlocks(
   children: readonly OoxmlNode[],
