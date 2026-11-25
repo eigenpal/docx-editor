@@ -80,7 +80,7 @@ interface Tokenized {
 }
 
 function isSpace(char: string): boolean {
-  return char === ' ' || char === '\t' || char === '\n' || char === '\r' || char === ' ';
+  return char === ' ' || char === '\t' || char === '\n' || char === '\r' || char === '\u00a0';
 }
 
 function isDigit(char: string | undefined): boolean {

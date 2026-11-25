@@ -300,14 +300,24 @@ describe('a formula in the result of a simple field', () => {
 });
 
 describe('a formula beside a drawing that holds its own story', () => {
-  test('is detected across the drawing', () => {
-    // The drawing's text box story walks with the field state saved and restored around it.
+  test('keeps its operands across the drawing', () => {
+    // The text box story walks with the field state saved and restored around it. Only the
+    // outer formula holds NUMPAGES, after the drawing.
     const drawing =
       '<w:r><w:drawing><w:txbxContent><w:p>' +
-      formula([pageOperand('NUMPAGES')], '5') +
+      text('box') +
       '</w:p></w:txbxContent></w:drawing></w:r>';
     const field =
-      BEGIN + instr(' = ') + pageOperand() + drawing + instr(' + 1 ') + SEPARATE + text('9') + END;
+      BEGIN +
+      instr(' = ') +
+      pageOperand() +
+      drawing +
+      instr(' + ') +
+      pageOperand('NUMPAGES') +
+      instr(' ') +
+      SEPARATE +
+      text('9') +
+      END;
     expect(detectStoryPageFields(footerPart(`<w:p>${field}</w:p>`).root)).toEqual({
       hasPage: true,
       hasNumPages: true,

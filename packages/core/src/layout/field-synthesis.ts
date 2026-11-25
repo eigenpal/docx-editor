@@ -271,7 +271,7 @@ export function synthesizeAtomicField(
  *
  * A tracked deletion that leaves a page field with no code shows nothing
  * ({@link trackedDeletionLeavesNoInstruction}), unless the whole field is a tracked deletion or
- * the view shows the original document.
+ * the view shows the original document, where the field keeps its earlier behavior.
  */
 export function captureSeparatedInstruction(
   pending: PendingFieldProjection,
@@ -279,7 +279,9 @@ export function captureSeparatedInstruction(
   match: AllowlistedPageFieldMatch | null,
   displayMode: RevisionDisplayMode
 ): void {
-  // The original view rejects the deletion, so the deleted code is the field's instruction.
+  // The original view rejects the deletion. A field with no live code element then evaluates
+  // its deleted code; one with an empty live element, or a deleted `=` beside live operands,
+  // keeps its saved result there.
   const codeDeleted =
     displayMode !== 'original' &&
     !revisionsAreDeletion(pending.resultRevisions) &&
