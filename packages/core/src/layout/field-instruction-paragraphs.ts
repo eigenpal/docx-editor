@@ -4,8 +4,8 @@
 // `begin` to its `end` (§17.18.29). Its field codes, the `w:instrText` runs (CT_Text,
 // §17.16.23), run up to the `separate` character; without one, the whole field is field codes
 // (§17.16.18). An `IF` field's text can hold several paragraphs, so its paragraph marks fall
-// inside the field codes. Word displays the field result, so a paragraph that starts and ends
-// inside one field's codes shows nothing: no text, no list marker, and no line.
+// inside the field codes. Only the field result displays, so a paragraph that starts and ends
+// inside one field's codes shows nothing: no text, no list marker, no line, and no list count.
 //
 // An unclosed field generates no field (§17.16.18), so it hides nothing. A field whose codes
 // hold plain `w:t` text outside a nested field's result is malformed, and it hides nothing too.

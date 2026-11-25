@@ -22,9 +22,11 @@
 // A paragraph inside a field instruction leaves the flow under the same conditions, whatever
 // it holds, because its mark is field code (see `field-instruction-paragraphs.ts`).
 //
-// The paragraph stays in the tree and still advances list counters: numbering is a property
-// of the document, not of what the page shows. {@link numberingFlowBlocks} gives list
-// resolution the block list with those paragraphs put back.
+// A paragraph with a hidden mark stays in the tree and still advances list counters: numbering
+// is a property of the document, not of what the page shows. {@link numberingFlowBlocks} gives
+// the block list with removed paragraphs put back. A paragraph inside a field instruction is
+// field code, not document content, so it advances no counter: {@link listCountingBlocks}
+// leaves it out.
 //
 // It also stays the neighbour that `w:contextualSpacing` (17.3.1.9) compares against. A
 // paragraph after a removed run keeps or drops its space before by the style of the removed
@@ -104,6 +106,8 @@ export interface HiddenMarkNeighbours {
 
 /** Laid-out block list → the same list with the removed paragraphs back in document order. */
 const numberingFlows = new WeakMap<readonly OoxmlElement[], readonly OoxmlElement[]>();
+/** The numbering flow without the removed field-code paragraphs, when there are any. */
+const listCountingFlows = new WeakMap<readonly OoxmlElement[], readonly OoxmlElement[]>();
 
 /** A kept paragraph's stand-in → the removed paragraphs beside it. */
 const neighboursOfStandIn = new WeakMap<OoxmlElement, HiddenMarkNeighbours>();
@@ -205,6 +209,13 @@ export function withoutHiddenMarkParagraphs(
   });
   const kept = all.filter((_block, index) => !removedIndexes.has(index));
   numberingFlows.set(kept, all);
+  const fieldCode = (index: number) => removedIndexes.has(index) && insideInstructions.has(index);
+  if (all.some((_block, index) => fieldCode(index))) {
+    listCountingFlows.set(
+      kept,
+      all.filter((_block, index) => !fieldCode(index))
+    );
+  }
   return kept;
 }
 
@@ -217,6 +228,17 @@ export function withoutHiddenMarkParagraphs(
  */
 export function numberingFlowBlocks(blocks: readonly OoxmlElement[]): readonly OoxmlElement[] {
   return numberingFlows.get(blocks) ?? blocks;
+}
+
+/**
+ * The block list that list counters walk: {@link numberingFlowBlocks} without the paragraphs a
+ * field instruction removed. Their marks are field code, so their list items count nothing.
+ *
+ * Returns the numbering flow itself when no such paragraph was removed, so list memos keyed on
+ * its identity keep hitting.
+ */
+export function listCountingBlocks(blocks: readonly OoxmlElement[]): readonly OoxmlElement[] {
+  return listCountingFlows.get(blocks) ?? numberingFlowBlocks(blocks);
 }
 
 /**
@@ -233,5 +255,11 @@ export function carryNumberingFlow(
     numberingFlows.set(
       to,
       flow.map((block) => replaced.get(block) ?? block)
+    );
+  const counting = listCountingFlows.get(from);
+  if (counting)
+    listCountingFlows.set(
+      to,
+      counting.map((block) => replaced.get(block) ?? block)
     );
 }

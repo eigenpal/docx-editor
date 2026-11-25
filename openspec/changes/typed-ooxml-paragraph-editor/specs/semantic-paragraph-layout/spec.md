@@ -1520,7 +1520,7 @@ A body `LISTNUM` field SHALL display the next number of its list, computed from 
 
 ### Requirement: Paragraphs inside a field instruction take no line
 
-A paragraph that starts and ends inside the field codes of one closed complex field SHALL take no line box, spacing, or list marker. The field codes run from `begin` to `separate`, or to `end` without a `separate` (ECMA-376 §17.16.18). The paragraph SHALL stay in the tree and still advance list counters. A join SHALL NOT absorb it.
+A paragraph that starts and ends inside the field codes of one closed complex field SHALL take no line box, spacing, or list marker. The field codes run from `begin` to `separate`, or to `end` without a `separate` (ECMA-376 §17.16.18). The paragraph SHALL stay in the tree and SHALL NOT advance list counters. A join SHALL NOT absorb it.
 
 #### Scenario: An IF field's text spans paragraphs
 

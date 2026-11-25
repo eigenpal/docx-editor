@@ -1,6 +1,7 @@
 // The field codes of a complex field can run over paragraph marks, as the quoted text of an
-// `IF` field does (ECMA-376 §17.16.18). Word displays the field result, so a paragraph that
-// starts and ends inside the field codes takes no line and shows no list marker.
+// `IF` field does (ECMA-376 §17.16.18). Only the field result displays, so a paragraph that
+// starts and ends inside the field codes takes no line, shows no list marker, and advances no
+// list counter.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -70,7 +71,7 @@ const ifField = (paragraphs: string[], result: string | null) =>
   ].join('');
 
 describe('paragraphs inside a field instruction', () => {
-  test('take no line and show no list marker', () => {
+  test('take no line, show no list marker, and advance no list counter', () => {
     const inside = [para(instr('Clause')), para(''), item(instr('Item')), item('')];
     const result = laidOut(
       `${item(text('first'))}${ifField(inside, 'Result')}${item(text('last'))}`
@@ -82,7 +83,7 @@ describe('paragraphs inside a field instruction', () => {
       'Result after',
       'last',
     ]);
-    expect(result.markers).toEqual(['1.', '4.']);
+    expect(result.markers).toEqual(['1.', '2.']);
   });
 
   test('take no line when the field has no saved result', () => {
