@@ -20,6 +20,24 @@ export function isLoneMergeRestart(cell: SemanticTableCell): boolean {
   return cell.restartsVerticalMerge === true && !cell.headsVerticalMerge && !cell.vMergeContinue;
 }
 
+/**
+ * Whether a lone restart can floor its row above the row's own content: only merge restarts,
+ * continuations, and waiting `btLr` cells hold the row, and one restart is lone. A row with
+ * an ordinary cell keeps the ordinary rules.
+ */
+export function loneRestartFloorsRow(row: SemanticTableRow): boolean {
+  return (
+    row.cells.some(isLoneMergeRestart) &&
+    row.cells.every(
+      (cell) =>
+        cell.vMergeContinue ||
+        cell.restartsVerticalMerge === true ||
+        cell.headsVerticalMerge === true ||
+        waitsForRowHeight(cell)
+    )
+  );
+}
+
 /** How row placement reserves end-of-cell boxes for a row before its cells flow. */
 export interface MergedRowSizing {
   /** Continuations and waiting `btLr` cells reserve an end-of-cell box. */
@@ -55,7 +73,7 @@ export function mergedRowSizing(
   return {
     reservesMarks: markSizedRow && !minimumAlone,
     firstCellBox: firstCellBox && !minimumAlone,
-    floorsContent: row.cells.some(isLoneMergeRestart),
+    floorsContent: loneRestartFloorsRow(row),
   };
 }
 
@@ -73,6 +91,8 @@ export interface UnsizedRowInput {
   }[];
   /** True for a head whose content this row does not size: its merge spans later rows. */
   readonly detached: (cell: SemanticTableCell) => boolean;
+  /** True when the row's content already raised it: only the first-cell floor can apply. */
+  readonly raised: boolean;
   /** True for a `btLr` cell that takes its line length from the row height. */
   readonly waits: (cell: SemanticTableCell) => boolean;
   readonly atLeastHeightPt: number | undefined;
@@ -122,6 +142,8 @@ export function unsizedRowFloorPt(input: UnsizedRowInput): number {
     if (markPt <= 0) return 0;
     return authoredRowMinimumFloorPt(markPt, flowed, input.minimumInsets, input.rowGapPt);
   }
+  // The default line is for a row that nothing raised; it never re-floors content.
+  if (input.raised) return 0;
   const hides = (cell: SemanticTableCell) => cellHidesEndMark(cell, deps.documentFirstParagraphId);
   if (!flowed.some((entry) => !entry.cell.vMergeContinue && !hides(entry.cell))) return 0;
   let line = 0;

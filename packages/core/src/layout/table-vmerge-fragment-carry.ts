@@ -341,7 +341,7 @@ export function createVMergeFragmentCarry(
     // line it cuts shows partly and the text below the span stays in the document.
     const clips = final && group.clipsTail === true;
     // The last piece is placed as a plain cell, because a merge head never clips to its row.
-    const { headsVerticalMerge: _head, ...plainCell } = head.cell;
+    const { headsVerticalMerge: _head, restartsVerticalMerge: _restart, ...plainCell } = head.cell;
     const sourceCell = { ...(clips ? plainCell : head.cell), vAlign: 'top' as const };
     const row: SemanticTableRow = {
       ...group.source,

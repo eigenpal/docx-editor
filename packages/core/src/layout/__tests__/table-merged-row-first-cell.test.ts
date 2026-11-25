@@ -125,6 +125,15 @@ test('an ordinary hidden cell beside a hidden head leaves the row to its minimum
   expect(middleRow(table([plain(mark(40), HIDE), head(mark(40), HIDE)]))).toBeCloseTo(5, 6);
 });
 
+test('a lone restart beside an ordinary cell leaves the row to its content', () => {
+  expect(middleRow(table([lone(text('s')), plain(text('t'))]))).toBeCloseTo(line(8), 6);
+  expect(middleRow(table([plain(text('s')), lone(text('t'))]))).toBeCloseTo(line(8), 6);
+  expect(middleRow(table([lone(text('s', 8), HIDE), plain(text('t', 8))], ''))).toBeCloseTo(
+    line(4),
+    6
+  );
+});
+
 test("a lone restart's text raises the row above the first-cell floor, never below it", () => {
   const short = text('s');
   const tall = text('Tall', 48);

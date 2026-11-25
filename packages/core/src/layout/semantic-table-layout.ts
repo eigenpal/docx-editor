@@ -1604,10 +1604,13 @@ export function layoutRowFragmentBounded(
     }
   }
   // The passes above skip detached heads, continuations, and waiting `btLr` cells on purpose.
-  // A row that only they hold has had nothing raise it (`unsizedRowFloorPt`, 17.4.84).
-  if (rowBottom <= rowTop + 0.001 || sizing.floorsContent) {
+  // A row that only they hold has had nothing raise it, and a lone restart can floor its row
+  // above its content (`unsizedRowFloorPt`, 17.4.84).
+  const raised = rowBottom > rowTop + 0.001;
+  if (!raised || sizing.floorsContent) {
     const floorPt = unsizedRowFloorPt({
       flowed,
+      raised,
       detached: (cell) => detachedSpans?.has(cell.id) === true,
       waits,
       atLeastHeightPt,
