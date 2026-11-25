@@ -1447,6 +1447,8 @@ export function layoutRowFragmentBounded(
   const waits = waitsForRowHeight;
   const markSizedRow =
     row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
+  // A row of continuations only takes its first cell (`cellReservedMarkHeights`, 17.4.84).
+  const onlyContinuations = row.cells.every((cell) => cell.vMergeContinue);
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
@@ -1486,7 +1488,11 @@ export function layoutRowFragmentBounded(
       cell,
       flowRight - flowLeft,
       flowDeps,
-      { vertical, markSizedRow }
+      {
+        vertical,
+        markSizedRow,
+        ...(onlyContinuations && { onlyContinuations: { first: cellIndex === 0 } }),
+      }
     );
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;

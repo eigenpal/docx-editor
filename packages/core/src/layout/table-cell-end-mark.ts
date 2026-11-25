@@ -1,7 +1,11 @@
 import type { SemanticTableCell } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 import { cellParagraphInputs } from './cell-paragraph-inputs.ts';
-import type { ParagraphLayoutInputs, StyleCascadeTable } from './style-cascade.ts';
+import {
+  cascadeParagraphFormatting,
+  type ParagraphLayoutInputs,
+  type StyleCascadeTable,
+} from './style-cascade.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import { applyLineSpacing, type ParagraphSpacing } from './paragraph-style.ts';
@@ -111,9 +115,11 @@ export function cellEndMarkHeight(
  * there the two are both 15.60. This takes the first reading, which is the one that leaves
  * every mixed row in the corpus where it already is.
  *
- * OPEN: t6 gives a continuation `w:hideMark` and the reference row is 23.52pt, neither zero
- * nor any line this file can derive. `hideMark` keeps its engine-wide meaning here until a
- * control explains that number; no corpus document sets it on a continuation.
+ * A row of continuations only takes this box from its FIRST cell, and a first cell with
+ * `w:hideMark` takes a default line instead ({@link mergedRowFirstCellHeight}). t6 gives a
+ * continuation `w:hideMark` and its row is 23.52pt, which that rule does not derive; later
+ * controls varied the mark size, its spacing, and the paragraph styles, and each gave the
+ * default line.
  */
 export function cellContinuationHeight(
   cell: SemanticTableCell,
@@ -133,38 +139,57 @@ export function cellContinuationHeight(
  * `btLr` text that waits for the row (`waitsForRowHeight`), so no other content sizes it.
  * They are mutually exclusive by construction. A `btLr` cell reserves no mark floor: its
  * text runs along the row, so only a row that nothing else sizes takes its end mark.
+ *
+ * A row of continuations only (`onlyContinuations`) takes its first cell, as a row of merge
+ * heads does ({@link mergedRowFirstCellHeight}): measured with two and three cells of
+ * different end-paragraph boxes, in a `w:bidiVisual` table, in a nested table, and in a
+ * header, the row was as tall as the first cell in document order. The other cells reserve
+ * nothing.
  */
 export function cellReservedMarkHeights(
   cell: SemanticTableCell,
   widthPt: number,
   deps: TableFlowDeps,
-  options: { readonly vertical: boolean; readonly markSizedRow: boolean }
+  options: {
+    readonly vertical: boolean;
+    readonly markSizedRow: boolean;
+    /** Set when every cell of the row continues a vertical merge. */
+    readonly onlyContinuations?: { readonly first: boolean };
+  }
 ): { readonly markFloor: number; readonly continuation: number } {
   if (!cell.vMergeContinue && !options.vertical)
     return { markFloor: cellEndMarkHeight(cell, widthPt, deps), continuation: 0 };
-  return {
-    markFloor: 0,
-    continuation: options.markSizedRow ? cellContinuationHeight(cell, widthPt, deps) : 0,
-  };
+  if (!options.markSizedRow) return { markFloor: 0, continuation: 0 };
+  const only = options.onlyContinuations;
+  if (only !== undefined)
+    return {
+      markFloor: 0,
+      continuation: only.first ? mergedRowFirstCellHeight(cell, widthPt, deps) : 0,
+    };
+  return { markFloor: 0, continuation: cellContinuationHeight(cell, widthPt, deps) };
 }
 
-const defaultsStyles = new WeakMap<
-  readonly unknown[],
+const defaultLineStyles = new WeakMap<
+  StyleCascadeTable,
   {
     readonly theme: StyleCascadeTable['themeFonts'] | undefined;
     readonly style: ReturnType<typeof resolveRunStyle>;
   }
 >();
 
-/** The document's default run properties, resolved once per style table and theme. */
-function defaultsRunStyle(deps: TableFlowDeps): ReturnType<typeof resolveRunStyle> {
-  const defaults = deps.styleCascade?.docDefaultsRun ?? [];
-  if (defaults.length === 0) return DEFAULT_RUN_STYLE;
-  const theme = deps.styleCascade?.themeFonts;
-  const known = defaultsStyles.get(defaults);
+/**
+ * The run properties of a paragraph that names no style: the document defaults under the
+ * default paragraph style. Resolved once per style table and theme.
+ */
+function defaultParagraphRunStyle(deps: TableFlowDeps): ReturnType<typeof resolveRunStyle> {
+  const table = deps.styleCascade;
+  if (table === undefined) return DEFAULT_RUN_STYLE;
+  const theme = table.themeFonts;
+  const known = defaultLineStyles.get(table);
   if (known && known.theme === theme) return known.style;
-  const style = resolveRunStyle(defaults, theme);
-  defaultsStyles.set(defaults, { theme, style });
+  const properties = cascadeParagraphFormatting(table, undefined).runProperties;
+  const style = properties.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(properties, theme);
+  defaultLineStyles.set(table, { theme, style });
   return style;
 }
 
@@ -177,10 +202,13 @@ function defaultsRunStyle(deps: TableFlowDeps): ReturnType<typeof resolveRunStyl
  * set the row, never the larger of the two. A merge head gives its mark's line and its spacing
  * after, but not its spacing before: a one-paragraph head with 4pt before still gave the bare
  * line. A continuation gives its whole box, as {@link cellContinuationHeight} does. A head
- * whose first line is 12pt over an 8pt end paragraph gave the 8pt line. A first cell with
- * `w:hideMark` (17.4.21) gave the line of the document's default run properties, whatever the
- * other cells held. A hidden or unmeasurable mark takes that line too (not measured), and a
- * default face that does not resolve takes the fallback line.
+ * whose first line is 12pt over an 8pt end paragraph gave the 8pt line.
+ *
+ * A first cell with `w:hideMark` (17.4.21), a head or a continuation, gave one line of the
+ * default paragraph style's run properties over the document defaults, whatever the other
+ * cells held. Its own paragraph style, mark size, and spacing did not count. A hidden or
+ * unmeasurable mark takes that line too (not measured), and a default face that does not
+ * resolve takes the fallback line.
  */
 export function mergedRowFirstCellHeight(
   cell: SemanticTableCell,
@@ -189,7 +217,7 @@ export function mergedRowFirstCellHeight(
 ): number {
   const box = endMarkBox(cell, widthPt, deps);
   if (box === null) {
-    const style = defaultsRunStyle(deps);
+    const style = defaultParagraphRunStyle(deps);
     if (style.hidden) return 0;
     // A face that did not resolve cannot be measured: take the fallback line instead.
     const measured = deps.measurer.hasResolvedFont?.(style) === false ? DEFAULT_RUN_STYLE : style;
