@@ -27,7 +27,7 @@ import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationViewportElement } from './navigation/navigation-layout';
 import type { Editor, EditorSnapshot, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
-import { hostDocumentOf, hostWindowOf, isElementNode } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, isElementNode, writeTextToClipboard } from '@docx-editor.dev/core/editor';
 
 /** Where the popover sits, in viewport coordinates. */
 export interface HyperlinkPopupAnchor {
@@ -422,7 +422,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     if (!href) return false;
     try {
       // The editor's window: an unfocused opener's clipboard refuses the write.
-      await hostWindowOf(viewportRef.current).navigator.clipboard.writeText(href);
+      await writeTextToClipboard(viewportRef.current, href);
     } catch {
       // A denied clipboard permission is not an error worth throwing at a user who clicked
       // a copy button; the confirmation simply does not appear.

@@ -833,7 +833,7 @@ export function mountPaginatedSurface(
               { paragraphId, offset: replacing.end }
             ),
           }
-        : positionPastDeletion(editingLayout(), anchor);
+        : hiddenMarks.insertPoint(anchor);
     if (at.paragraphId !== paragraphId || at.offset !== offset) return [];
     return [
       {
@@ -1715,7 +1715,7 @@ export function mountPaginatedSurface(
       kind === 'insertion'
         ? {
             ops: [] as readonly TreeDocOp[],
-            collapseTo: positionPastDeletion(editingLayout(), range.from),
+            collapseTo: hiddenMarks.insertPoint(range.from),
           }
         : deleteSelectionPlan(writer);
     const ops = attributeTrackedOps(plan.ops, revision, formattingTracked());
@@ -3475,7 +3475,7 @@ export function mountPaginatedSurface(
     later: (task) => afterNextPaint(timers, fieldScope.wrap(landing.wrap(task))),
     modelTextOf: (id) => paragraphTextOf(partOfNodeId(session, id) ?? session.part(), id),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
-    compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,
+    compositionUsesTyping: () => typingSelectionPlan().composesAsTyping === true,
     promptLanding: typedLanding,
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting

@@ -340,6 +340,7 @@ export function applyDocumentFontSubstitutions(
   // A family that the configuration serves for any face is available, so it gets no class
   // fallback; see `served-font-families.ts`.
   const served = servedFontFamilies(configuration);
+  const standIns = new Set<string>();
   let remaining = Math.max(0, HARD_MAX_FONT_SOURCES - existing.size);
   for (const family of plan.families) {
     const key = family.trim().toLowerCase();
@@ -395,14 +396,32 @@ export function applyDocumentFontSubstitutions(
           ? supply({ family: servingName, weight, style })
           : undefined;
         const nearest = elsewhere ?? served.nearestFace(family, from);
-        if (nearest) push(nearest);
+        if (nearest && push(nearest) && !elsewhere) {
+          const { weight: toWeight, style: toStyle } = nearest.to;
+          if (toWeight !== weight || toStyle !== style) standIns.add(fontRequestKey(from));
+        }
       }
     }
   }
-  return composeFontConfiguration({
+  const result = composeFontConfiguration({
     ...configuration,
     substitutions: [...substitutions, ...(configuration.substitutions ?? [])],
   });
+  if (standIns.size > 0) standInFacesOf.set(result, standIns);
+  return result;
+}
+
+const standInFacesOf = new WeakMap<FontConfiguration, ReadonlySet<string>>();
+const NO_STAND_INS: ReadonlySet<string> = new Set();
+
+/**
+ * The faces (`fontRequestKey`) that `applyDocumentFontSubstitutions` gave a synthesized stand-in
+ * when it built `configuration`. They measure and paint, but no face of their own is installed:
+ * a probe for an installed face (`TextMeasurer.hasResolvedFont`) must not count them, or a
+ * face that loads later looks loaded already.
+ */
+export function documentStandInFaces(configuration: FontConfiguration): ReadonlySet<string> {
+  return standInFacesOf.get(configuration) ?? NO_STAND_INS;
 }
 
 /**

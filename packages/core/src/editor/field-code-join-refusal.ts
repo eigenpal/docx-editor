@@ -4,10 +4,10 @@
 // `ST_FldCharType` `begin` (17.18.29) to its `end`, and its field codes (`w:instrText`,
 // 17.16.23) run up to `separate`. When the field codes hold paragraph marks, those marks belong
 // to the field instruction: the paragraphs inside, and the paragraph that holds `begin`. Layout
-// takes the paragraphs inside out of the flow (`layout/field-instruction-paragraphs.ts`), and
-// Backspace and Delete step over the field codes instead of joining across them. A join would
-// rewrite the field instruction without showing a change, so the command is refused with a
-// stable reason instead.
+// shows none of them as a break (`layout/field-instruction-paragraphs.ts`,
+// `layout/field-code-paragraph-merge.ts`), and Backspace and Delete never join across them. A
+// join would rewrite the field instruction without showing a change, so the command is refused
+// with a stable reason instead.
 
 import type { ExecResult } from '../contracts/editor.ts';
 import { markIsFieldCode } from '../layout/field-code-marks.ts';

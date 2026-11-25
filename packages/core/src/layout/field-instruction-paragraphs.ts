@@ -59,6 +59,18 @@ export function paragraphsInsideFieldInstructions(
 }
 
 /**
+ * Indexes of the paragraphs in `blocks` whose mark is field code: each paragraph inside a field
+ * instruction, and each paragraph that holds the `begin` of a field whose field codes end in a
+ * later paragraph. Their list items advance no counter, in a table cell as at the top level of
+ * a story, and whether or not a content control wraps them.
+ */
+export function fieldCodeMarkParagraphs(blocks: readonly OoxmlElement[]): ReadonlySet<number> {
+  const { inside, joins } = scanFieldInstructionParagraphs(blocks);
+  if (joins.length === 0) return inside;
+  return new Set([...inside, ...joins.map((join) => join.first)]);
+}
+
+/**
  * The paragraphs inside a field instruction (`inside`), and every paragraph that sits between a
  * closed field's `begin` and the end of its field codes, also when stray text keeps them in the
  * flow (`spanned`). A text edit in a spanned paragraph can change which paragraphs leave the
@@ -66,8 +78,8 @@ export function paragraphsInsideFieldInstructions(
  *
  * `joins` pairs the paragraph that holds a field's `begin` with the paragraph where its field
  * codes end, for each field whose field codes hold paragraph marks and no plain text. The mark
- * of the first one is field code too, so edits never add or remove it without saying so (see
- * `field-code-marks.ts`).
+ * of the first one is field code too, so the two lay out as one line (see
+ * `field-code-paragraph-merge.ts`).
  */
 export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]): {
   readonly inside: ReadonlySet<number>;
