@@ -1447,6 +1447,13 @@ export function layoutRowFragmentBounded(
   const waits = waitsForRowHeight;
   const markSizedRow =
     row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
+  // A row of continuations only takes its first cell's box (`cellReservedMarkHeights`,
+  // 17.4.84). A cell with no end paragraph (a head a merged-text carry emptied, or an invalid
+  // empty `w:tc`) keeps the row on the largest box of its cells.
+  const onlyContinuations = row.cells.every(
+    (cell) => cell.vMergeContinue && cell.blocks.length > 0
+  );
+  let firstCellPt: number | null = null;
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
@@ -1486,8 +1493,13 @@ export function layoutRowFragmentBounded(
       cell,
       flowRight - flowLeft,
       flowDeps,
-      { vertical, markSizedRow }
+      {
+        vertical,
+        markSizedRow,
+        ...(onlyContinuations && { onlyContinuations: { firstCellPt } }),
+      }
     );
+    if (onlyContinuations && firstCellPt === null) firstCellPt = continuationPt;
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
     let nextCursor = cursor;
