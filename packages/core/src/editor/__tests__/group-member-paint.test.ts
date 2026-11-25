@@ -35,6 +35,7 @@ import {
 } from '../../layout/furniture-drawing-exclusion.ts';
 import type { AnchoredDrawingRecord } from '../../layout/drawing-layout.ts';
 import { hitAnchoredDrawingAtPoint } from '../../layout/semantic-hit-test.ts';
+import { drawingPaintsPastBox } from '../../layout/vector-shape-hit.ts';
 import type { ImageDecodePort } from '../../store/package/image-resources.ts';
 import type { PaginatedSurface } from '../paginated-surface.ts';
 
@@ -585,6 +586,19 @@ test('a press on a picture outside the group extent hits the group', async () =>
     expect(hit(-60, 40)).toBeNull();
     expect(hit(-30, 10)).toBeNull();
     expect(hit(-30, 80)).toBeNull();
+    // The pointer path asks for drawings that paint past their box.
+    expect(drawingPaintsPastBox(groupRecord(surface))).toBe(true);
+  });
+  // A mirrored picture has the other corner order.
+  await withMounted(docx(picture(-50, 20, { xfrmAttributes: ' flipH="1"' })), (surface) => {
+    const group = groupRecord(surface).hitBounds;
+    const drawings = surface.layout().pages[0]!.anchoredDrawings;
+    const at = (dx: number, dy: number) => ({ x: group.x + dx, y: group.y + dy });
+    expect(hitAnchoredDrawingAtPoint(drawings, at(-30, 40), 0)).not.toBeNull();
+    expect(hitAnchoredDrawingAtPoint(drawings, at(-30, 10), 0)).toBeNull();
+  });
+  await withMounted(docx(picture(0, 20)), (surface) => {
+    expect(drawingPaintsPastBox(groupRecord(surface))).toBe(false);
   });
 });
 

@@ -322,7 +322,10 @@ function readPictureMember(
   // The ring flattens at the size that the member paints at, so a group with small child
   // units keeps a smooth ring. The proportions stay those of the member's own extent.
   const fine = Math.max(1, space.scaleX, space.scaleY);
-  const shapeRing = shapeClipRing(shapeProperties, { cx: cx * fine, cy: cy * fine });
+  // A ring with too many points at that size keeps the ring of the member's own extent.
+  const shapeRing =
+    shapeClipRing(shapeProperties, { cx: cx * fine, cy: cy * fine }) ??
+    (fine > 1 ? shapeClipRing(shapeProperties, { cx, cy }) : null);
   // An upright fill takes the bounding box of the turned geometry as its box.
   const uprightFill =
     fillStaysUpright(blipFill) && (shapeFacing.rotationDegrees !== 0 || shapeFacing.flipH);

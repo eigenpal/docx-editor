@@ -412,3 +412,61 @@ test('the link of a group covers the group when a picture reaches past the exten
   expect(rects[0]).toEqual([72, 520, 172, 720]);
   expect(rects[1]).toEqual(rects[0]);
 });
+
+test('a table cell still cuts a picture and the text of a group that paint past the extent', async () => {
+  // An inline group, 400pt wide, in a fixed cell 200pt wide (2026-11-25 Word render: the cell
+  // cuts the members on its right edge, also when a member reaches above the extent).
+  const cx = 400 * PT;
+  const cy = 100 * PT;
+  const textbox =
+    '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr>' +
+    `<a:xfrm><a:off x="${150 * PT}" y="${60 * PT}"/><a:ext cx="${200 * PT}" cy="${30 * PT}"/></a:xfrm>` +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></wps:spPr>' +
+    '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Text box text here</w:t></w:r></w:p>' +
+    '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
+  // The bar reaches above the extent, so the text of the group paints past the group too.
+  const members =
+    picture(-5).replace('<a:off x="0"', `<a:off x="${150 * PT}"`) + bar(-5, '2040C0') + textbox;
+  const drawing =
+    `<w:r><w:drawing ${NAMESPACES}><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Group"/>` +
+    '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">' +
+    `<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/>` +
+    `<a:chOff x="0" y="0"/><a:chExt cx="${cx}" cy="${cy}"/></a:xfrm></wpg:grpSpPr>${members}` +
+    '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+  const cell = (content: string) =>
+    `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${content}</w:tc>`;
+  const bytes = docx(
+    '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid><w:tr>' +
+      `${cell(`<w:p>${drawing}</w:p>`)}${cell('<w:p><w:r><w:t>Next</w:t></w:r></w:p>')}` +
+      '</w:tr></w:tbl><w:p/>',
+    {
+      'word/_rels/document.xml.rels': relationships({ rIdImg: 'media/image1.png' }),
+      'word/media/image1.png': PNG_1X1,
+    }
+  );
+  const result = await exportPdf(bytes, { useSystemFonts: false, fidelityPolicy: 'best-effort' });
+  const pdf = await PDFDocument.load(result.bytes);
+  const text = pdf.context
+    .enumerateIndirectObjects()
+    .flatMap(([, value]) => (value instanceof PDFRawStream ? [value] : []))
+    .filter((stream) => stream.dict.get(PDFName.of('Subtype')) !== PDFName.of('Image'))
+    .map((stream) => new TextDecoder().decode(decodePDFRawStream(stream).decode()))
+    .join('\n');
+  // The picture: a region rectangle, then the picture's own frame, then the image.
+  const pictureClip =
+    /q ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re W n [\d.]+ [\d.]+ m [^\n]* Do Q/.exec(text);
+  expect(pictureClip).not.toBeNull();
+  const [left, , width] = pictureClip!.slice(1, 4).map(Number) as [number, number, number];
+  // The cell starts at the 72pt margin and is 200pt wide.
+  expect(left + width).toBeGreaterThan(270);
+  expect(left + width).toBeLessThan(273);
+  // The frame of the picture reaches past that edge, so only the region rectangle cuts it.
+  expect(text).toMatch(/322(\.\d+)? [\d.]+ l/);
+  // The group text paints past the group, inside a region rectangle with the same right edge.
+  const textClips = [...text.matchAll(/q 0 0 ([\d.]+) [\d.]+ re W n/g)].map((match) =>
+    Number(match[1])
+  );
+  expect(textClips.some((right) => right > 270 && right < 273)).toBe(true);
+});

@@ -580,3 +580,21 @@ describe('a picture fill that does not turn with its shape', () => {
     expect(picture.memberClipUnit!.length).toBeGreaterThan(40);
   });
 });
+
+// The ring of a picture member flattens at the painted size. A custom geometry with many
+// curves passes the point limit at that size, and then keeps the ring of its own extent.
+test('a custom geometry with many curves still clips its picture, with small child units', () => {
+  const curves = Array.from({ length: 40 }, (_, at) => {
+    const angle = (step: number) => ((at + step) / 40) * 2 * Math.PI;
+    const point = (step: number, reach: number) =>
+      `<a:pt x="${Math.round(1500 + 1500 * reach * Math.cos(angle(step)))}" ` +
+      `y="${Math.round(500 + 500 * reach * Math.sin(angle(step)))}"/>`;
+    return `<a:cubicBezTo>${point(1 / 3, 0.6)}${point(2 / 3, 0.6)}${point(1, 1)}</a:cubicBezTo>`;
+  }).join('');
+  const geometry =
+    '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/>' +
+    '<a:pathLst><a:path w="3000" h="1000"><a:moveTo><a:pt x="3000" y="500"/></a:moveTo>' +
+    `${curves}<a:close/></a:path></a:pathLst></a:custGeom>`;
+  const picture = pictureOf(pictureMember({ geometry }));
+  expect(picture.memberClipUnit!.length).toBeGreaterThan(40);
+});
