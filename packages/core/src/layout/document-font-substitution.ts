@@ -17,6 +17,7 @@ import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { SYMBOL_ENCODED_FAMILIES } from '../store/package/symbol-encoding.ts';
 import { englishFamily } from '../store/package/default-font-faces.ts';
+import { servedFontFamilies } from './served-font-families.ts';
 import { applicationRunDefaults } from './application-run-defaults.ts';
 import { readDocDefaults } from './style-definition-reader.ts';
 import { resolveRunStyle } from './run-style.ts';
@@ -336,15 +337,9 @@ export function applyDocumentFontSubstitutions(
     if (!hosted || !target) return undefined;
     return hosted.lineMetrics ? { to: target, lineMetrics: hosted.lineMetrics } : { to: target };
   };
-  // A host answers only the faces that text uses, so the family decides, not the face. Only a
-  // substitution whose target has bytes counts: a resolver names its targets before it fetches
-  // them, and a failed fetch must not take the fallback away from the family.
-  const hostFamilies = new Set(
-    (configuration.substitutions ?? [])
-      .filter((substitution) => sources.has(fontRequestKey(substitution.to)))
-      .map((substitution) => substitution.from.family.trim().toLowerCase())
-  );
-  const hostServes = (name: string): boolean => hostFamilies.has(name.trim().toLowerCase());
+  // A family that the configuration serves for any face is available, so it gets no class
+  // fallback; see `served-font-families.ts`.
+  const served = servedFontFamilies(configuration);
   let remaining = Math.max(0, HARD_MAX_FONT_SOURCES - existing.size);
   for (const family of plan.families) {
     const key = family.trim().toLowerCase();
@@ -353,43 +348,54 @@ export function applyDocumentFontSubstitutions(
     // A localized East Asian name (`メイリオ`) is its English family (`Meiryo`), so a face the
     // host supplies under that name comes before any other candidate.
     const english = englishFamily(family);
-    // A host that serves the English family serves the localized name too.
-    const servedInEnglish = english.trim().toLowerCase() !== key && hostServes(english);
-    const hostAnswered = servedInEnglish || hostServes(family);
+    const servingName = served.servingName(family);
+    const servedElsewhere = servingName !== undefined && servingName.trim().toLowerCase() !== key;
     for (const weight of [400, 700]) {
       for (const style of ['normal', 'italic'] as const) {
         const from = { family, weight, style };
         if (sources.has(fontRequestKey(from))) continue;
-        // A family the host substitutes itself (Arial to Liberation Sans) keeps that face unless
-        // the document names a face the host supplies directly, as before: following the host's
-        // substitutions for a fallback is only for families the host has no answer for. The
-        // class fallback is not a face the document names: a host substitute (Segoe UI to its
-        // metric twin) keeps the family even when the host has the fallback face installed.
-        // The font table class (`w:family`, `CT_FontFamily`, ECMA-376 Part 1, §17.8.3.9) only
-        // locates a substitute for a font that is not available, and a host's family is.
-        for (const candidate of hostAnswered
-          ? [english, alternate]
-          : [english, alternate, fallback]) {
-          if (!candidate || candidate.trim().toLowerCase() === key) continue;
-          const request = { family: candidate, weight, style };
-          const direct = sources.get(fontRequestKey(request));
-          const supplied = !hostAnswered
-            ? supply(request)
-            : direct
-              ? { to: direct }
-              : servedInEnglish && candidate === english
-                ? supply(request)
-                : undefined;
-          if (!supplied) continue;
+        const push = (supplied: Pick<FontSourceSubstitution, 'to' | 'lineMetrics'>): boolean => {
           if (!existing.has(fontRequestKey(from))) {
-            if (remaining === 0) break;
+            if (remaining === 0) return false;
             remaining--;
           }
           // A recorded family keeps its authored line box on the face that stands in for it.
           const authored = recordedLineBoxFamily(family)?.em;
           substitutions.push({ from, ...supplied, ...(authored ? { lineMetrics: authored } : {}) });
-          break;
+          return true;
+        };
+        if (servingName === undefined) {
+          // Nothing serves the family: its English name, its font table alternate, then its
+          // class fallback, each directly or through the host's substitute for that name.
+          for (const candidate of [english, alternate, fallback]) {
+            if (!candidate || candidate.trim().toLowerCase() === key) continue;
+            const supplied = supply({ family: candidate, weight, style });
+            if (supplied) {
+              push(supplied);
+              break;
+            }
+          }
+          continue;
         }
+        // A served family takes a face that the document names directly (its English name or
+        // its font table alternate, `w:altName`) first. An alternate that reaches bytes only
+        // through a host's substitute does not count: one paint alias holds every face of the
+        // family, so its other faces stand in through the family that serves it.
+        const direct = [english, alternate]
+          .filter((candidate) => !!candidate && candidate.trim().toLowerCase() !== key)
+          .map((candidate) => sources.get(fontRequestKey({ family: candidate!, weight, style })))
+          .find((found) => found !== undefined);
+        if (direct) {
+          push({ to: direct });
+          continue;
+        }
+        // A face that the host serves under the document name keeps the host's answer.
+        if (supply(from)) continue;
+        const elsewhere = servedElsewhere
+          ? supply({ family: servingName, weight, style })
+          : undefined;
+        const nearest = elsewhere ?? served.nearestFace(family, from);
+        if (nearest) push(nearest);
       }
     }
   }
@@ -412,9 +418,12 @@ export function hostChainedDocumentFallbacks(
   const existing = new Set(
     (before.substitutions ?? []).map((substitution) => fontRequestKey(substitution.from))
   );
+  const served = servedFontFamilies(before);
   const families = new Set<string>();
   for (const substitution of after.substitutions ?? []) {
     if (existing.has(fontRequestKey(substitution.from))) continue;
+    // A served family's other faces stand in through the family that serves it, not a fallback.
+    if (served.servingName(substitution.from.family) !== undefined) continue;
     const key = substitution.from.family.trim().toLowerCase();
     const target = substitution.to.family.trim().toLowerCase();
     const planned = [plan.alternates.get(key), plan.fallbacks.get(key)].some(

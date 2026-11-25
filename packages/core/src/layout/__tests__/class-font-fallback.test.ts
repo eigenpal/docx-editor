@@ -292,7 +292,15 @@ test('a family the host answers for some faces gets no class fallback for its ot
   const brand = fonts.substitutions?.filter(
     (substitution) => substitution.from.family === 'Brand Light'
   );
-  expect(brand?.map((substitution) => substitution.to.family)).toEqual(['Carlito', 'Carlito']);
+  // The faces the host did not serve stand in through its family, not the class fallback.
+  expect(
+    brand?.map(({ from, to }) => `${from.weight} ${from.style} ${to.family} ${to.style}`)
+  ).toEqual([
+    '400 italic Carlito italic',
+    '700 italic Carlito italic',
+    '400 normal Carlito normal',
+    '700 normal Carlito normal',
+  ]);
 });
 
 test('a host substitute without bytes keeps the class fallback for the family', () => {
@@ -348,5 +356,36 @@ test('a localized family that the host serves in English gets no fallback for it
   );
   expect(localized?.map(({ from, to }) => `${from.weight} ${from.style} ${to.family}`)).toEqual([
     '400 normal Carlito',
+    '400 italic Carlito',
+    '700 normal Carlito',
+    '700 italic Carlito',
+  ]);
+});
+
+test('a localized family name that the host serves covers its English name too', () => {
+  const document = documentWith(
+    'Meiryo',
+    '<w:font w:name="Meiryo"><w:family w:val="swiss"/></w:font><w:font w:name="Times New Roman"><w:family w:val="roman"/></w:font>',
+    undefined,
+    'Times New Roman'
+  );
+  const plan = documentFontSubstitutionPlan(document, ['Meiryo'], [], 'Times New Roman');
+  const host = hostFonts();
+  const answered = {
+    from: { family: 'メイリオ', weight: 400, style: 'normal' as const },
+    to: { family: 'Liberation Mono', weight: 400, style: 'normal' as const },
+  };
+  const fonts = applyDocumentFontSubstitutions(
+    composeFontConfiguration({ ...host, substitutions: [answered, ...host.substitutions!] }),
+    plan
+  );
+  const english = fonts.substitutions?.filter(
+    (substitution) => substitution.from.family === 'Meiryo'
+  );
+  expect(english?.map(({ to }) => to.family)).toEqual([
+    'Liberation Mono',
+    'Liberation Mono',
+    'Liberation Mono',
+    'Liberation Mono',
   ]);
 });

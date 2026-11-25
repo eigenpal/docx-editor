@@ -166,6 +166,17 @@ test('regular text keeps the host face after a late italic, in measurement and i
       ...container.querySelectorAll<HTMLElement>('[data-paragraph-id] .layout-run-text'),
     ].find((run) => run.textContent?.startsWith('Regular'));
     expect(painted?.style.fontFamily.split(',')[0]?.replace(/"/g, '').trim()).toBe(standIn);
+
+    // The italic that the host did not serve measures in the stand-in's regular face, which
+    // paint slants through the same alias.
+    const italic = final.substitutions?.find(
+      ({ from }) => from.family === 'Brand Light' && from.weight === 400 && from.style === 'italic'
+    );
+    expect(italic?.to).toEqual({ family: 'Stand In', weight: 400, style: 'normal' });
+    const paintedItalic = [
+      ...container.querySelectorAll<HTMLElement>('[data-paragraph-id] .layout-run-text'),
+    ].find((run) => run.textContent?.startsWith('Italic'));
+    expect(paintedItalic?.style.fontFamily.split(',')[0]?.replace(/"/g, '').trim()).toBe(standIn);
   } finally {
     editor.destroy();
     spy.mockRestore();
