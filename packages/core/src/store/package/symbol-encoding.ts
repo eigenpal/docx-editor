@@ -23,6 +23,9 @@ const SYMBOL_PUA_END = 0xf0ff;
  * would trade a tofu box for a wrong character, which is not an improvement.
  */
 const SYMBOL_TO_UNICODE: ReadonlyMap<number, string> = new Map([
+  // A dash bullet is Word writing U+F02D in `w:lvlText` (§17.9.11, CT_LevelText) for a level
+  // whose `w:rFonts` names Symbol (§17.3.2.26, CT_Fonts).
+  [0x2d, '−'], // minus −
   [0xa7, '♣'], // clubsuit ♣
   [0xa8, '♦'], // diamondsuit ♦
   [0xa9, '♥'], // heartsuit ♥

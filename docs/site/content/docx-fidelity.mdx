@@ -298,6 +298,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 - Supply font bytes for accurate measurement. See [Fonts and measurement](/docs/2.x/guides/fonts).
 - The font resolver also receives faces of SYMBOL fields and numbering markers.
 - Symbol and Wingdings bullets use a Unicode fallback when the font is missing. Layout keeps the symbol font metrics.
+- A Symbol dash bullet falls back to a minus sign (U+2212).
 - No-break spaces and word joiners keep their break behavior across runs.
 - Paragraph `w:bidi` controls alignment and group order. Run `w:rtl` controls direction within a group.
 - `w:themeFontLang` selects theme fonts for Latin, East Asian, and complex-script tokens.

@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A Symbol list level whose w:lvlText is U+F02D keeps the private-use code, and layout draws a missing-glyph box.",
+  "after": "Layout maps U+F02D in Symbol to U+2212 for the marker it draws. The stored w:lvlText is unchanged.",
+  "reason": "The mapping is a layout and text-read fallback. Stored numbering, operations, and shared state are unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/symbol-bullet-encoding.test.ts"],
+  "changeset": "symbol-minus-list-marker",
+  "migration": null
+}

@@ -83,6 +83,16 @@ describe('symbol-font private-use mapping', () => {
     expect(mapSymbolPuaText('', 'Symbol')).toBe('→');
   });
 
+  test('maps the Symbol minus that dash bullets use', () => {
+    const SYMBOL_MINUS = '';
+    expect(mapSymbolPuaText(SYMBOL_MINUS, 'Symbol')).toBe('−');
+    const part = document(listParagraph('Dash item', '0'));
+    const body = part.root!.children.find((child) => child.localName === 'body')!;
+    const index = numbering(NUMBERING.replace(SYMBOL_BULLET, SYMBOL_MINUS));
+    const [item] = resolveStoryListItems(body.children, index, undefined).values();
+    expect(item!.markerText).toBe('−');
+  });
+
   test('leaves everything it cannot map exactly', () => {
     // Not a symbol family: the codepoint means whatever that font says it means.
     expect(mapSymbolPuaText(SYMBOL_BULLET, 'Calibri')).toBe(SYMBOL_BULLET);
