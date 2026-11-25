@@ -271,6 +271,7 @@ export function tabCarriesItsWord(
   if (width <= 0 || placed.width + width <= pen.room + OVERFLOW_TOLERANCE_PT) return false;
   if (leftStopKeepsTab(context, pen.stopX)) return false;
   const onFreshLine = tabPlacement(context, fresh.x, fresh.x, 0);
+  // Left-to-right only: the caller passes plain tabs (`plainTab`), which excludes RTL paragraphs.
   const chopsAfterStop =
     fresh.chopsWord &&
     word.choppable &&
