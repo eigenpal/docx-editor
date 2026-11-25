@@ -1,12 +1,14 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A paragraph inside a field instruction showed as a blank line with its list marker, and Backspace or Delete at the break around it joined it away.",
-  "after": "Layout removes such a paragraph from the flow, it advances no list counter, joins do not absorb it, and Delete before the field moves the caret over it.",
-  "reason": "Only derived layout and the local choice of which existing join operations to emit change. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
+  "before": "A paragraph inside a field instruction showed as a blank line with its list marker, and Backspace, Delete, or mergeParagraphs at the break around it joined it away.",
+  "after": "Layout removes such a paragraph from the flow, also in table cells and content controls, and it advances no list counter. Joins do not absorb it, Delete before the field moves the caret over it, and mergeParagraphs refuses before it emits any operation.",
+  "reason": "Only derived layout, the local choice of which existing join operations to emit, and a local refusal change. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
   "tests": [
-    "packages/core/src/layout/__tests__/field-instruction-paragraphs.test.ts",
     "packages/core/src/editor/__tests__/hidden-mark-joins.test.ts",
+    "packages/core/src/editor/__tests__/selection-edit-commands.test.ts",
+    "packages/core/src/layout/__tests__/field-instruction-paragraphs.test.ts",
+    "packages/core/src/layout/__tests__/field-instruction-scan-cost.test.ts",
     "packages/pro/src/collaboration/__tests__/document-field-instruction-paragraphs.test.ts"
   ],
   "changeset": "field-instruction-paragraphs",

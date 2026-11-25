@@ -86,7 +86,38 @@ test('participants agree on field-code paragraphs through edits, undo, and save'
     alice.redo();
     converged(['before', 'Yes! after']);
 
-    expect(shown(open(alice.save()))).toEqual(['before', 'Yes! after']);
+    // Concurrent edits on both sides of the field codes land in their own paragraphs.
+    peers.pause();
+    caret(alice, 0, 0);
+    alice.type('A ');
+    caret(bob, 3, 10);
+    bob.type(' B');
+    peers.resume();
+    converged(['A before', 'Yes! after B']);
+
+    // Alice deletes the first side up to the result, while Bob types in the result. Both
+    // converge on one document, and save keeps it.
+    peers.pause();
+    const [opening, result] = [0, 3].map((index) => alice.session.paragraphIds()[index]!);
+    alice.setSelection({
+      anchor: { paragraphId: opening!, offset: 0 },
+      head: { paragraphId: result!, offset: 0 },
+    });
+    alice.deleteSelection();
+    caret(bob, 3, 3);
+    bob.type('?');
+    peers.resume();
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    expect(alice.session.bodyText()).toBe(bob.session.bodyText());
+    // The field-code marks stay: the emptied first side keeps its own line.
+    const finalLines = ['', 'Yes?! after B'];
+    expect(alice.session.paragraphIds()).toHaveLength(4);
+    expect(shown(alice)).toEqual(finalLines);
+    expect(shown(bob)).toEqual(finalLines);
+
+    expect(shown(open(alice.save()))).toEqual(finalLines);
+    expect(shown(open(bob.save()))).toEqual(finalLines);
   } finally {
     for (const surface of active) surface.destroy();
     harness.cleanup();
