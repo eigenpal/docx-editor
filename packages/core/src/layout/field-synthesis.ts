@@ -34,7 +34,14 @@ import {
   type FieldPageContext,
   type PageFieldMarker,
 } from './field-page-furniture.ts';
-import type { ComplexFieldParseState } from './field-instruction.ts';
+import {
+  effectiveFieldInstruction,
+  trackedDeletionLeavesNoInstruction,
+  type AllowlistedPageFieldMatch,
+  type ComplexFieldParseState,
+} from './field-instruction.ts';
+import { captureInstructionSpecs } from './field-form.ts';
+import { revisionsAreDeletion } from './revision-projection.ts';
 import { instrTextValue, isDeletedInstrText } from '../store/package/field-nodes.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
 import { deferredSegmentsMarker } from './field-nested-page.ts';
@@ -244,6 +251,37 @@ export function synthesizeAtomicField(
     }
   }
   return null;
+}
+
+/**
+ * Capture what the outermost `separate` of `pending` decides, while the machine still holds the
+ * instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
+ *
+ * The allowlisted page-field match is captured whether or not a page context is present. With
+ * one (header/footer) the flush projects the live value; without one (body) it paints a
+ * placeholder the kind marks, and document finalize substitutes the page's value. The `\#`
+ * picture and `\*` number format ride along: they decide how it renders. Any other field
+ * captures its SYMBOL / HYPERLINK / form-field spec. Nesting overflow refuses exactly as PAGE
+ * projection does: a >4-deep hostile field must not synthesize output from whatever outer
+ * fragments the buffer kept.
+ *
+ * A tracked deletion that leaves a page field with no code shows nothing
+ * ({@link trackedDeletionLeavesNoInstruction}), unless the whole field is a tracked deletion.
+ */
+export function captureSeparatedInstruction(
+  pending: PendingFieldProjection,
+  field: ComplexFieldParseState,
+  match: AllowlistedPageFieldMatch | null
+): void {
+  const codeDeleted =
+    !revisionsAreDeletion(pending.resultRevisions) && trackedDeletionLeavesNoInstruction(field);
+  pending.kind = codeDeleted ? null : (match?.kind ?? null);
+  pending.pageSwitches = match ?? {};
+  const effective = effectiveFieldInstruction(field);
+  if (!pending.kind && !effective.overflow && !field.nestingOverflow) {
+    captureInstructionSpecs(pending, effective.instruction);
+  }
+  if (codeDeleted) pending.hidesResult = true;
 }
 
 /**

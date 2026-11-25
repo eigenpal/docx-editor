@@ -92,9 +92,9 @@ describe('w:delInstrText NEXT TO live w:instrText', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['9']);
   });
 
-  test('an EMPTY live element beside a deleted instruction goes inert, not deleted-driven', () => {
+  test('an EMPTY live element beside a deleted page instruction shows nothing', () => {
     // Accepting the deletion leaves exactly the empty live instruction, so the deleted
-    // buffer must not answer for it.
+    // buffer must not answer for it, and a field with no instruction shows no result.
     const pieces = piecesOfParagraph(
       paragraphOf(
         fieldWith(
@@ -105,6 +105,6 @@ describe('w:delInstrText NEXT TO live w:instrText', () => {
       [],
       { pageNumber: 2, pageCount: 7 }
     );
-    expect(pieces.map((piece) => piece.text)).toEqual(['9']);
+    expect(pieces.map((piece) => piece.text)).toEqual([]);
   });
 });

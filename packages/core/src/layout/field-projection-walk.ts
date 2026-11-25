@@ -49,7 +49,11 @@ import {
 } from './field-nested-page.ts';
 import { modelTextOfRunChild, hyphenDisplayOf, runPropertiesOf } from './field-run-text.ts';
 import { captureInstructionSpecs, formControlMarkerOf } from './field-form.ts';
-import { noteInstructionLanguage, synthesizeAtomicField } from './field-synthesis.ts';
+import {
+  captureSeparatedInstruction,
+  noteInstructionLanguage,
+  synthesizeAtomicField,
+} from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
@@ -548,20 +552,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
         const separateLevel = field.nesting;
         const match = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
-          // Capture the allowlisted kind whether or not a page context is present. With one
-          // (header/footer) the flush projects the live value; without one (body) it paints a
-          // placeholder the kind marks, and document finalize substitutes the page's value.
-          // The `\#` picture and `\*` number format ride along: they decide how it renders.
-          pending.kind = match?.kind ?? null;
-          pending.pageSwitches = match ?? {};
-          // Capture the SYMBOL / HYPERLINK / form-field spec while the machine still holds the
-          // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
-          // Nesting overflow refuses exactly as PAGE projection does: a >4-deep hostile field
-          // must not synthesize output from whatever outer fragments the buffer kept.
-          const effective = effectiveFieldInstruction(field);
-          if (!pending.kind && !effective.overflow && !field.nestingOverflow) {
-            captureInstructionSpecs(pending, effective.instruction);
-          }
+          captureSeparatedInstruction(pending, field, match);
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
           pending.style = style;

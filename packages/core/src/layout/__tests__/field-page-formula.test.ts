@@ -378,10 +378,18 @@ describe('a formula with tracked changes in its instruction', () => {
     });
   }
 
-  test('keeps the saved result when only the `=` is deleted', () => {
+  test('shows nothing when only the `=` is deleted', () => {
+    // With the deletion accepted, the field holds only its operand and has no instruction.
     const field =
       BEGIN + deleted(delInstr(' = ')) + pageOperand() + instr(' ') + SEPARATE + text('9') + END;
-    expect(footerTexts(footerOf(field))).toEqual(['[9]', '[9]', '[9]']);
+    expect(footerTexts(footerOf(field))).toEqual(['[]', '[]', '[]']);
+  });
+
+  test('shows nothing for a page field whose code alone is deleted', () => {
+    const field = BEGIN + deleted(delInstr(' PAGE ')) + SEPARATE + text('9') + END;
+    expect(footerTexts(footerOf(field))).toEqual(['[]', '[]', '[]']);
+    // A wholly deleted page field still shows its value, marked as deleted.
+    expect(footerTexts(footerOf(deletedPage))).toEqual(['[1]', '[2]', '[3]']);
   });
 
   test('keeps the saved result of a deleted formula', () => {

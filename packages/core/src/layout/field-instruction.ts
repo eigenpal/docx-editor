@@ -379,6 +379,23 @@ function effectiveLevelInstruction(level: NestedInstructionLevel): EffectiveFiel
     : { instruction: level.deletedInstruction, overflow: level.deletedOverflow };
 }
 
+/**
+ * True when tracked deletions (`w:delInstrText`, 17.16.13) remove the code of a level-1 page
+ * field or page formula and leave no live instruction: a deleted `PAGE` with no live code, or a
+ * deleted `=` with only its page-field operands left. With the deletion accepted, the field has
+ * no instruction and shows nothing. The caller applies this only when the field itself is not
+ * a tracked deletion: a wholly deleted field keeps the behavior of {@link effectiveFieldInstruction}.
+ */
+export function trackedDeletionLeavesNoInstruction(state: ComplexFieldParseState): boolean {
+  if (state.nesting !== 1 || state.nestingOverflow) return false;
+  if (state.instructionOverflow || state.deletedInstructionOverflow) return false;
+  if (state.instruction.trim().length > 0) return false;
+  const { operands, inert } = state.formula;
+  if (matchAllowlistedPageField(state.deletedInstruction)) return operands.length === 0;
+  if (inert || operands.length === 0 || state.deletedInstruction.trim() !== '=') return false;
+  return operands.every((operand) => operand.match !== 'open');
+}
+
 export function onFldCharBegin(state: ComplexFieldParseState): void {
   if (state.nesting === 0) {
     state.instruction = '';
