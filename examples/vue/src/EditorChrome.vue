@@ -91,7 +91,6 @@
           type="button"
           class="demo-header-action demo-header-action--secondary"
           :aria-label="t('demoTopbar.openDocx')"
-          :title="t('demoTopbar.openDocx')"
           :disabled="busy"
           @mousedown="keepCaret"
           @click="openFilePicker"

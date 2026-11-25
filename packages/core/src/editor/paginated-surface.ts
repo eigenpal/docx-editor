@@ -306,6 +306,7 @@ import { createSurfaceCaret } from './surface-caret.ts';
 import { createSurfaceBookmarks, storyContentBox } from './surface-bookmarks.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
+import { focusPagesLayerInPlace } from './surface-focus.ts';
 import { createSurfaceFormat } from './surface-format.ts';
 import { createSurfaceFormatPainter } from './surface-format-painter.ts';
 import { authoredRunPropertiesAt, type SurfaceProperty } from './surface-formatting.ts';
@@ -5715,7 +5716,7 @@ export function mountPaginatedSurface(
       // An already-focused surface may have a newer native selection or active IME
       // composition. A redundant focus request must not overwrite either with the model.
       if (pagesLayer.ownerDocument.activeElement === pagesLayer) return;
-      pagesLayer.focus({ preventScroll: true });
+      focusPagesLayerInPlace(pagesLayer);
       // Returning from a toolbar input can place the browser caret at the document's
       // start. Restore the saved model range before selectionchange adopts that caret
       // and follows it into view (including when no formatting command was executed).
@@ -6135,11 +6136,11 @@ export function mountPaginatedSurface(
       },
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
-      // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
-      // it into view — to its top. The first click anywhere in a long document therefore
-      // threw the reader back to page 1 before the caret it had just placed could be seen.
-      // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
-      focus: () => pagesLayer.focus({ preventScroll: true }),
+      // No browser scroll (see `focusPagesLayerInPlace`): the caret is positioned from layout.
+      // A dropped range is written back, because not every press sets a selection.
+      focus: () => {
+        if (focusPagesLayerInPlace(pagesLayer)) selectionSync.mirrorToDom(true);
+      },
       // An armed format painter paints the selection the gesture just produced. Word's
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
