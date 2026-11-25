@@ -147,3 +147,29 @@ export function cellReservedMarkHeights(
     continuation: options.markSizedRow ? cellContinuationHeight(cell, widthPt, deps) : 0,
   };
 }
+
+/**
+ * The height a row asks of its FIRST cell when no ordinary cell sizes it: every cell starts
+ * (`w:vMerge w:val="restart"`) or continues (`w:vMerge`) a vertical merge (`CT_VMerge`,
+ * ECMA-376 Part 1, 17.4.84), and at least one starts one. The merged text belongs to the span.
+ *
+ * Measured with two cells of different end-paragraph boxes in either order, heads and
+ * continuations mixed: only the first cell's end-of-cell paragraph set the row, never the
+ * larger of the two. A merge head gives its mark's line and its spacing after, but not its
+ * spacing before: a one-paragraph head with 4pt before still gave the bare 8pt-text line. A
+ * continuation gives its whole box ({@link cellContinuationHeight}). The text of the cell
+ * does not count: a head whose first line is 12pt over an 8pt end paragraph gave the 8pt line.
+ *
+ * An `atLeast` `w:trHeight` (`CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37) can raise the
+ * row above this floor but never lowers it. 0 when the first cell's mark contributes nothing
+ * (`w:hideMark`, 17.4.21, a hidden mark, or a face that did not resolve).
+ */
+export function mergedRowFirstCellHeight(
+  cell: SemanticTableCell,
+  widthPt: number,
+  deps: TableFlowDeps
+): number {
+  if (cell.vMergeContinue) return cellContinuationHeight(cell, widthPt, deps);
+  const box = endMarkBox(cell, widthPt, deps);
+  return box === null ? 0 : box.linePt + Math.max(0, box.spacing.after);
+}

@@ -124,7 +124,7 @@ import {
   breakPreparedParagraphLazily,
 } from './paragraph-break-request.ts';
 import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
-import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
+import { cellReservedMarkHeights, mergedRowFirstCellHeight } from './table-cell-end-mark.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import { type StyleCascadeTable, type TableCellStyleFormatting } from './style-cascade.ts';
 import { cellBorderContinuation, paragraphBorderGroupKey } from './cell-border-groups.ts';
@@ -1593,27 +1593,27 @@ export function layoutRowFragmentBounded(
       rowBottom = needed;
     }
   }
-  // A row whose ONLY cells are detached merge heads has had nothing raise it: the two passes
-  // above skip detached cells on purpose. Keep its paragraph-line floor, but do not
-  // apply that floor to rows consisting entirely of continuation cells: the merged
-  // head and authored row heights already supply their required span geometry. An
-  // `atLeast` row height (`w:trHeight`, 17.4.80) is the row's own minimum, so the
-  // authored floor below sizes the row instead.
+  // A row of merge heads and continuations only has had nothing raise it: the passes above
+  // skip detached heads and continuations on purpose. Its first cell's end paragraph sizes
+  // it (`mergedRowFirstCellHeight`, 17.4.84); an `atLeast` minimum below can only raise it.
+  // A row of continuations alone took its end marks above.
+  const first = flowed[0];
   if (
+    first !== undefined &&
     rowBottom <= rowTop + 0.001 &&
-    (atLeastHeightPt ?? 0) <= 0 &&
-    flowed.some(
-      (entry) =>
-        !entry.cell.vMergeContinue && !cellHidesEndMark(entry.cell, deps.documentFirstParagraphId)
-    )
+    flowed.some((entry) => !entry.cell.vMergeContinue) &&
+    flowed.every((entry) => entry.cell.vMergeContinue || detachedSpans?.has(entry.cell.id))
   ) {
-    let lineBottom = rowTop;
-    for (const entry of flowed) {
-      if (cellHidesEndMark(entry.cell, deps.documentFirstParagraphId)) continue;
-      const line = rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
-      if (line > lineBottom) lineBottom = line;
-    }
-    rowBottom = Math.min(flowMaxBottom, lineBottom);
+    const { left, right } = first.insets;
+    const markPt = mergedRowFirstCellHeight(first.cell, first.width - left - right, flowDeps);
+    // Padded with the row-local clearance, as the authored minimum below is.
+    const floorPt = authoredRowMinimumFloorPt(
+      markPt,
+      flowed,
+      deps.cellMinimumContentInsets,
+      rowGapPt
+    );
+    if (markPt > 0) rowBottom = Math.min(flowMaxBottom, rowTop + floorPt);
   }
   rowBottom = Math.min(flowMaxBottom, rowBottom);
 

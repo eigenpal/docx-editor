@@ -1,10 +1,11 @@
 // A row whose cells all start or continue a vertical merge (`w:vMerge`, `CT_VMerge`,
 // ECMA-376 Part 1, 17.4.84). The merged text belongs to the span, so no cell of the row sizes
-// it. An `atLeast` row height (`w:trHeight`, `CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37)
-// is then the row's height, not one line of the default run style.
+// it. The end-of-cell paragraph of the row's FIRST cell then sets its floor, and an `atLeast`
+// row height (`w:trHeight`, `CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37) can only raise it.
 //
-// Each table is a three-row footer band: a 6.25pt exact row, a 9.2pt atLeast row, and a
-// 19.85pt exact row. Fonts are 8pt, and the cells have no borders and no side margins.
+// Each table is a three-row footer band: a 6.25pt exact row, the row under test, and a
+// 19.85pt exact row. The cells have no borders and no side margins. The fixed measurer gives
+// an 8pt line 10.18pt and a 12pt line 15.27pt.
 
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
@@ -24,6 +25,8 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const measurer = createFixedMeasurer();
+const LINE_8PT = (14 * 8) / 11;
+const LINE_12PT = (14 * 12) / 11;
 
 const p = (text: string, before = 0, size = 16) =>
   `<w:p><w:pPr><w:spacing w:before="${before}" w:after="0"/><w:rPr><w:sz w:val="${size}"/></w:rPr></w:pPr>` +
@@ -45,18 +48,26 @@ const EXACT_TOP = '<w:trHeight w:hRule="exact" w:val="125"/>';
 const EXACT_BOTTOM = '<w:trHeight w:hRule="exact" w:val="397"/>';
 
 /** The middle row's cells and its `w:trHeight`, between the two fixed rows. */
-function band(middle: readonly string[], middleHeight: string, top: Merge = undefined): string {
-  const bottom = middle.map((cell) => cell.includes('w:vMerge w:val="restart"'));
+function band(
+  middle: readonly string[],
+  middleHeight: string,
+  top: Merge = undefined,
+  bottomMerges?: readonly Merge[]
+): string {
+  const bottom =
+    bottomMerges ??
+    middle.map((cell) => (cell.includes('w:vMerge w:val="restart"') ? 'continue' : undefined));
+  const firstContinues = middle[0]!.includes('<w:vMerge/>');
   return (
     '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar>' +
     '<w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
     '<w:tblGrid><w:gridCol w:w="7767"/><w:gridCol w:w="2993"/></w:tblGrid>' +
-    tr(EXACT_TOP, [tc(7767, p('')), tc(2993, p('Page 1'), top)]) +
-    tr(middleHeight, middle) +
-    tr(EXACT_BOTTOM, [
-      tc(7767, p(''), bottom[0] ? 'continue' : undefined),
-      tc(2993, p('Notice', 90), bottom[1] ? 'continue' : undefined),
+    tr(EXACT_TOP, [
+      tc(7767, p(''), firstContinues ? 'restart' : undefined),
+      tc(2993, p('Page 1'), top),
     ]) +
+    tr(middleHeight, middle) +
+    tr(EXACT_BOTTOM, [tc(7767, p(''), bottom[0]), tc(2993, p('Notice', 90), bottom[1])]) +
     '</w:tbl>'
   );
 }
@@ -100,21 +111,63 @@ test('an ordinary cell sizes the middle row to its own line', () => {
 });
 
 for (const shape of ['two merge heads', 'a merge head beside a continuation'] as const) {
-  test(`a row with ${shape} takes its atLeast height`, () => {
+  test(`a row with ${shape} takes its first cell's end line over a smaller atLeast height`, () => {
     const heights = rowHeights(shapes[shape]);
     expect(heights[0]).toBeCloseTo(6.25, 6);
-    expect(heights[1]).toBeCloseTo(9.2, 6);
+    expect(heights[1]).toBeCloseTo(LINE_8PT, 6);
     expect(heights[2]).toBeCloseTo(19.85, 6);
   });
 }
 
-// Without a height of its own, the row keeps one line of the default run style.
-test('a row of merge heads with no authored height keeps a line', () => {
-  const auto = band(
-    [tc(7767, twoLines, 'restart'), tc(2993, p('Code'), 'restart')],
-    '<w:trHeight w:hRule="auto" w:val="184"/>'
+test('an atLeast height above the end line sizes a row of merge heads', () => {
+  const heads = [tc(7767, twoLines, 'restart'), tc(2993, p('Code'), 'restart')];
+  expect(rowHeights(band(heads, '<w:trHeight w:val="300"/>'))[1]).toBeCloseTo(15, 6);
+});
+
+// Without a height of its own, the row takes the first cell's end line, not one line of the
+// default run style.
+for (const height of ['<w:trHeight w:hRule="auto" w:val="184"/>', '']) {
+  test(`a row of merge heads with ${height ? 'an auto' : 'no'} height takes its end line`, () => {
+    const heads = [tc(7767, twoLines, 'restart'), tc(2993, p('Code'), 'restart')];
+    expect(rowHeights(band(heads, height))[1]).toBeCloseTo(LINE_8PT, 6);
+  });
+}
+
+const low = '<w:trHeight w:val="100"/>';
+test('only the first cell of a row of merge heads sets its floor', () => {
+  const big = p('Big', 0, 24);
+  const small = p('small');
+  expect(
+    rowHeights(band([tc(7767, big, 'restart'), tc(2993, small, 'restart')], low))[1]
+  ).toBeCloseTo(LINE_12PT, 6);
+  expect(
+    rowHeights(band([tc(7767, small, 'restart'), tc(2993, big, 'restart')], low))[1]
+  ).toBeCloseTo(LINE_8PT, 6);
+  // The text of the head does not count: its end paragraph does.
+  expect(
+    rowHeights(band([tc(7767, big + small, 'restart'), tc(2993, small, 'restart')], low))[1]
+  ).toBeCloseTo(LINE_8PT, 6);
+});
+
+const spaced = (before: number, after: number, text = '') =>
+  `<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}"/><w:rPr><w:sz w:val="16"/></w:rPr></w:pPr>` +
+  (text ? `<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>${text}</w:t></w:r>` : '') +
+  '</w:p>';
+test("a merge head adds its end paragraph's spacing after, not its spacing before", () => {
+  const head = (body: string) =>
+    band([tc(7767, body, 'restart'), tc(2993, p('b'), 'restart')], low);
+  expect(rowHeights(head(spaced(80, 0, 'one')))[1]).toBeCloseTo(LINE_8PT, 6);
+  expect(rowHeights(head(p('one') + spaced(0, 120, 'two')))[1]).toBeCloseTo(LINE_8PT + 6, 6);
+});
+
+test('a continuation in the first cell gives its whole end paragraph box', () => {
+  const heights = rowHeights(
+    band([tc(7767, spaced(80, 0), 'continue'), tc(2993, p('b'), 'restart')], low, undefined, [
+      undefined,
+      'continue',
+    ])
   );
-  expect(rowHeights(auto)[1]).toBeGreaterThan(9.2);
+  expect(heights[1]).toBeCloseTo(4 + LINE_8PT, 6);
 });
 
 // The band as a footer at 0pt from the sheet edge, under a 28.35pt bottom margin. The footer
@@ -174,4 +227,20 @@ test('the footer band leaves the body room for a page-tall exact row and its par
     'table',
     'paragraph',
   ]);
+});
+
+// A 3pt rule above and below every cell. A merge head's bottom rule belongs to its span, so
+// the floor takes the row's own clearance: the 3pt rule above it, and no rule of its own below.
+test('the end line of a row of merge heads takes the row-local border clearance', () => {
+  const ruled = (height: string) =>
+    band([tc(7767, twoLines, 'restart'), tc(2993, p('Code'), 'restart')], height).replace(
+      '<w:tblLayout w:type="fixed"/>',
+      '<w:tblLayout w:type="fixed"/><w:tblBorders>' +
+        ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+          .map((side) => `<w:${side} w:val="single" w:sz="24" w:space="0" w:color="000000"/>`)
+          .join('') +
+        '</w:tblBorders>'
+    );
+  expect(rowHeights(ruled(''))[1]).toBeCloseTo(LINE_8PT + 3, 6);
+  expect(rowHeights(ruled('<w:trHeight w:val="100"/>'))[1]).toBeCloseTo(LINE_8PT + 3, 6);
 });
