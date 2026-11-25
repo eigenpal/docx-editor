@@ -40,7 +40,11 @@ import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks } from '../layout/story-roots.ts';
-import { blockBeforeInsideFieldCodes, splitInsideFieldCodes } from '../layout/field-code-marks.ts';
+import {
+  blockAnchorOutsideFieldCodes,
+  blockBeforeInsideFieldCodes,
+  splitInsideFieldCodes,
+} from '../layout/field-code-marks.ts';
 
 /** The revision view the page is laid out in. */
 export interface RevisionView {
@@ -334,6 +338,8 @@ export function createHiddenMarkEditing(deps: {
   forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | 'step' | null;
   /** See {@link shownPosition}. */
   shown(position: SemanticPosition): SemanticPosition;
+  /** Where a table or a table of contents at `position` goes: `blockAnchorOutsideFieldCodes`. */
+  lineFirst(position: SemanticPosition): string;
   /** A collapsed selection moved to where it shows; a range is left alone. */
   shownSelection(selection: SemanticSelection): SemanticSelection;
   /** The same for an ordered range: moved only when it is collapsed. */
@@ -357,6 +363,7 @@ export function createHiddenMarkEditing(deps: {
       absorbRemovedAfter(deps.part(), firstId, deps.view()) ??
       (onlyFieldCodeBetween(deps.part(), firstId, nextId, deps.view()) ? 'step' : null),
     shown,
+    lineFirst: (position) => blockAnchorOutsideFieldCodes(deps.part(), position.paragraphId),
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),
     shownRange: (range) => {

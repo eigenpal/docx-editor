@@ -582,8 +582,6 @@ describe('paragraphs inside a field instruction', () => {
   // Every structural insert at the start of the result passes the same check as Enter.
   const inserts: [string, (surface: PaginatedSurface) => unknown][] = [
     ['a section break', (surface) => surface.insertSectionBreak()],
-    ['a table', (surface) => surface.insertTable(1, 1)],
-    ['a table of contents', (surface) => surface.insertToc()],
   ];
   for (const [label, insert] of inserts) {
     test(`${label} at the start of the field result is refused`, async () => {
@@ -595,6 +593,34 @@ describe('paragraphs inside a field instruction', () => {
       expect(surface.session.paragraphIds()).toEqual(ids);
       expect(await instructionParagraphs(surface)).toEqual(before);
       expect(surface.state().lastRejection).toStartWith('field-code-mark');
+    });
+  }
+
+  // A table or a table of contents placed anywhere in the result paragraph goes before the
+  // paragraph that holds the field's begin: the only place outside the field codes.
+  for (const [label, insert] of [
+    ['a table', (surface: PaginatedSurface) => surface.insertTable(1, 1)],
+    ['a table of contents', (surface: PaginatedSurface) => surface.insertToc()],
+  ] as const) {
+    test(`${label} in the field result goes before the field`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      for (const offset of [0, 3]) {
+        caret(surface, ids[3]!, offset);
+        expect(insert(surface)).toBe(true);
+        expect(surface.state().lastRejection).toBeNull();
+        surface.undo();
+      }
+      expect(insert(surface)).toBe(true);
+      const xml = strFromU8(unzipSync(await surface.save())['word/document.xml']!);
+      const start = xml.indexOf('IF 1 = 1');
+      const codes = xml.slice(start, xml.indexOf('w:fldCharType="separate"', start));
+      expect(codes.match(/<w:p[ >/]/g)).toHaveLength(3);
+      expect(codes).not.toContain('<w:tbl');
+      expect(codes).not.toContain('<w:sdt');
+      const block = label === 'a table' ? '<w:tbl>' : '<w:sdt>';
+      expect(xml.indexOf(block)).toBeGreaterThan(-1);
+      expect(xml.indexOf(block)).toBeLessThan(xml.indexOf('>Alpha<'));
     });
   }
 

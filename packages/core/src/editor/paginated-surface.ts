@@ -4049,7 +4049,7 @@ export function mountPaginatedSurface(
    */
   function insertTableOp(rows: number, cols: number) {
     if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
-    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    const beforeParagraphId = tocBlockAnchor(session.part(), hiddenMarks.lineFirst(selection.head));
     if (beforeParagraphId === null) return null;
     const section = structure.sectionPropertiesAt(selection.head.paragraphId);
     const contentWidth =
@@ -4128,7 +4128,7 @@ export function mountPaginatedSurface(
 
   function insertTocOp() {
     const instruction = parseTocInstruction(INSERT_TOC_INSTRUCTION);
-    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    const beforeParagraphId = tocBlockAnchor(session.part(), hiddenMarks.lineFirst(selection.head));
     if (!instruction || beforeParagraphId === null) return null;
     const outline = session.documentOutline();
     const plan = planTocEntries(

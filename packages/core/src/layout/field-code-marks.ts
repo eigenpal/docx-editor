@@ -31,6 +31,8 @@ interface FieldCodeIds {
   readonly inside: ReadonlySet<string>;
   /** Paragraphs where field codes that hold paragraph marks end. */
   readonly closing: ReadonlySet<string>;
+  /** For each paragraph whose start is inside field codes, the paragraph that holds `begin`. */
+  readonly beginOf: ReadonlyMap<string, string>;
 }
 
 /** The container whose blocks a paragraph flows in: its parent, outside any content control. */
@@ -54,10 +56,18 @@ function fieldCodeIdsOf(part: OoxmlPart, id: string): FieldCodeIds | null {
   const { inside, joins } = scanFieldInstructionParagraphs(blocks);
   const idOf = (index: number) => blocks[index]!.id;
   const insideIds = new Set([...inside].map(idOf));
+  // Inner fields close first, so an outer field's begin is set last and wins.
+  const beginOf = new Map<string, string>();
+  for (const join of joins) {
+    for (let index = join.first + 1; index <= join.last; index += 1) {
+      if (index === join.last || inside.has(index)) beginOf.set(idOf(index), idOf(join.first));
+    }
+  }
   const ids: FieldCodeIds = {
     inside: insideIds,
     marks: new Set([...insideIds, ...joins.map((join) => idOf(join.first))]),
     closing: new Set(joins.map((join) => idOf(join.last))),
+    beginOf,
   };
   idsByContainer.set(container, ids);
   return ids;
@@ -86,4 +96,13 @@ export function splitInsideFieldCodes(part: OoxmlPart, id: string, offset: numbe
 export function blockBeforeInsideFieldCodes(part: OoxmlPart, id: string): boolean {
   const ids = fieldCodeIdsOf(part, id);
   return ids !== null && (ids.inside.has(id) || ids.closing.has(id));
+}
+
+/**
+ * The paragraph a block goes before when it is placed at paragraph `id`: the paragraph that
+ * holds the field's `begin` when the start of `id` is inside field codes, so the block lands
+ * outside them. `id` anywhere else.
+ */
+export function blockAnchorOutsideFieldCodes(part: OoxmlPart, id: string): string {
+  return fieldCodeIdsOf(part, id)?.beginOf.get(id) ?? id;
 }
