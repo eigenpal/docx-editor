@@ -272,9 +272,10 @@ test('vertical cells exclude hidden markers but retain printable content', () =>
 });
 
 // A row that only merge heads or only continuations hold takes its first cell's end
-// paragraph (`mergedRowFirstCellHeight`, 17.4.84). A hidden mark there gives the line of the
-// default run properties, here the 10pt fallback, not zero: measured with 20pt hidden marks
-// in one and two columns, each row of the merge was one default line tall.
+// paragraph (`mergedRowFirstCellHeight`, 17.4.84). A hidden mark there gives one line of the
+// default paragraph style over the document defaults, here the 10pt fallback, not zero:
+// measured with 20pt hidden marks in one and two columns, each row of the merge was one
+// default line tall.
 test('merged empty cells with hidden marks keep one default line per row', () => {
   const result = run(
     table(
@@ -294,8 +295,8 @@ test('merged empty cells with hidden marks keep one default line per row', () =>
   expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(20);
 });
 
-// The head row's line comes from the document's default run properties: their size, and none
-// when they are hidden text.
+// With no default paragraph style, the head row's line comes from the document's default run
+// properties: their size, and none when they are hidden text.
 test('a hidden head mark takes the line of the default run properties', () => {
   const defaults = (rPr: string) =>
     buildStyleCascadeTable(
@@ -333,6 +334,26 @@ test('a hidden mark takes the default paragraph style line, not its own style', 
       row(cell(big, '<w:vMerge/><w:hideMark/>'))
   );
   expect(rows(run(merged, cascade)).map((r) => r.box.height)).toEqual([16, 16]);
+});
+
+// The table style's run properties do not count either: measured with an 8pt default and a
+// 16pt table style, the rows of the merge each took the 8pt line.
+test('a hidden mark ignores the table style run properties', () => {
+  const cascade = buildStyleCascadeTable(
+    part(
+      `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="16"/></w:rPr>` +
+        '</w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
+        '<w:style w:type="table" w:styleId="Large"><w:rPr><w:sz w:val="48"/></w:rPr></w:style>' +
+        '</w:styles>',
+      '/word/styles.xml'
+    ).root
+  );
+  const merged = table(
+    row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
+      row(cell(paragraph(), '<w:vMerge/><w:hideMark/>')),
+    '<w:tblStyle w:val="Large"/>'
+  );
+  expect(rows(run(merged, cascade)).map((r) => r.box.height)).toEqual([8, 8]);
 });
 
 // `w:hideMark` is per cell. A head that hides its own mark says nothing about the cells

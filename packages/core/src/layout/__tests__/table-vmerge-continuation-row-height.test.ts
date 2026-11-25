@@ -164,6 +164,26 @@ test('a reused layout session keeps no stale row height after the first cell cha
   expect(middleRow(continuationTable([small, big]), session)).toBeCloseTo(line(8), 6);
 });
 
+// Each cell pads the first cell's box with its own margins, so the largest top and bottom
+// margins in the row count, wherever they are.
+test("the row's largest top and bottom margins pad the first cell's box", () => {
+  const margins = (top: number, bottom: number) =>
+    `<w:tcMar><w:top w:w="${top}" w:type="dxa"/><w:bottom w:w="${bottom}" w:type="dxa"/></w:tcMar>`;
+  const padded = (first: string, second: string) =>
+    middleRow(
+      continuationTable(
+        [
+          { body: mark(16), properties: first },
+          { body: mark(24), properties: second },
+        ],
+        { height: '' }
+      )
+    );
+  expect(padded(margins(0, 0), margins(400, 400))).toBeCloseTo(20 + line(8) + 20, 6);
+  expect(padded(margins(400, 400), margins(0, 0))).toBeCloseTo(20 + line(8) + 20, 6);
+  expect(padded(margins(0, 0), margins(0, 400))).toBeCloseTo(line(8) + 20, 6);
+});
+
 // A `w:vanish` mark is not measured, so it takes the default line as a hidden mark does.
 test('a vanished first mark gives one default line', () => {
   const vanished =

@@ -140,11 +140,12 @@ export function cellContinuationHeight(
  * They are mutually exclusive by construction. A `btLr` cell reserves no mark floor: its
  * text runs along the row, so only a row that nothing else sizes takes its end mark.
  *
- * A row of continuations only (`onlyContinuations`) takes its first cell, as a row of merge
- * heads does ({@link mergedRowFirstCellHeight}): measured with two and three cells of
- * different end-paragraph boxes, in a `w:bidiVisual` table, in a nested table, and in a
- * header, the row was as tall as the first cell in document order. The other cells reserve
- * nothing.
+ * A row of continuations only (`onlyContinuations`) takes the box of its first cell, as a
+ * row of merge heads does ({@link mergedRowFirstCellHeight}): measured with two and three
+ * cells of different end-paragraph boxes, in a `w:bidiVisual` table, in a nested table, and
+ * in a header, the row was as tall as the first cell's box in document order. Every cell then
+ * pads that box with its own margins, so the largest top and bottom margins in the row count.
+ * `firstCellPt` is null for the first cell, which measures the box, and that box afterwards.
  */
 export function cellReservedMarkHeights(
   cell: SemanticTableCell,
@@ -154,7 +155,7 @@ export function cellReservedMarkHeights(
     readonly vertical: boolean;
     readonly markSizedRow: boolean;
     /** Set when every cell of the row continues a vertical merge. */
-    readonly onlyContinuations?: { readonly first: boolean };
+    readonly onlyContinuations?: { readonly firstCellPt: number | null };
   }
 ): { readonly markFloor: number; readonly continuation: number } {
   if (!cell.vMergeContinue && !options.vertical)
@@ -164,7 +165,7 @@ export function cellReservedMarkHeights(
   if (only !== undefined)
     return {
       markFloor: 0,
-      continuation: only.first ? mergedRowFirstCellHeight(cell, widthPt, deps) : 0,
+      continuation: only.firstCellPt ?? mergedRowFirstCellHeight(cell, widthPt, deps),
     };
   return { markFloor: 0, continuation: cellContinuationHeight(cell, widthPt, deps) };
 }
