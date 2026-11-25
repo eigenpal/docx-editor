@@ -174,6 +174,28 @@ describe('DATE fields in layout', () => {
     );
   });
 
+  test('take the language of the live instruction run, not of a deleted one', () => {
+    const run = (lang: string, inner: string) =>
+      `<w:r><w:rPr><w:lang w:val="${lang}"/></w:rPr>${inner}</w:r>`;
+    const tracked =
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      `<w:del w:id="1" w:author="A">${run('en-US', '<w:delInstrText xml:space="preserve"> DATE \\@ "d MMMM" </w:delInstrText>')}</w:del>` +
+      `<w:ins w:id="2" w:author="A">${run('fr-FR', '<w:instrText xml:space="preserve"> DATE \\@ "d MMMM" </w:instrText>')}</w:ins>` +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      text('saved') +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    expect(painted(tracked, { measurer, fieldDate: MOMENT })).toBe('saved');
+    // A space-only first run does not decide the language.
+    const spaced =
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      run('fr-FR', '<w:instrText xml:space="preserve"> </w:instrText>') +
+      run('en-US', '<w:instrText xml:space="preserve">DATE \\@ "d MMMM" </w:instrText>') +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      text('saved') +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    expect(painted(spaced, { measurer, fieldDate: MOMENT })).toBe('5 March');
+  });
+
   test('keep the saved result of a picture built from a nested field', () => {
     const nested =
       '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
@@ -189,6 +211,7 @@ describe('DATE fields in layout', () => {
   test('keep spaces and tabs inside a quoted picture', () => {
     expect(format('DATE \\@ "d  MMMM\tyyyy"')).toBe('5  March\t2026');
     expect(format('DATE\t\\@\t"yyyy"')).toBe('2026');
+    expect(format('DATE \\@ "d\nMMMM"')).toBe('5 March');
   });
 
   test('keep the saved results while saved results are editable text', () => {

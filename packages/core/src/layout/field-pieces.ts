@@ -519,10 +519,12 @@ export interface PendingFieldProjection {
    */
   dateSpec?: import('./field-date.ts').DateFieldSpec | null;
   /**
-   * The cascaded properties of the first run that holds the level-1 instruction. A DATE or
+   * The cascaded properties of the first live run with level-1 instruction text. A DATE or
    * TIME picture shows day and month names in that run's language (ECMA-376 Part 1, 17.16.4.1).
    */
   instructionProps?: readonly OoxmlProperty[];
+  /** The same for the first `w:delInstrText` run; used only when no live instruction exists. */
+  deletedInstructionProps?: readonly OoxmlProperty[];
   /**
    * Recognized REF cross-reference instruction, or null when the field is not one.
    *

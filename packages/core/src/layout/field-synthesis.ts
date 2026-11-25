@@ -192,12 +192,16 @@ export function synthesizeAtomicField(
   }
   // DATE and TIME show the layout's field date, because their value is the current moment. A
   // result that existed but was hidden stays hidden. A name in an unsupported language keeps
-  // the cache, and so does a picture built from a nested field, which the instruction buffer
-  // holds only in part.
+  // the cache, and so does a field with any nested field: a nested field in the instruction
+  // leaves the picture only partly buffered.
   const fieldDate = pending.dateSpec && !pending.hasNestedField ? currentFieldDate() : undefined;
   const dateText =
     pending.dateSpec && fieldDate && (pending.cachedText.length > 0 || !pending.sawResultContent)
-      ? formatDateField(pending.dateSpec, fieldDate, pending.instructionProps ?? pending.props)
+      ? formatDateField(
+          pending.dateSpec,
+          fieldDate,
+          pending.instructionProps ?? pending.deletedInstructionProps ?? pending.props
+        )
       : null;
   if (dateText !== null) return { text: dateText, props: pending.props, style: pending.style };
   // A non-empty cached result is what Word last painted; it wins over synthesis.

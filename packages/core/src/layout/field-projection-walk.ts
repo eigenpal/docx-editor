@@ -61,7 +61,8 @@ import {
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { captureFieldResultDrawing, emitAtomicFieldResult } from './field-result-drawings.ts';
 import { legacyCheckboxAccessibleName } from '../store/package/legacy-checkbox-accessibility.ts';
-import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
+import { isDeletedInstrText, legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
+import { instructionRunHasText } from './field-date.ts';
 import { plainRefSpec } from './field-ref-parse.ts';
 import { fieldProjectionSpansOf } from './field-projection-spans.ts';
 import { markSavedResultPieces, savedSimpleResultLink } from './field-saved-result.ts';
@@ -534,9 +535,11 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
       }
 
       if (isInstrText(grand)) {
-        // DATE and TIME names follow the language of the run that holds the instruction.
-        if (pending && field.nesting === 1 && pending.instructionProps === undefined) {
-          pending.instructionProps = props;
+        // DATE and TIME names follow the language of the run that holds the instruction: the
+        // first one with text of the buffer the field evaluates (live, else deleted).
+        if (pending && field.nesting === 1 && instructionRunHasText(grand)) {
+          if (!isDeletedInstrText(grand)) pending.instructionProps ??= props;
+          else pending.deletedInstructionProps ??= props;
         }
         ingestInstrTextBounded(field, grand, budget, runDepth + 1);
         continue;

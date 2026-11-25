@@ -22,7 +22,7 @@
 // picture with a name keeps its saved result in a run of another language. Numeric codes and
 // `AM/PM` do not depend on the language.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { MAX_FIELD_INSTRUCTION_CHARS } from '../store/package/field-nodes.ts';
 import { runTextLanguage } from './run-proofing.ts';
@@ -118,7 +118,7 @@ function parseDatePicture(picture: string): DatePictureItem[] | null {
     if (char === "'") {
       const close = picture.indexOf("'", index + 1);
       if (close < 0) return null;
-      items.push({ kind: 'text', text: picture.slice(index + 1, close) });
+      items.push({ kind: 'text', text: picture.slice(index + 1, close).replace(/[\r\n]/g, ' ') });
       index = close + 1;
       continue;
     }
@@ -129,7 +129,8 @@ function parseDatePicture(picture: string): DatePictureItem[] | null {
       continue;
     }
     if (!isAsciiLetter(char)) {
-      items.push({ kind: 'text', text: char });
+      // A line break in a picture is not a character a field result shows on its line.
+      items.push({ kind: 'text', text: char === '\r' || char === '\n' ? ' ' : char });
       index += 1;
       continue;
     }
@@ -290,4 +291,10 @@ export function withFieldDate<T>(date: Date | undefined, run: () => T): T {
   } finally {
     current = outer;
   }
+}
+
+/** True when an instruction element holds non-space text in its own text values. */
+export function instructionRunHasText(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  return node.children.some((child) => child.kind === 'textValue' && /\S/.test(child.value));
 }
