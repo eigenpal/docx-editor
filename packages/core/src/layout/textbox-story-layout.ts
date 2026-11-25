@@ -799,7 +799,7 @@ export function layoutTextboxStory(
       : 0;
   // Lines that stack from the bottom start at the bottom: the anchor sides change places.
   const fromBottom = story.linesFromBottom === true;
-  if (fromBottom) fragments = stackLinesFromBottom(fragments, flowHeight);
+  if (fromBottom) fragments = [...stackLinesFromBottom(fragments, flowHeight)];
   const anchorOffset =
     story.verticalAnchor === 'center'
       ? slack / 2

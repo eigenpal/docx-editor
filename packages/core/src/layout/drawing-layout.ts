@@ -165,14 +165,20 @@ export function inlineDrawingVerticalLayout(
 ): InlineDrawingVerticalLayout {
   // A quarter-turned shape sits on the line as its turned box, with its extent centred in it.
   const height = measure.height + 2 * measure.turnedInset;
-  const boxTopY = Math.max(measure.distT + measure.effectT, textBaseline - height - runPositionPt);
+  // The bottom effect extent sits on the baseline with the drawing: a short drawing keeps it
+  // inside the text ascent, as Word places it.
+  const boxTopY = Math.max(
+    measure.distT + measure.effectT,
+    textBaseline - height - measure.effectB - runPositionPt
+  );
   const extentTopY = boxTopY + measure.turnedInset;
   const drawingBottom = boxTopY + height + measure.effectB;
   const baseline = Math.max(textBaseline, drawingBottom + runPositionPt);
   // A drawing raised by its run's `w:position` can move the baseline.
   // Its line still holds the text descent.
   const textBottom = runPositionPt ? textLineHeight + baseline - textBaseline : textLineHeight;
-  const lineHeight = Math.max(textBottom, drawingBottom - measure.effectT + measure.distB);
+  // The top effect extent is part of the line, as the bottom one is.
+  const lineHeight = Math.max(textBottom, drawingBottom + measure.distB);
   return Object.freeze({ extentTopY, lineHeight, baseline });
 }
 

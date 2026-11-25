@@ -5283,6 +5283,7 @@ export interface TextboxStoryProjection {
         top: number;
     }>;
     readonly legacyFrame?: TextboxLegacyFrame;
+    readonly linesFromBottom?: true;
     readonly noWrap?: true;
     readonly shadow?: LegacyTextboxShadow;
     readonly strokeCap?: 'round' | 'square';

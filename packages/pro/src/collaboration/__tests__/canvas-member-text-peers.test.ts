@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // A canvas (`wpc:wpc`) whose ellipse holds text, beside a paragraph with a bordered run
-// (`w:bdr`, ECMA-376 Part 1, 17.3.2.4). Both peers lay the member text out in the text
+// (`w:bdr`, ECMA-376 Part 1, 17.3.2.4) and a right-to-left paragraph with one. Both peers lay the member text out in the text
 // rectangle of the ellipse (`a:rect`, 20.1.9.22) and give the border its room. Typing in the
 // bordered run converges, undoes, and survives a concurrent delete of the canvas and a save.
 import { expect, test } from 'bun:test';
@@ -58,6 +58,10 @@ function fixture(): Uint8Array {
     '<w:p><w:r><w:t xml:space="preserve">Alpha </w:t></w:r>' +
     `<w:r>${BORDER}<w:t>boxed</w:t></w:r><w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>` +
     `<w:p><w:r>${CANVAS}</w:r><w:r><w:t>after</w:t></w:r></w:p>` +
+    // A right-to-left paragraph: its bordered run takes its room from the right.
+    '<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t xml:space="preserve">שלום </w:t></w:r>' +
+    `<w:r>${BORDER.replace('<w:rPr>', '<w:rPr><w:rtl/>')}<w:t>עולם</w:t></w:r>` +
+    '<w:r><w:rPr><w:rtl/></w:rPr><w:t xml:space="preserve"> טוב</w:t></w:r></w:p>' +
     '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
     '</w:body></w:document>';
   return zipSync({
@@ -201,6 +205,14 @@ test('two editors agree on canvas member text and bordered runs through concurre
     expect(a.editor.exec({ type: 'redo' })).toMatchObject({ ok: true });
     sync(a, b);
     expect(await converged(a, b)).toContain('boxed in');
+
+    // Both type in the right-to-left paragraph, Alice inside its bordered run.
+    type(a, 'עולם', 'ות');
+    type(b, 'טוב', ' מאוד');
+    sync(a, b);
+    const rtl = await converged(a, b);
+    expect(rtl).toContain('עולםות');
+    expect(rtl).toContain('טוב מאוד');
 
     // Bob deletes the canvas while Alice types in the bordered run; then he undoes the delete.
     const canvasParagraph = canvas(b)!.paragraphId;

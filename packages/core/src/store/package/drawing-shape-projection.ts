@@ -207,7 +207,7 @@ export interface TextboxStoryProjection {
   readonly insetsEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
   /** `wps:bodyPr/@anchor` collapsed to the three renderable positions; default top. */
   readonly verticalAnchor: 'top' | 'center' | 'bottom';
-  /** The lines of vertical text stack from the left: the story lays them out from its bottom. */
+  /** Vertical text stacks its lines from the left: the story lays them out from its bottom. @internal */
   readonly linesFromBottom?: true;
   /**
    * Autofit child of `wps:bodyPr`. `shape` on a top-level box sets {@link fitHeightToText};
