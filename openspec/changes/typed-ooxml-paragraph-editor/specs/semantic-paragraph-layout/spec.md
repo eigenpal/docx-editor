@@ -1569,9 +1569,17 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 #### Scenario: An automation delete removes a field-code mark
 
 - **GIVEN** field codes that hold paragraph marks
-- **WHEN** an automation delete of a paragraph or a range, tracked or not, would remove one of those marks, or the mark of the paragraph that holds `begin`, also when it covers the whole field
+- **WHEN** an automation delete of a paragraph or a range, tracked or not, would remove one of those marks, or the mark of the paragraph that holds `begin`, and is not an untracked range delete over the whole field
 - **THEN** the planner refuses with `unsupported-capability` and the detail `field-code-mark`, which the editor API reports as `NotSupported`
 - **AND** the document does not change
+
+#### Scenario: An untracked automation range delete covers the whole field
+
+- **GIVEN** a complex field whose field codes hold paragraph marks (ECMA-376 §17.16.18, `CT_FldChar`; §17.16.23, `instrText`)
+- **WHEN** an untracked automation range delete or replacement spans paragraphs and holds every field character of the field, from `begin` through `end`
+- **THEN** the planner removes the field characters, the field codes with the paragraphs inside them, and the result, and joins what is left of the outer paragraphs, as for any range delete
+- **AND** it composes existing operations: `deleteBlock`, `joinParagraphs`, and `deleteText`
+- **AND** a range that holds only some of the field's characters, or any tracked range delete, is still refused with the detail `field-code-mark`
 
 #### Scenario: A malformed field keeps its paragraphs
 

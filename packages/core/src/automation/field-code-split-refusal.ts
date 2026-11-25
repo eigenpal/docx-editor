@@ -28,15 +28,18 @@ export function fieldCodeSplitRefusal(
 /**
  * The refusal for a delete across `ids`, the paragraphs it spans in order, when a mark it
  * removes (every mark but the last one) is field code, or null. A text delete keeps the field
- * characters, so even a delete over the whole field would join its field codes and drop the
- * paragraphs inside them, changing the instruction.
+ * characters, so it would join the field codes and drop the paragraphs inside them, changing
+ * the instruction. The untracked range planner removes a field the range holds whole instead
+ * (`field-code-range-delete.ts`) and returns this refusal only for part of a field.
  */
 export function fieldCodeDeleteRefusal(
   part: OoxmlPart,
   ids: readonly string[]
 ): PlannedOperation | null {
   if (!ids.slice(0, -1).some((id) => markIsFieldCode(part, id))) return null;
-  return refusal('this delete would remove a paragraph mark inside a field instruction');
+  return refusal(
+    'this delete would remove a paragraph mark inside a field instruction; an untracked delete from the start of the field through the end of its result removes the whole field'
+  );
 }
 
 /** The refusal for deleting paragraph `paragraphId` when its mark is field code, or null. */
