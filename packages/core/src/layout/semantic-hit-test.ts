@@ -912,7 +912,10 @@ function offsetOnLine(
   return gapOffset(line, spans, x, context);
 }
 
-function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): LineOffset {
+function endOfLine(merged: LineRecord, rightEdge: number, context: HitContext): LineOffset {
+  // A merged line ends in its last paragraph, in that paragraph's own offsets; `line.range`
+  // names only the first one (see `remapMergedLines`).
+  const line = lineForSegment(merged, lineSegments(merged).at(-1));
   const offset = lineEndOffset(context.layout, line);
   if (offset === line.range.end) return { offset, x: rightEdge, withinSpan: false };
   // The end moved back over a break, so the caret's x moves back with it — into whichever

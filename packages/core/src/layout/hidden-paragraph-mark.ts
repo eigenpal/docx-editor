@@ -37,7 +37,10 @@
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { readOnOffChild } from '../store/package/ooxml-shared.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
-import { scanFieldInstructionParagraphs } from './field-instruction-paragraphs.ts';
+import {
+  scanFieldInstructionParagraphs,
+  type FieldCodeJoin,
+} from './field-instruction-paragraphs.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { paragraphRendersNothingVisible } from './revision-visibility.ts';
 
@@ -170,12 +173,17 @@ function standInFor(block: OoxmlElement, neighbours: HiddenMarkNeighbours): Ooxm
  *
  * `canStandIn` refuses a copy for a block whose identity something else is keyed on; that
  * block keeps its own neighbours for contextual spacing.
+ *
+ * `mergeFieldCodes` lays the paragraph that opens a field and the paragraph where its field
+ * codes end out as one, when only field-code paragraphs stand between them (see
+ * `field-code-paragraph-merge.ts`). The numbering flow keeps both paragraphs.
  */
 export function withoutHiddenMarkParagraphs(
   entries: readonly HiddenMarkFlowEntry[],
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  canStandIn: (block: OoxmlElement) => boolean = () => true
+  canStandIn: (block: OoxmlElement) => boolean = () => true,
+  mergeFieldCodes?: (first: OoxmlElement, last: OoxmlElement) => OoxmlElement | null
 ): OoxmlElement[] {
   let removed: Set<number> | null = null;
   let next: HiddenMarkFlowEntry | undefined;
@@ -201,14 +209,16 @@ export function withoutHiddenMarkParagraphs(
     }
     next = entry;
   }
+  const merges = fieldCodeMerges(entries, fieldCodes.joins, removed, canStandIn, mergeFieldCodes);
   const spannedIds = (): ReadonlySet<string> =>
     new Set([...fieldCodes.spanned].map((index) => entries[index]!.block.id));
-  if (removed === null) {
+  const joinFirsts = new Set(fieldCodes.joins.map((join) => join.first));
+  if (removed === null && merges.size === 0 && insideInstructions.size + joinFirsts.size === 0) {
     const blocks = entries.map((entry) => entry.block);
     if (fieldCodes.spanned.size > 0) fieldCodeSpans.set(blocks, spannedIds());
     return blocks;
   }
-  const removedIndexes = removed;
+  const removedIndexes = removed ?? new Set<number>();
   // A removed paragraph is a neighbour only inside its own container, the same rule that
   // decided the removal.
   const removedBeside = (index: number, side: -1 | 1): OoxmlElement | undefined => {
@@ -222,15 +232,22 @@ export function withoutHiddenMarkParagraphs(
   const all = entries.map((entry, index) => {
     const { block } = entry;
     if (removedIndexes.has(index) || block.kind !== 'paragraph' || !canStandIn(block)) return block;
+    if (merges.has(index) || merges.absorbed.has(index)) return block;
     const before = removedBeside(index, -1);
     const after = removedBeside(index, 1);
     if (!before && !after) return block;
     return standInFor(block, { ...(before ? { before } : {}), ...(after ? { after } : {}) });
   });
-  const kept = all.filter((_block, index) => !removedIndexes.has(index));
+  const kept = all.flatMap((block, index) => {
+    if (removedIndexes.has(index) || merges.absorbed.has(index)) return [];
+    return [merges.get(index) ?? block];
+  });
   numberingFlows.set(kept, all);
   if (fieldCodes.spanned.size > 0) fieldCodeSpans.set(kept, spannedIds());
-  const fieldCode = (index: number) => removedIndexes.has(index) && insideInstructions.has(index);
+  // A field-code paragraph counts nothing: one wholly inside the field codes, and one whose
+  // mark the field codes cover because it holds the field's `begin`. The same rule applies in
+  // table cells (`fieldCodeMarkParagraphs`), whether the paragraph leaves the flow or not.
+  const fieldCode = (index: number) => insideInstructions.has(index) || joinFirsts.has(index);
   if (all.some((_block, index) => fieldCode(index))) {
     listCountingFlows.set(
       kept,
@@ -238,6 +255,46 @@ export function withoutHiddenMarkParagraphs(
     );
   }
   return kept;
+}
+
+/** Merged paragraphs by the index of the paragraph that opens the field, and the absorbed ones. */
+type FieldCodeMerges = Map<number, OoxmlElement> & { readonly absorbed: ReadonlySet<number> };
+
+/**
+ * The field-code joins that apply: both ends are kept paragraphs in one container, neither
+ * carries a section break or stands for other paragraphs already, and every block between
+ * them left the flow.
+ */
+function fieldCodeMerges(
+  entries: readonly HiddenMarkFlowEntry[],
+  joins: readonly FieldCodeJoin[],
+  removed: ReadonlySet<number> | null,
+  canStandIn: (block: OoxmlElement) => boolean,
+  mergeFieldCodes: ((first: OoxmlElement, last: OoxmlElement) => OoxmlElement | null) | undefined
+): FieldCodeMerges {
+  const absorbed = new Set<number>();
+  const merges = Object.assign(new Map<number, OoxmlElement>(), { absorbed });
+  if (!mergeFieldCodes) return merges;
+  for (const { first, last } of joins) {
+    const opening = entries[first];
+    const closing = entries[last];
+    if (!opening || !closing || opening.parentKey !== closing.parentKey) continue;
+    if (merges.has(first) || absorbed.has(first) || merges.has(last)) continue;
+    const ends = [opening.block, closing.block];
+    if (ends.some((block) => block.kind !== 'paragraph' || !canStandIn(block))) continue;
+    if (ends.some(carriesSectionBreak) || removed?.has(first) || removed?.has(last)) continue;
+    // Between them, a content control can wrap field-code paragraphs; they left the flow too.
+    let between = true;
+    for (let index = first + 1; index < last && between; index += 1) {
+      between = removed?.has(index) === true;
+    }
+    if (!between) continue;
+    const merged = mergeFieldCodes(opening.block, closing.block);
+    if (!merged) continue;
+    merges.set(first, merged);
+    absorbed.add(last);
+  }
+  return merges;
 }
 
 /**
