@@ -13,7 +13,12 @@ import {
   measureFollowingTabSegment,
   positionalTabDestination,
   type Piece,
+  type TabWordBreaks,
 } from './paragraph-piece-metrics.ts';
+import type { CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
+import { wordBoundaries } from './cjk-line-break.ts';
+import { fittedLineOpenDecision } from './fit-text-groups.ts';
+import { isLayoutOwnedPiece } from './layout-owned-piece.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
@@ -205,6 +210,20 @@ export function tabPlacement(
     rtl && positional === null ? segment.rtlDecimalOffset : segment.decimalOffset
   );
   return { destination, width };
+}
+
+/**
+ * The breaks the line breaker takes, for measuring the word after a tab: the same candidates and
+ * the same line-open decision as line placement.
+ */
+export function tabWordBreaksFor(cjkBreaks: CjkParagraphBreaks | null): TabWordBreaks {
+  return {
+    boundaries: (piece) =>
+      cjkBreaks?.boundaries(piece) ?? wordBoundaries(piece.text, !isLayoutOwnedPiece(piece)),
+    opensAt: (piece, offset, before) =>
+      fittedLineOpenDecision(piece, offset, before, piece.text.slice(offset), cjkBreaks) ===
+      'opens',
+  };
 }
 
 /**

@@ -93,3 +93,17 @@ test('a second leading tab moves down with a word that fits after one tab on a f
   const word = lines[1]!.spans.find((span) => span.text.startsWith('L'))!;
   expect(word.box.x).toBeCloseTo(36, 5);
 });
+
+test('full-width digits after a tab stay one word, so the tab moves down with them', () => {
+  // The line breaker keeps a run of full-width digits whole, so the tab carries all of them.
+  const lines = layout(run('A'.repeat(50)) + tab + run('１'.repeat(15)));
+
+  expect(texts(lines)[0]).toBe('A'.repeat(50));
+  expect(texts(lines)[1]!.startsWith('\t１')).toBe(true);
+});
+
+test('a literal U+00AD in the text is a visible hyphen, not a break, so the tab moves down', () => {
+  const lines = layout(run('A'.repeat(50)) + tab + run('Abcdefghij­klmnopqrst'));
+
+  expect(texts(lines)).toEqual(['A'.repeat(50), '\tAbcdefghij­klmnopqrst']);
+});

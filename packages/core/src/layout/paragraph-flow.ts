@@ -24,6 +24,7 @@ import {
   tabClosesLine,
   tabContextFor,
   tabPlacement,
+  tabWordBreaksFor,
 } from './paragraph-tab-flow.ts';
 import { runBorderAdvance } from './run-border-advance.ts';
 import { inlineExtentSpacing, lineSpacingBand } from './equation-line-spacing.ts';
@@ -276,6 +277,7 @@ export function breakParagraph(
   const paragraphFinal = paragraphFinalAt(pieces);
   const endSpacesAt = lineEndSpaces.paragraphEndSpacesOf(pieces, paragraphRtl, measurer);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
+  const tabWordBreaks = tabWordBreaksFor(cjkBreaks);
   const clusterTail = graphemeContinuationWidth(pieces, measurer, typography);
   const { opticalParagraph, opticalCompression, fitCjkOptically } = createParagraphCjkOpticalFitter(
     allPieces,
@@ -1218,7 +1220,14 @@ export function breakParagraph(
         const stopXAtPen = () => (paragraphRtl ? leading + lineOffset() + line.width : penX());
         let placed = tabPlacement(tabContext, penX(), stopXAtPen(), alignedTabRight);
         const word = () =>
-          measureWordAfterTab(pieces, pieceIndex, boundary, measurer, pageBreaksIgnored);
+          measureWordAfterTab(
+            pieces,
+            pieceIndex,
+            boundary,
+            measurer,
+            tabWordBreaks,
+            pageBreaksIgnored
+          );
         const fresh = { x: contentOriginX + indentLeft, room: available - borders.trailing };
         const lineRoom = lineAvailable() - line.width;
         if (
