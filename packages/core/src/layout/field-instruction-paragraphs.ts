@@ -9,9 +9,13 @@
 //
 // An unclosed field generates no field (§17.16.18), so it hides nothing. A field whose codes
 // hold plain `w:t` text outside a nested field's result is malformed, and it hides nothing too.
+// A field nested deeper than `MAX_FIELD_NESTING` inside the fields the scan tracks is left out,
+// with everything it holds: it hides nothing and holds no stray text for the fields around it.
+// The fields around it, and every other field in the story, still apply. The cap keeps the scan
+// linear in paragraphs and markers.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
-import { fldCharType, type FldCharType } from '../store/package/field-nodes.ts';
+import { fldCharType, MAX_FIELD_NESTING, type FldCharType } from '../store/package/field-nodes.ts';
 
 const OWN_STORIES = new Set(['drawing', 'pict', 'object', 'AlternateContent', 'txbxContent']);
 
@@ -68,19 +72,30 @@ export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]):
   readonly spanned: ReadonlySet<number>;
   readonly joins: readonly FieldCodeJoin[];
 } {
-  const inside = new Set<number>();
-  const spanned = new Set<number>();
   const joins: FieldCodeJoin[] = [];
+  // Each closed field marks its range once in two difference arrays, so the scan stays linear
+  // in paragraphs plus markers: +1 where a range starts, -1 past its end.
+  const spannedDiff = new Int32Array(blocks.length + 1);
+  const insideDiff = new Int32Array(blocks.length + 1);
   const open: { begin: number; instructionEnd: number | null; holdsText: boolean }[] = [];
-  blocks.forEach((block, index) => {
-    if (block.kind !== 'paragraph') return;
+  // Fields opened past the nesting cap, still open: their characters and text are skipped.
+  let ignored = 0;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    if (block.kind !== 'paragraph') continue;
     for (const type of markersOf(block)) {
+      if (ignored > 0) {
+        if (type === 'begin') ignored += 1;
+        else if (type === 'end') ignored -= 1;
+        continue;
+      }
       if (type === 'text') {
         if (open.at(-1)?.instructionEnd !== null) continue;
         for (const field of open) if (field.instructionEnd === null) field.holdsText = true;
-      } else if (type === 'begin')
-        open.push({ begin: index, instructionEnd: null, holdsText: false });
-      else if (type === 'separate') {
+      } else if (type === 'begin') {
+        if (open.length >= MAX_FIELD_NESTING) ignored = 1;
+        else open.push({ begin: index, instructionEnd: null, holdsText: false });
+      } else if (type === 'separate') {
         const field = open.at(-1);
         if (field && field.instructionEnd === null) field.instructionEnd = index;
       } else {
@@ -89,13 +104,27 @@ export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]):
         const instructionEnd = field.instructionEnd ?? index;
         if (instructionEnd > field.begin && !field.holdsText)
           joins.push({ first: field.begin, last: instructionEnd });
-        for (let between = field.begin + 1; between < instructionEnd; between += 1) {
-          if (blocks[between]?.kind !== 'paragraph') continue;
-          spanned.add(between);
-          if (!field.holdsText) inside.add(between);
+        if (instructionEnd > field.begin + 1) {
+          spannedDiff[field.begin + 1]! += 1;
+          spannedDiff[instructionEnd]! -= 1;
+          if (!field.holdsText) {
+            insideDiff[field.begin + 1]! += 1;
+            insideDiff[instructionEnd]! -= 1;
+          }
         }
       }
     }
-  });
+  }
+  const inside = new Set<number>();
+  const spanned = new Set<number>();
+  let spannedDepth = 0;
+  let insideDepth = 0;
+  for (let index = 0; index < blocks.length; index += 1) {
+    spannedDepth += spannedDiff[index]!;
+    insideDepth += insideDiff[index]!;
+    if (blocks[index]!.kind !== 'paragraph') continue;
+    if (spannedDepth > 0) spanned.add(index);
+    if (insideDepth > 0) inside.add(index);
+  }
   return { inside, spanned, joins };
 }

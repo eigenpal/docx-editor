@@ -1530,6 +1530,13 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 - **AND** a nested field's saved result inside those paragraphs adds no line
 - **AND** Backspace before the result and Delete before the field keep the paragraphs of the field codes
 
+#### Scenario: A field nested past the nesting cap
+
+- **GIVEN** a story with a field nested more than four levels deep, and an ordinary `IF` field whose field codes span paragraphs
+- **WHEN** the story lays out
+- **THEN** only the field past the cap is left out
+- **AND** the fields around it and the ordinary `IF` field still hide their field-code paragraphs
+
 #### Scenario: A malformed field keeps its paragraphs
 
 - **GIVEN** a field without an `end`, or a field whose field codes hold `w:t` text outside a nested field's result

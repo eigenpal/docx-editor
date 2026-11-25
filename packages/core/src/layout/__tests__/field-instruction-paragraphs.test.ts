@@ -159,3 +159,30 @@ describe('paragraphs that keep their line', () => {
     expect(lineTexts(body)).toEqual(['', 'kept', '', 'last']);
   });
 });
+
+// A field nested past the field machine's cap is left out on its own. The fields around it and
+// every other field in the story still hide their field-code paragraphs.
+describe('a field nested past the nesting cap', () => {
+  test('leaves the other fields of the story alone', () => {
+    const deep =
+      `${fldChar('begin')}${instr('IF ')}`.repeat(4) +
+      `${fldChar('begin')}${instr('MERGEFIELD x')}${fldChar('separate')}${text('x')}${fldChar('end')}` +
+      `${instr(' = "x" "y" "n"')}${fldChar('separate')}${text('y')}${fldChar('end')}`.repeat(4);
+    const lines = lineTexts(
+      para(`${text('deep ')}${deep}`) + ifField([para(instr('Clause')), para('')], 'Result')
+    );
+    expect(lines.slice(-2)).toEqual(['before ', 'Result after']);
+    expect(lines).toHaveLength(3);
+  });
+
+  test('leaves the field around it in force', () => {
+    const deepInside = para(
+      `${fldChar('begin')}${instr('IF ')}`.repeat(4) + `${fldChar('end')}`.repeat(4)
+    );
+    // The outer IF already holds one open field, so the fifth level is past the cap.
+    expect(lineTexts(ifField([deepInside, para('')], 'Result'))).toEqual([
+      'before ',
+      'Result after',
+    ]);
+  });
+});
