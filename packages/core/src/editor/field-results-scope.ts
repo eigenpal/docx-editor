@@ -165,15 +165,35 @@ export function scopeSession<T extends object>(session: T, scope: FieldResultsSc
 
 /**
  * The scope a paginated surface opens with. An `editable` request with a collaboration model is
- * refused, not approximated: shared paragraph text keeps every field one unit.
+ * refused, not approximated: shared paragraph text keeps every field one unit. A `fieldDate`
+ * that is not a valid `Date` is refused, and so is a `fieldDate` with the `editable` mode,
+ * where a DATE field's saved result is text the user edits.
  */
 export function surfaceFieldResultsScope(options: {
   readonly fieldResults?: unknown;
   readonly collaborationModel?: unknown;
+  readonly fieldDate?: unknown;
 }): FieldResultsScope {
   const mode = fieldResultsModeOf(options.fieldResults);
   if (mode === 'editable' && options.collaborationModel) {
     throw new TypeError(COLLABORATION_FIELD_RESULTS_REFUSAL);
   }
+  if (options.fieldDate !== undefined) {
+    if (!isValidFieldDate(options.fieldDate)) throw new TypeError(INVALID_FIELD_DATE_REFUSAL);
+    if (mode === 'editable') throw new TypeError(EDITABLE_FIELD_DATE_REFUSAL);
+  }
   return createFieldResultsScope(mode);
+}
+
+const INVALID_FIELD_DATE_REFUSAL = 'Invalid fieldDate: use a valid Date';
+const EDITABLE_FIELD_DATE_REFUSAL =
+  "fieldDate is not supported with fieldResults: 'editable'; saved results are editable text";
+
+/** A valid `Date`, also one from another window (no `instanceof`). */
+function isValidFieldDate(value: unknown): boolean {
+  try {
+    return !Number.isNaN(Date.prototype.getTime.call(value));
+  } catch {
+    return false;
+  }
 }

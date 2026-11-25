@@ -20,12 +20,3 @@ export function configSurfaceOptions(
     ...(config.fieldDate ? { fieldDate: config.fieldDate } : {}),
   };
 }
-
-/** A valid `Date`, also one from another window (no `instanceof`). */
-export function isValidFieldDate(value: unknown): boolean {
-  try {
-    return !Number.isNaN(Date.prototype.getTime.call(value));
-  } catch {
-    return false;
-  }
-}

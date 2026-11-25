@@ -107,4 +107,10 @@ describe('fieldDate on createDocxEditor', () => {
     expect(() => mount({ fieldDate: new Date(Number.NaN) })).toThrow(TypeError);
     expect(() => mount({ fieldDate: '2026-03-05' as unknown as Date })).toThrow(TypeError);
   });
+
+  test('refuses a date with editable saved results', () => {
+    expect(() => mount({ fieldDate: MOMENT, fieldResults: 'editable' })).toThrow(
+      /fieldResults: 'editable'/
+    );
+  });
 });

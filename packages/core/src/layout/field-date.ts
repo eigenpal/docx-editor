@@ -1,9 +1,9 @@
-// DATE and TIME fields (§17.16.4.1) show the current date and time when the host supplies one.
+// DATE and TIME fields show the current date and time when the host supplies one.
 //
-// Word recalculates these two fields whenever it opens a document, so the saved result is the
-// date of the last save, not today. A host passes `fieldDate` to layout, and the field shows
-// that moment through its `\@` picture. CREATEDATE, SAVEDATE, and PRINTDATE name a fixed moment
-// and keep their saved results.
+// DATE (ECMA-376 Part 1, 17.16.5.13) and TIME (17.16.5.65) have the current date and time as
+// their value, so the saved result is the date of the last update, not today. A host passes
+// `fieldDate` to layout, and the field shows that moment through its `\@` picture (17.16.4.1).
+// CREATEDATE, SAVEDATE, and PRINTDATE name a fixed moment and keep their saved results.
 //
 // The value is display-only: layout never writes it to the document, so collaboration
 // participants and saved files keep the stored result. Without `fieldDate`, and while saved
@@ -15,12 +15,16 @@
 //
 //   DATE|TIME \@ picture [\* MERGEFORMAT | \* CHARFORMAT]...
 //
-// A field without a picture keeps its saved result, because Word's default format depends on
-// the system locale. So do `\l`, `\h`, `\s`, casing switches, and any picture letter outside
-// the codes below. Month and day names are English.
+// A field without a picture keeps its saved result, because 17.16.4.1 leaves the default format
+// to the implementation. So do `\l`, `\h`, `\s`, casing switches, and any picture letter outside
+// the codes below. Month and day names follow the run's language (`w:lang`, 17.3.2.20,
+// `CT_Language`). Only English names are built in, so a picture with a name keeps its saved
+// result in a run of another language. Numeric codes and `AM/PM` do not depend on the language.
 
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { MAX_FIELD_INSTRUCTION_CHARS } from '../store/package/field-nodes.ts';
+import { runTextLanguage } from './run-proofing.ts';
 
 /** One picture item: a date or time code, or literal text. */
 type DatePictureItem =
@@ -50,7 +54,16 @@ type DatePictureCode =
 /** A recognized DATE or TIME field: the picture its value renders through. */
 export interface DateFieldSpec {
   readonly picture: readonly DatePictureItem[];
+  /** The picture shows a day or month name (`ddd`, `dddd`, `MMM`, `MMMM`). */
+  readonly names: boolean;
 }
+
+const NAME_CODES: ReadonlySet<DatePictureCode> = new Set<DatePictureCode>([
+  'ddd',
+  'dddd',
+  'MMM',
+  'MMMM',
+]);
 
 const CODES: ReadonlySet<string> = new Set<DatePictureCode>([
   'd',
@@ -178,7 +191,9 @@ export function parseDateFieldInstruction(raw: string): DateFieldSpec | null {
     const format = argument.value.toUpperCase();
     if (format !== 'MERGEFORMAT' && format !== 'CHARFORMAT') return null;
   }
-  return picture === null ? null : { picture };
+  if (picture === null) return null;
+  const names = picture.some((item) => item.kind === 'code' && NAME_CODES.has(item.code));
+  return { picture, names };
 }
 
 const padded = (value: number): string => String(value).padStart(2, '0');
@@ -218,14 +233,30 @@ function codeText(code: DatePictureCode, date: Date): string {
     case 'mm':
       return padded(date.getMinutes());
     case 'AM/PM':
-      return date.getHours() < 12 ? 'AM' : 'PM';
     case 'am/pm':
-      return date.getHours() < 12 ? 'am' : 'pm';
+      // 17.16.4.1: `h:mm am/pm` shows `5:28 PM`. Both spellings show upper case.
+      return date.getHours() < 12 ? 'AM' : 'PM';
   }
 }
 
-/** The text a recognized field shows for `date`, in the date's local time. */
-export function formatDateField(spec: DateFieldSpec, date: Date): string {
+/** True for a language whose day and month names are the built-in English ones. */
+function hasEnglishNames(language: string | null): boolean {
+  if (language === null) return true;
+  const primary = language.split('-')[0]!.toLowerCase();
+  return primary === 'en';
+}
+
+/**
+ * The text a recognized field shows for `date`, in the date's local time, or null when the
+ * picture shows a day or month name and `props` (the run's cascaded properties) select a
+ * language other than English. The field then keeps its saved result.
+ */
+export function formatDateField(
+  spec: DateFieldSpec,
+  date: Date,
+  props: readonly OoxmlProperty[] = []
+): string | null {
+  if (spec.names && !hasEnglishNames(runTextLanguage(props))) return null;
   return spec.picture
     .map((item) => (item.kind === 'text' ? item.text : codeText(item.code, date)))
     .join('');

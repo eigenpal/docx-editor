@@ -73,9 +73,9 @@ export interface PaginatedSurfaceOptions {
    */
   readonly fieldResults?: FieldResultsMode;
   /**
-   * The moment DATE and TIME fields with a `\@` picture show, as Word recalculates them when
-   * it opens a document. Display only: the document keeps its saved results. Absent, and in
-   * the `editable` {@link fieldResults} mode, fields show their saved results.
+   * The moment DATE and TIME fields with a `\@` picture show. Display only: the document keeps
+   * its saved results. Absent, fields show their saved results. Refused with the `editable`
+   * {@link fieldResults} mode.
    */
   readonly fieldDate?: Date;
   readonly measurer?: TextMeasurer;

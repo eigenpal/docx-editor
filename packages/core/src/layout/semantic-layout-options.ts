@@ -164,10 +164,10 @@ export interface SemanticLayoutOptions {
    */
   readonly fieldResults?: FieldResultsMode;
   /**
-   * The moment DATE and TIME fields with a `\@` date-time picture show, in its local time, as
-   * Word recalculates them when it opens a document. Absent keeps every saved result, and so
-   * does the `editable` {@link SemanticLayoutOptions.fieldResults} mode. Layout never writes
-   * the value to the document. The moment is folded into every cache key.
+   * The moment DATE and TIME fields with a `\@` date-time picture show, in its local time.
+   * Absent keeps every saved result, and so does the `editable`
+   * {@link SemanticLayoutOptions.fieldResults} mode. Layout never writes the value to the
+   * document. The moment is folded into every cache key.
    */
   readonly fieldDate?: Date;
   /** @internal */

@@ -500,10 +500,14 @@ function projectSimpleFieldDisplay(
   // DATE and TIME show the layout's field date over a saved result, like the complex shape.
   const dateSpec = parseDateFieldInstruction(instr);
   const fieldDate = dateSpec ? currentFieldDate() : undefined;
-  if (dateSpec && fieldDate && (display.text.length > 0 || !display.sawResultContent)) {
+  const dateText =
+    dateSpec && fieldDate && (display.text.length > 0 || !display.sawResultContent)
+      ? formatDateField(dateSpec, fieldDate, props)
+      : null;
+  if (dateText !== null) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    return { text: formatDateField(dateSpec, fieldDate), props, style };
+    return { text: dateText, props, style };
   }
 
   // Synthesis fills only a result the file never cached: a cached result that exists but is
