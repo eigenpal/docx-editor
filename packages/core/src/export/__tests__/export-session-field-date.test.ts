@@ -3,6 +3,7 @@
 // saved results, and a session without the option exports the saved results.
 
 import { describe, expect, test } from 'bun:test';
+import { runInNewContext } from 'node:vm';
 import { strToU8, zipSync } from 'fflate';
 import { forEachSemanticSpan } from '../../layout/export-traversal.ts';
 import type { SemanticLayout } from '../../layout/semantic-records.ts';
@@ -91,6 +92,12 @@ describe('fieldDate on openDocumentForExport', () => {
     } finally {
       opened.session.dispose();
     }
+  });
+
+  test('accepts a Date from another realm', async () => {
+    const foreign = runInNewContext('new Date(2026, 2, 5, 14, 7)') as Date;
+    expect(foreign instanceof Date).toBe(false);
+    expect(await exported({ fieldDate: foreign })).toContain('5 March 2026');
   });
 
   test('refuses a value that is not a valid date', () => {

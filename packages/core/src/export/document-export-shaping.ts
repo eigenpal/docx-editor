@@ -250,8 +250,9 @@ export async function openFontBackedDocumentForExport(
         'document-aware byte sessions are immutable'
     );
   }
-  // Refuse an invalid date before parsing and font resolution, not after.
-  copyValidFieldDate(options.fieldDate);
+  // Refuse an invalid date before parsing and font resolution, and copy it now: a caller that
+  // mutates its own `Date` while fonts resolve cannot change the session's date.
+  const fieldDate = copyValidFieldDate(options.fieldDate);
   if (options.signal?.aborted) return { ok: false, reason: 'aborted' };
   const opened = openHeadlessDocument(source);
   if (!opened.ok) return opened;
@@ -306,6 +307,7 @@ export async function openFontBackedDocumentForExport(
   try {
     result = openDocumentForExport(opened.view, {
       ...sessionOptions,
+      fieldDate,
       reuseAcrossRevisions: false,
       ...(shaping
         ? {

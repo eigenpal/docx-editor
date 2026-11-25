@@ -7,8 +7,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // 17.16.5.13, 17.16.4.1) lays out that moment, as the editor shows it. Without the option the
 // field keeps its saved result.
 import { expect, test } from 'bun:test';
+import { runInNewContext } from 'node:vm';
 import { forEachSemanticSpan, type SemanticLayout } from '@docx-editor.dev/core/layout';
-import { exportPdf, exportPdfFrom, openDocumentForExport } from '../src/index.ts';
+import {
+  defineFontResolver,
+  exportPdf,
+  exportPdfFrom,
+  openDocumentForExport,
+} from '../src/index.ts';
 import { docx } from './fixture.ts';
 
 /** Thursday 5 March 2026, 14:07 local time. */
@@ -47,9 +53,15 @@ test('fieldDate lays out the date; the default keeps the saved result', async ()
   expect(await laidOut(MOMENT)).toBe('5 March 2026');
 });
 
-test('exportPdf accepts fieldDate', async () => {
+test('exportPdf accepts fieldDate, also a Date from another realm', async () => {
   const result = await exportPdf(source, { useSystemFonts: false, fieldDate: MOMENT });
   expect(result.pageCount).toBe(1);
+  const foreign = runInNewContext('new Date(2026, 2, 5, 14, 7)') as Date;
+  expect(foreign instanceof Date).toBe(false);
+  expect(await laidOut(foreign)).toBe('5 March 2026');
+  await expect(
+    exportPdf(source, { useSystemFonts: false, fieldDate: foreign })
+  ).resolves.toBeDefined();
 });
 
 test('exportPdfFrom refuses fieldDate: the session sets it when it opens', async () => {
@@ -59,6 +71,26 @@ test('exportPdfFrom refuses fieldDate: the session sets it when it opens', async
     await expect(
       exportPdfFrom(opened.session, { fieldDate: MOMENT } as Parameters<typeof exportPdfFrom>[1])
     ).rejects.toThrow('fieldDate must be configured when opening the PDF session');
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('a Date the caller changes while fonts resolve does not change the session', async () => {
+  const date = new Date(MOMENT.getTime());
+  const fonts = defineFontResolver(() => {
+    date.setFullYear(2031);
+    return { sources: [] };
+  });
+  const opened = await openDocumentForExport(source, {
+    useSystemFonts: false,
+    fonts,
+    fieldDate: date,
+  });
+  if (!opened.ok) throw new Error(`open failed: ${opened.reason}`);
+  try {
+    expect(date.getFullYear()).toBe(2031);
+    expect(spanText(await opened.session.layout())).toBe('5 March 2026');
   } finally {
     opened.session.dispose();
   }

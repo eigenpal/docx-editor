@@ -25,7 +25,9 @@ export interface ChromeExportView {
   /**
    * The moment DATE and TIME fields with a `\@` picture show in the editor, from the editor's
    * `fieldDate` option. Pass it to `exportPdf` as `fieldDate`, so the PDF shows the same dates.
-   * The source bytes keep the saved results. Absent when the editor shows saved results.
+   * Fields show it in the local time of the process that lays out the PDF: for a server in
+   * another time zone, send the local wall-clock time and rebuild it there. The source bytes keep
+   * the saved results. Absent when the editor shows saved results.
    */
   readonly fieldDate?: Date;
 }

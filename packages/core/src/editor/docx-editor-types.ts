@@ -508,8 +508,9 @@ export interface DocxEditorInstance extends Editor {
   getReviewAuthors(): readonly ReviewAuthorInfo[];
   /**
    * A copy of the moment DATE and TIME fields show ({@link DocxEditorConfig.fieldDate}), or
-   * undefined when fields show their saved results. Fixed for the instance. `runChromeExport`
-   * and `runChromePrint` read it to pass the date to the PDF handler.
+   * undefined when fields show their saved results. Fixed for the instance, but each call answers
+   * a new `Date`: compare results with `getTime()`. `runChromeExport` and `runChromePrint` read it
+   * to pass the date to the PDF handler.
    */
   getFieldDate(): Date | undefined;
   /** Whether this author's revisions and comments are shown in the current review view. */
