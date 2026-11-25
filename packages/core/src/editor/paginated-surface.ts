@@ -194,7 +194,7 @@ import { surfaceRevisionFilter } from './surface-unlisted-filter.ts';
 import { createFurnitureFilterMemo } from './surface-furniture-filter.ts';
 import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
-import { copyFieldDate, scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
+import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
 import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { bindSurfaceViewport, type SurfaceViewportBinding } from './surface-viewport-binding.ts';
 import { createSurfaceHostListeners } from './surface-host-listeners.ts';
@@ -415,7 +415,6 @@ export function mountPaginatedSurface(
 ): OpenPaginatedResult {
   const runtimeOptions = options as PaginatedSurfaceRuntimeOptions;
   const fieldScope = surfaceFieldResultsScope(options);
-  const fieldDate = copyFieldDate(options.fieldDate); // The host may mutate its own Date.
   const opened =
     runtimeOptions.openedSession ??
     openTreeSession(bytes, {
@@ -1515,8 +1514,7 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context && !context.live ? false : showFieldCodes,
-      fieldResults: fieldScope.mode,
-      fieldDate,
+      ...fieldScope.layout, // `fieldResults`, and a copy of `fieldDate` the host cannot mutate
       revisionAuthorFilter: activeAuthorFilter,
       bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);

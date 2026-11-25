@@ -172,8 +172,8 @@ export function scopeSession<T extends object>(session: T, scope: FieldResultsSc
 export function surfaceFieldResultsScope(options: {
   readonly fieldResults?: unknown;
   readonly collaborationModel?: unknown;
-  readonly fieldDate?: unknown;
-}): FieldResultsScope {
+  readonly fieldDate?: Date;
+}): SurfaceFieldResultsScope {
   const mode = fieldResultsModeOf(options.fieldResults);
   if (mode === 'editable' && options.collaborationModel) {
     throw new TypeError(COLLABORATION_FIELD_RESULTS_REFUSAL);
@@ -182,7 +182,18 @@ export function surfaceFieldResultsScope(options: {
     if (!isValidFieldDate(options.fieldDate)) throw new TypeError(INVALID_FIELD_DATE_REFUSAL);
     if (mode === 'editable') throw new TypeError(EDITABLE_FIELD_DATE_REFUSAL);
   }
-  return createFieldResultsScope(mode);
+  // One copy per surface: layout compares the installed date by identity, and a host that
+  // mutates its own `Date` later cannot desynchronize layout caches.
+  const layout = { fieldResults: mode, fieldDate: copyFieldDate(options.fieldDate) };
+  return { ...createFieldResultsScope(mode), layout };
+}
+
+/** A surface's field scope, with the field options its layout passes. */
+export interface SurfaceFieldResultsScope extends FieldResultsScope {
+  readonly layout: {
+    readonly fieldResults: FieldResultsMode;
+    readonly fieldDate: Date | undefined;
+  };
 }
 
 const INVALID_FIELD_DATE_REFUSAL = 'Invalid fieldDate: use a valid Date';

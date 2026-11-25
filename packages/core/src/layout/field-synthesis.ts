@@ -19,7 +19,7 @@ import { characterStyleFieldValue } from './field-character-style.ts';
 //   7. empty cache only (and no hidden-but-present result): a document-property value, else a
 //      MACROBUTTON / GOTOBUTTON display.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
 import { currentFieldDate, formatDateField } from './field-date.ts';
 import { docPropertyValue } from './field-doc-property.ts';
@@ -32,7 +32,8 @@ import {
   type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
-import type { AllowlistedPageFieldMatch } from './field-instruction.ts';
+import type { AllowlistedPageFieldMatch, ComplexFieldParseState } from './field-instruction.ts';
+import { instrTextValue, isDeletedInstrText } from '../store/package/field-nodes.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
 import {
   listNumFieldValue,
@@ -220,4 +221,22 @@ export function synthesizeAtomicField(
     }
   }
   return null;
+}
+
+/**
+ * Record the run properties of an instruction run of `pending`, before the walk ingests it.
+ * DATE and TIME names follow the language of the run that holds the instruction (ECMA-376
+ * Part 1, 17.16.4.1): the first run with text of the buffer the field evaluates, live, else
+ * deleted. Runs of nested fields and runs after the separator do not count.
+ */
+export function noteInstructionLanguage(
+  pending: PendingFieldProjection,
+  field: ComplexFieldParseState,
+  instrText: OoxmlNode,
+  props: readonly OoxmlProperty[]
+): void {
+  if (field.nesting !== 1 || field.phase !== 'instruction') return;
+  if (!/\S/.test(instrTextValue(instrText))) return;
+  if (!isDeletedInstrText(instrText)) pending.instructionProps ??= props;
+  else pending.deletedInstructionProps ??= props;
 }
