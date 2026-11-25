@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "When the word after a tab would overflow the line, the tab stayed on the line and the word opened the next line at the margin.",
+  "after": "The tab opens the next line with the word and reaches its stop there, when the two fit on a fresh line.",
+  "reason": "Only line breaking in local layout changes. Shared nodes, operations, and package serialization remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/tab-wraps-with-its-word.test.ts"],
+  "changeset": "tab-wraps-with-its-word",
+  "migration": null
+}
