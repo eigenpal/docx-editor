@@ -286,19 +286,17 @@ export interface InlineDrawingRecord {
   /** A picture's reflection and soft edges, in the extent's EMU; absent when it has none. */
   readonly frameEffects?: PictureFrameEffects;
   /**
-   * Present when the image is the picture member of a drawing group. The image then fills
-   * the bounds of `geometry.imageTransformCorners`, not `geometry.contentBounds`, and paints
-   * below `vectorShape`, which holds the group's other members. `placeholderGraphicKind`
-   * stays non-null, as for a vector shape, so image commands do not treat the group as a
-   * picture. The group paints whole or not at all: when the picture cannot paint, an output
-   * shows no part of the group.
+   * Present when the image is the first picture member of a drawing group that paints. The
+   * image fills the box of `geometry.imageTransformCorners`, not `geometry.contentBounds`.
+   * `vectorShape` holds the other members, which paint in bands between the pictures
+   * (`vectorPictureBand`). `placeholderGraphicKind` stays non-null, so image commands do not
+   * treat the group as a picture. A picture that cannot paint is left out.
    */
   readonly groupPicture?: DrawingGroupPictureRecord;
-  /**
-   * The group's other picture members, in document order. Each paints above the record's
-   * own image and the layers before it, and below `vectorShape`. Absent for one picture.
-   */
+  /** The group's later picture members, in document order, each above the ones before it. */
   readonly groupPictureLayers?: readonly import('./drawing-group-picture-layers.ts').DrawingGroupPictureLayerRecord[];
+  /** How many group members paint nothing while the others paint; absent for none. */
+  readonly groupMembersNotShown?: number;
   /**
    * The revision wrappers enclosing the owning run, outermost first — the same stack spans
    * carry, so paint and review chrome give a tracked picture the same cues as tracked text.

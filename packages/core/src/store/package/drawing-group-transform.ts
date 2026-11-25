@@ -16,20 +16,12 @@ export function transformComponent(
 ): VectorShapeComponent {
   // A group that collapses an axis flattens an inset outline's shape onto a line; with no
   // inside left, the outline stays centred.
+  // A shadow keeps its distance and blur: they are absolute lengths, as a line width is, so
+  // the group's child-to-extent scale does not change them.
   const { strokeInset: inset, ...rest } = component;
   return {
     ...rest,
     ...(inset && scaleX !== 0 && scaleY !== 0 ? { strokeInset: true } : {}),
-    ...(component.shadow
-      ? {
-          shadow: {
-            ...component.shadow,
-            dxEmu: component.shadow.dxEmu * scaleX,
-            dyEmu: component.shadow.dyEmu * scaleY,
-            blurEmu: component.shadow.blurEmu * ((Math.abs(scaleX) + Math.abs(scaleY)) / 2),
-          },
-        }
-      : {}),
     ...(component.fillGradient
       ? {
           fillGradient: {
@@ -168,15 +160,21 @@ export function groupMemberPlacement(
 
 /**
  * A group's members under its own turn: flipped, then turned clockwise, about the centre of
- * the group extent. Null when a member's paint does not follow the turn here yet: a shadow or
- * a pattern fill. The group then keeps its placeholder.
+ * the group extent. A shadow and a pattern fill do not follow the turn here: the member paints
+ * without its shadow, and with the mean colour of its pattern.
  */
 export function turnGroupComponents(
-  components: readonly VectorShapeComponent[],
+  source: readonly VectorShapeComponent[],
   extent: Readonly<{ cx: number; cy: number }>,
   turn: GroupTurn
-): VectorShapeComponent[] | null {
-  if (components.some((c) => c.shadow || c.shadowOnly || c.fillPattern)) return null;
+): VectorShapeComponent[] {
+  const components: VectorShapeComponent[] = [];
+  for (const component of source) {
+    // A shadow silhouette paints only its shadow.
+    if (component.shadowOnly) continue;
+    const { shadow: _shadow, fillPattern: _fillPattern, ...flat } = component;
+    components.push(flat);
+  }
   const place = shapePointTransform(extent, turn.flipH, turn.flipV, turn.rotationDegrees);
   const map = (paths: readonly (readonly Readonly<{ x: number; y: number }>[])[]) =>
     paths.map((path) => path.map(place));
@@ -202,8 +200,7 @@ export function turnGroupComponents(
 
 /**
  * Members of turned or flipped nested groups under those turns, innermost first: each flips
- * and turns about the centre of its box, which sits anywhere in the drawing extent. Null when
- * a member's paint does not follow a turn, as {@link turnGroupComponents} refuses it.
+ * and turns about the centre of its box, which sits anywhere in the drawing extent.
  */
 export function turnComponentsInBoxes(
   components: readonly VectorShapeComponent[],
@@ -211,13 +208,12 @@ export function turnComponentsInBoxes(
     box: Readonly<{ x: number; y: number; cx: number; cy: number }>;
     turn: GroupTurn;
   }>[]
-): VectorShapeComponent[] | null {
+): VectorShapeComponent[] {
   let current: VectorShapeComponent[] = [...components];
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const { box, turn } = turns[index]!;
     const local = current.map((c) => transformComponent(c, { x: -box.x, y: -box.y }, 1, 1));
     const turned = turnGroupComponents(local, { cx: box.cx, cy: box.cy }, turn);
-    if (!turned) return null;
     current = turned.map((c) => transformComponent(c, { x: box.x, y: box.y }, 1, 1));
   }
   return current;

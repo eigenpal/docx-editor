@@ -8,11 +8,7 @@ import type { DiagramPartResolver } from './diagram-parts.ts';
 import { projectDiagram } from './diagram-projection.ts';
 import { projectCanvas } from './drawing-canvas-projection.ts';
 import { drawingRenderers } from './drawing-renderers.ts';
-import {
-  groupVectorMembersAreBounded,
-  readGroupPicture,
-  type GroupPictureProjection,
-} from './drawing-group-picture.ts';
+import { readGroupPicture, type GroupPictureProjection } from './drawing-group-picture.ts';
 import {
   projectTextboxStory,
   projectVectorShape,
@@ -42,6 +38,11 @@ export interface DrawingContentProjection {
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
   /** Something paints, so an "unsupported graphic" diagnostic no longer applies. */
   readonly paints: boolean;
+  /**
+   * The node ids of the group members that paint nothing because paint cannot represent them.
+   * The other members of the group still paint. Absent when every member paints.
+   */
+  readonly omittedGroupMembers?: readonly string[];
   /** The title and plot types of a chart, whether it paints or not. */
   readonly chartSummary?: DrawingChartSummary;
   /** A picture's clip ring in the unit square of its extent; see `projectPictureFrame`. */
@@ -93,30 +94,22 @@ export function projectDrawingContent(
       paints: true,
     };
   }
-  const groupRead = readGroupPicture(
-    anchor,
-    extent,
-    ctx.resolveStyleMatrixReference,
-    ctx.resolveSchemeColor
-  );
+  // A group paints the members that paint can represent, in document order. A member that
+  // paint cannot represent paints nothing, and `omittedMembers` names it.
+  const groupRead = readGroupPicture(anchor, extent);
+  const omittedMembers: string[] = [];
   const vectorMembers = projectVectorShape(
     anchor,
     extent,
     compatibilityMode,
     ctx.resolveSchemeColor,
     ctx.resolveStyleMatrixReference,
-    groupRead ? new Set(groupRead.pictures.map((picture) => picture.memberNodeId)) : undefined
+    groupRead ? new Set(groupRead.pictures.map((picture) => picture.memberNodeId)) : undefined,
+    omittedMembers
   );
-  // A group paints whole or not at all: the picture needs every other member to paint too,
-  // inside the same bounds as the picture frame.
-  const groupAdmitted =
-    groupRead !== null &&
-    (vectorMembers
-      ? groupVectorMembersAreBounded(vectorMembers, extent)
-      : !groupRead.hasOtherMembers);
-  const groupPicture = groupAdmitted ? groupRead.picture : null;
-  const groupPictureLayers = groupAdmitted ? groupRead.pictures.slice(1) : [];
-  const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
+  const groupPicture = groupRead?.picture ?? null;
+  const groupPictureLayers = groupRead?.pictures.slice(1) ?? [];
+  const vectorShape = vectorMembers;
   let chartSummary: DrawingChartSummary | null = null;
   if (!groupPicture && !vectorShape) {
     // Every chart carries its summary, whether it renders, shows a fallback, or a placeholder.
@@ -166,9 +159,10 @@ export function projectDrawingContent(
       : {}),
     vectorShape: vectorShape ?? chrome,
     textboxStory: chrome && textboxStory ? { ...textboxStory, chromeByVector: true } : textboxStory,
-    ...groupTextboxesField(anchor, extent, { picture: null, groupPicture, vectorShape }, ctx),
+    ...groupTextboxesField(anchor, extent, { picture: null }, ctx),
     paints: groupPicture !== null || vectorShape !== null,
     ...(chartSummary ? { chartSummary } : {}),
+    ...(omittedMembers.length > 0 ? { omittedGroupMembers: Object.freeze(omittedMembers) } : {}),
   };
 }
 

@@ -7,7 +7,11 @@
 
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
+import { regionCutClipBox } from '../layout/drawing-group-picture-layers.ts';
 import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
+
+/** A length, in points, past which no member of a drawing paints. */
+const FAR = 100_000;
 
 /**
  * The member text layer of a group drawing, or null when it has none to paint.
@@ -38,11 +42,24 @@ export function paintGroupTextboxStories(
   // DrawingML shape text overflows its box and the drawing, as the reference shows it. Turned
   // text, or text whose turned members or groups paint past the frame, goes past it too; each
   // member's content box still clips its own text.
-  layer.style.overflow =
+  const open =
     drawing.vectorShape?.overflowVisible ||
-    members.some((member) => member.story.overflowVisible || member.rotationDegrees !== 0)
-      ? 'visible'
-      : 'hidden';
+    members.some((member) => member.story.overflowVisible || member.rotationDegrees !== 0);
+  layer.style.overflow = open ? 'visible' : 'hidden';
+  // A region that cut the drawing, such as a table cell, still cuts the text on that side.
+  const far = {
+    x: bounds.x - FAR,
+    y: bounds.y - FAR,
+    width: bounds.width + 2 * FAR,
+    height: bounds.height + 2 * FAR,
+  };
+  const cut = open ? regionCutClipBox(drawing, bounds, far) : null;
+  if (cut) {
+    const inset = (value: number) => `${value * scale}px`;
+    layer.style.clipPath = `inset(${inset(cut.y - bounds.y)} ${inset(
+      bounds.x + bounds.width - (cut.x + cut.width)
+    )} ${inset(bounds.y + bounds.height - (cut.y + cut.height))} ${inset(cut.x - bounds.x)})`;
+  }
   layer.style.pointerEvents = 'none';
   // Extent origin inside the clipped paint bounds.
   const extentLeft = drawing.x - bounds.x;

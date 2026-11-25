@@ -8,6 +8,7 @@ import type { DrawingTransform, SourceCrop } from '../store/package/drawing-proj
 import { DEFAULT_IMAGE_RESOURCE_LIMITS } from '../store/runtime/limits.ts';
 import { clipBoxToRegion, EMU_PER_POINT, emuToPointsSafe } from './drawing-layout.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import { turnedPictureCorners } from './drawing-group-picture-layers.ts';
 
 export const ROTATION_UNITS_PER_DEGREE = 60_000;
 export const CROP_PERCENT_MAX = 100_000;
@@ -812,17 +813,17 @@ export function drawingGeometryFromProjection(options: {
     const scaleX = extent.cx > 0 ? options.extentWidth / extent.cx : 0;
     const scaleY = extent.cy > 0 ? options.extentHeight / extent.cy : 0;
     const member = groupPicture.frameEmu;
-    const image = computeDrawingGeometry({
-      extentWidth: member.cx * scaleX,
-      extentHeight: member.cy * scaleY,
-      anchorX: options.anchorX + member.x * scaleX,
-      anchorY: options.anchorY + member.y * scaleY,
-      effectExtentEmu: { top: 0, right: 0, bottom: 0, left: 0 },
-      crop: groupPicture.crop,
-      transform: defaultTransform,
-      presetGeometry: null,
-    });
-    return Object.freeze({ ...frame, imageTransformCorners: image.transformedCorners });
+    const corners = turnedPictureCorners(
+      {
+        x: finite(options.anchorX) + member.x * scaleX,
+        y: finite(options.anchorY) + member.y * scaleY,
+        width: Math.max(0, member.cx * scaleX),
+        height: Math.max(0, member.cy * scaleY),
+      },
+      groupPicture.rotationDegrees ?? 0,
+      groupPicture.flipH === true
+    );
+    return Object.freeze({ ...frame, imageTransformCorners: corners });
   }
   return computeDrawingGeometry({
     extentWidth: options.extentWidth,

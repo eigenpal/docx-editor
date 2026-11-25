@@ -75,10 +75,17 @@ test('a shape inside a nested group gets its box through the nested child space'
   // A shape inside a turned nested group has no upright box, so only the direct shape selects.
   const turned = nested.replace('<wpg:grpSpPr><a:xfrm>', '<wpg:grpSpPr><a:xfrm rot="60000">');
   expect(boxes(0, member(0, 0) + turned)).toEqual([[0, 0, 0.5, 1]]);
-  // A group that cannot place a nested group paints a placeholder, with no shapes to select.
+  // A nested group with an effect paints its members flat, so both shapes select.
   const glowing = nested.replace(
     '</a:xfrm></wpg:grpSpPr>',
     '</a:xfrm><a:effectLst><a:glow rad="1"/></a:effectLst></wpg:grpSpPr>'
   );
-  expect(boxes(0, member(0, 0) + glowing)).toBeNull();
+  expect(boxes(0, member(0, 0) + glowing)).toEqual([
+    [0, 0, 0.5, 1],
+    [0.5, 0, 0.5, 1],
+  ]);
+  // A nested group without a child extent paints nothing, so only the direct shape selects.
+  const childExtent = `<a:chExt cx="${36 * EMU}" cy="${72 * EMU}"/>`;
+  expect(nested).toContain(childExtent);
+  expect(boxes(0, member(0, 0) + nested.replace(childExtent, ''))).toEqual([[0, 0, 0.5, 1]]);
 });

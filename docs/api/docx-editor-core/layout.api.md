@@ -914,7 +914,13 @@ export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'gr
 
 // @public
 export interface DrawingGroupPictureLayerRecord {
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
     readonly crop: SourceCrop;
+    readonly effects?: DrawingImageEffects;
+    readonly flipH?: true;
     readonly frameUnit: Readonly<{
         height: number;
         width: number;
@@ -922,11 +928,16 @@ export interface DrawingGroupPictureLayerRecord {
         y: number;
     }>;
     readonly resource: ImageResourceState;
+    readonly rotationDegrees?: number;
 }
 
 // @public
 export interface DrawingGroupPictureRecord {
     readonly alternateContent: boolean;
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
 }
 
 // @public (undocumented)
@@ -1554,7 +1565,13 @@ export interface GraphemeWordSegmentRecord {
 }
 
 // @internal
+export function groupPictureInkReach(drawing: InlineDrawingRecord | AnchoredDrawingRecord, ink: LayoutBox): LayoutBox;
+
+// @internal
 export function groupPictureLayerDrawing<D extends InlineDrawingRecord | AnchoredDrawingRecord>(drawing: D, layer: DrawingGroupPictureLayerRecord): D;
+
+// @internal
+export function groupPicturePaintsPastExtent(drawing: InlineDrawingRecord | AnchoredDrawingRecord): boolean;
 
 // @public
 export interface GroupTextboxStoryRecord {
@@ -1779,6 +1796,7 @@ export interface InlineDrawingRecord {
     readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupMembersNotShown?: number;
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupPictureLayers?: readonly DrawingGroupPictureLayerRecord[];
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
@@ -3035,6 +3053,18 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null;
 // @public
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties;
 
+// @internal
+export function pictureCornerFrame(corners: readonly DrawingPoint[]): {
+    readonly box: {
+        height: number;
+        width: number;
+        x: number;
+        y: number;
+    };
+    readonly flipH: boolean;
+    readonly rotationDegrees: number;
+} | null;
+
 // @public
 export interface PictureFrameEffects {
     readonly reflection?: ShapeReflection;
@@ -3152,6 +3182,9 @@ export interface RefNoteParts {
     // (undocumented)
     readonly footnotesPart: OoxmlPart | null;
 }
+
+// @internal
+export function regionCutClipBox(drawing: InlineDrawingRecord | AnchoredDrawingRecord, box: LayoutBox, far: LayoutBox): LayoutBox | null;
 
 // @public
 export interface RegisteredFieldLink {
@@ -5227,6 +5260,9 @@ export interface VectorPattern {
     readonly rows: readonly number[];
 }
 
+// @internal
+export function vectorPictureBand(component: VectorShapeComponent, pictureCount: number): number;
+
 // @public
 export interface VectorShapeComponent {
     readonly arrowheadsEmu?: readonly (readonly Readonly<{
@@ -5245,6 +5281,7 @@ export interface VectorShapeComponent {
     readonly fillHex: string | null;
     readonly fillPattern?: VectorPattern;
     readonly fillRule?: 'nonzero';
+    readonly picturesBelow?: number;
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)

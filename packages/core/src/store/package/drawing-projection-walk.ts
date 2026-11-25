@@ -13,6 +13,7 @@ export interface DrawingDiagnostic {
   readonly code:
     | 'malformed-drawing'
     | 'unsupported-graphic'
+    | 'group-member-not-shown'
     | 'unresolvable-frame'
     | 'invalid-geometry'
     | 'resource-refused'

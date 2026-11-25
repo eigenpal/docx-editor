@@ -6,12 +6,7 @@ import { identityGroupThemeEffect } from './drawing-group-theme-effects.ts';
 import { parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 export { MAX_EMU, parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
-import {
-  findGraphicData,
-  readDrawingGroupFrame,
-  supportedGroupVisuals,
-  schemaFlagIsSet,
-} from './drawing-group-frame.ts';
+import { findGraphicData, supportedGroupVisuals, schemaFlagIsSet } from './drawing-group-frame.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
@@ -45,19 +40,8 @@ import {
   shapePointTransform,
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
-import {
-  transformComponent,
-  turnComponentsInBoxes,
-  turnGroupComponents,
-} from './drawing-group-transform.ts';
 import { groupFillSpansMembers, withResolvedGroupFill } from './drawing-group-fill.ts';
-import { groupPictureOutline } from './drawing-group-picture-outline.ts';
-import {
-  flattenGroupMembers,
-  groupSpacePlacement,
-  mapGroupPoint,
-  rootGroupSpace,
-} from './drawing-group-members.ts';
+import { projectGroupVectorMembers } from './drawing-group-vector-members.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import {
   directFill,
@@ -67,7 +51,6 @@ import {
 } from './drawing-shape-color.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import {
-  childTransform,
   shapeFlagsValid,
   shapeProperties,
   shapeTransformElement,
@@ -94,9 +77,10 @@ export type ShapeStyleMatrixResolver = (
  * group of them: closed polygon subpaths (`a:custGeom` with move/line/close/cubicBezTo
  * verbs, or a supported `a:prstGeom`) with a solid fill and/or stroke. The colour may come
  * from `a:srgbClr` or from the theme, through `a:schemeClr` or a `wps:style` matrix
- * reference. Anything richer (picture fills, a picture in a turned or flipped nested group)
- * projects as `null` and paints the labelled placeholder instead. A top-level text box paints
- * through its story, not through this projection.
+ * reference. A lone shape that is richer (a picture fill, for example) projects as `null` and
+ * paints the labelled placeholder instead. A group member that is richer paints nothing, and
+ * the other members of the group still paint. A top-level text box paints through its story,
+ * not through this projection.
  *
  * @public
  */
@@ -180,6 +164,13 @@ export interface VectorShapeComponent {
   readonly clipEmu?: readonly (readonly Readonly<{ x: number; y: number }>[])[];
   /** In a picture's frame: paints under the picture (its shadow and fill), not over it. */
   readonly belowPicture?: true;
+  /**
+   * In a group with pictures: the number of the group's pictures that paint under this
+   * component. Absent when every picture paints under it. Members paint in document order
+   * (`wpg:grpSp`, CT_WordprocessingGroup; ECMA-376 Part 1, 20.4.2.32), so a picture after a shape
+   * paints over that shape.
+   */
+  readonly picturesBelow?: number;
   /**
    * How far the stroked path lies outside the geometry by design, in EMU: a picture outline
    * runs half its width outside the picture, so the whole stroke stays off the picture.
@@ -460,7 +451,7 @@ export function isUnpaintedGroupTextbox(
 ): boolean {
   if (member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp') return false;
   const spPr = shapeProperties(member);
-  if (!spPr || !hasTextbox(member) || !supportedGroupVisuals(member, spPr, false)) return false;
+  if (!spPr || !hasTextbox(member) || !supportedGroupVisuals(member, spPr)) return false;
   if (!identityGroupThemeEffect(member, resolveStyleMatrixReference)) return false;
   const paint = shapePaint(
     member,
@@ -705,7 +696,8 @@ function enclosesArea(points: readonly Readonly<{ x: number; y: number }>[]): bo
  * Renderable-subset projection of direct `wps:wsp` and one bounded `wpg:wgp` group.
  *
  * `groupPictureNodeIds` names the group members the group picture projection paints; they
- * are skipped here. Every other member must be a supported `wps:wsp`, or the group refuses.
+ * are skipped here. Any other member that is not a supported `wps:wsp` paints nothing, and
+ * `omittedMembers` receives its node id (`projectGroupVectorMembers`).
  */
 export function projectVectorShape(
   anchor: OoxmlElement,
@@ -713,7 +705,8 @@ export function projectVectorShape(
   compatibilityMode: boolean,
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
-  groupPictureNodeIds?: ReadonlySet<string>
+  groupPictureNodeIds?: ReadonlySet<string>,
+  omittedMembers?: string[]
 ): VectorShapeProjection | null {
   void compatibilityMode;
   // A straight vertical or horizontal line has a zero width or height.
@@ -751,74 +744,21 @@ export function projectVectorShape(
     // A direct shape paints its whole geometry and outline, past its extent too.
     overflowVisible = true;
   } else {
-    const frame = readDrawingGroupFrame(anchor, { turned: true });
-    if (!frame) return null;
-    const turn = frame.turn;
-    const members = flattenGroupMembers(frame, rootGroupSpace(frame, extent));
-    if (!members) return null;
-    for (const { member: child, space, groupFill } of members) {
-      if (groupPictureNodeIds?.has(child.id)) {
-        // The group picture paints the raster; its outline, if any, strokes above it here.
-        const outline = groupPictureOutline(child, pointBudget, resolveSchemeColor, {
-          project: projectShapeComponents,
-          childTransform,
-          place: (component, offset) =>
-            transformComponent(component, mapGroupPoint(space, offset), space.scaleX, space.scaleY),
-        });
-        if (outline === null) return null;
-        components.push(...outline);
-        continue;
-      }
-      // A member the vector paint cannot draw refuses the whole group: no partial group paints.
-      if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') return null;
-      const properties = findDirectChild(child.children, {
-        namespaceUri: WPS_NAMESPACE_URI,
-        localName: 'spPr',
-      });
-      if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
-      if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
-      if (
-        isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
-      )
-        continue;
-      const transform = childTransform(child);
-      if (!transform) return null;
-      // A turned member turns in group space, after its box scales, so it never skews.
-      const memberTurn = shapeRotationDegrees(shapeTransformElement(child)) ?? 0;
-      // A turned member paints whole, past the group extent where its corners reach.
-      if (memberTurn !== 0) overflowVisible = true;
-      const place = groupSpacePlacement(transform, space, memberTurn);
-      const memberComponents = projectShapeComponents(
-        child,
-        place.extent,
-        pointBudget,
-        resolveSchemeColor,
-        resolveStyleMatrixReference,
-        true,
-        groupFill
-      );
-      if (!memberComponents) return null; // A member that paints nothing adds nothing.
-      const placed = memberComponents.map((component) =>
-        transformComponent(component, place.offset, place.scaleX, place.scaleY)
-      );
-      if (space.turns) {
-        // Members of a turned nested group turn with it and paint whole, past the frame.
-        const turned = turnComponentsInBoxes(placed, space.turns);
-        if (!turned) return null;
-        components.push(...turned);
-        overflowVisible = true;
-      } else {
-        components.push(...placed);
-      }
-    }
+    const group = projectGroupVectorMembers(
+      anchor,
+      extent,
+      pointBudget,
+      resolveSchemeColor,
+      resolveStyleMatrixReference,
+      groupPictureNodeIds,
+      omittedMembers ?? [],
+      { project: projectShapeComponents, isUnpaintedTextbox: isUnpaintedGroupTextbox }
+    );
     // A group whose members are all hidden, or that has none, paints nothing and no placeholder.
-    if (components.length === 0 && members.length > 0) return null;
-    if (turn) {
-      const turned = turnGroupComponents(components, extent, turn);
-      if (!turned) return null;
-      components = turned;
-      rotationDegrees = turn.rotationDegrees;
-    }
+    if (!group || (group.components.length === 0 && group.memberCount > 0)) return null;
+    components = group.components;
+    rotationDegrees = group.rotationDegrees;
+    overflowVisible = group.overflowVisible;
   }
   const subpathsEmu: (readonly Readonly<{ x: number; y: number }>[])[] = [];
   for (const component of components) {
