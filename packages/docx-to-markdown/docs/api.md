@@ -178,6 +178,7 @@ Set `images: { syntax: 'html' }` to emit `<img>` tags with each occurrence's dis
 | `producer`              | Stable identity for a host-owned measurer and its cache entries.                              |
 | `imageDecodePort`       | Custom image metadata decoder. Defaults to the Node.js decoder.                               |
 | `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                      |
+| `fieldDate`             | A valid `Date` shown by DATE and TIME fields with a `\@` picture. Omit for saved results.     |
 
 `fontPolicy` and `onFontResolution` require immutable DOCX bytes with the default document-aware font resolution. Both options throw `TypeError` when used with a live `HeadlessDocumentView` or combined with a custom `measurer`, including an explicit `fontPolicy: 'best-effort'`.
 

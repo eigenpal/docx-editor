@@ -1558,6 +1558,7 @@ export interface ChromeExportView {
     readonly comments?: boolean;
     // (undocumented)
     readonly displayMode: ReviewDisplayMode;
+    readonly fieldDate?: Date;
     readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
     // (undocumented)
     readonly revisionMarkup: ResolvedRevisionMarkup;
@@ -2315,6 +2316,7 @@ export interface DocxEditorInstance extends Editor {
     fontMeasurement(): FontMeasurementState;
     // @internal
     getConfiguredAuthor(): string | null;
+    getFieldDate(): Date | undefined;
     getReviewAuthors(): readonly ReviewAuthorInfo[];
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
@@ -4850,10 +4852,10 @@ export interface RulerTick {
 export type RulerUnit = 'inch' | 'cm';
 
 // @public
-export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers, settings?: ChromePrintSettings): Promise<ChromeExportResult>;
+export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors' | 'getFieldDate'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers, settings?: ChromePrintSettings): Promise<ChromeExportResult>;
 
 // @public
-export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
+export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors' | 'getFieldDate'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
 
 // @internal
 export function runImageFilePaste(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>, event: ClipboardEvent, insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>, refuse: (reason: string) => void): Promise<void> | null;

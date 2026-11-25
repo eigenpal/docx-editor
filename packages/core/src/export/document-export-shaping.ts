@@ -85,6 +85,7 @@ import {
   type ExportLaidOutTextApi,
 } from './export-laid-out-text.ts';
 import { createSessionExportShaping, type SessionExportShaping } from './shared-export-shaping.ts';
+import { copyValidFieldDate } from '../layout/field-date.ts';
 
 export type {
   ExportDroppedEmbeddedFont,
@@ -249,6 +250,9 @@ export async function openFontBackedDocumentForExport(
         'document-aware byte sessions are immutable'
     );
   }
+  // Refuse an invalid date before parsing and font resolution, and copy it now: a caller that
+  // mutates its own `Date` while fonts resolve cannot change the session's date.
+  const fieldDate = copyValidFieldDate(options.fieldDate);
   if (options.signal?.aborted) return { ok: false, reason: 'aborted' };
   const opened = openHeadlessDocument(source);
   if (!opened.ok) return opened;
@@ -303,6 +307,7 @@ export async function openFontBackedDocumentForExport(
   try {
     result = openDocumentForExport(opened.view, {
       ...sessionOptions,
+      fieldDate,
       reuseAcrossRevisions: false,
       ...(shaping
         ? {

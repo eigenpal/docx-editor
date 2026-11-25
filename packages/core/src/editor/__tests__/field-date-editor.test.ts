@@ -1,12 +1,15 @@
 // `fieldDate` on `createDocxEditor`: DATE and TIME fields show it in the body and in footers, the
-// saved document keeps its results, and an editor without it shows the saved results.
+// saved document keeps its results, and an editor without it shows the saved results. Print and
+// PDF export pass it to the PDF handler with the saved bytes.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
+import { runChromeExport, type ChromeExportView } from '../chrome-export.ts';
+import { runChromePrint } from '../chrome-print.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import type { DocxEditorConfig } from '../docx-editor-types.ts';
 
@@ -124,5 +127,65 @@ describe('fieldDate on createDocxEditor', () => {
     expect(() => mount({ fieldDate: MOMENT, fieldResults: 'editable' })).toThrow(
       /fieldResults: 'editable'/
     );
+  });
+});
+
+const PDF = new TextEncoder().encode('%PDF-1.7\n');
+
+/** A PDF handler that records the view and the bytes it receives. */
+function recordingHandler() {
+  const calls: { source: Uint8Array; view: ChromeExportView | undefined }[] = [];
+  return {
+    calls,
+    handlers: {
+      pdf: async (source: Uint8Array, view?: ChromeExportView) => {
+        calls.push({ source, view });
+        return { bytes: PDF };
+      },
+    },
+  };
+}
+
+describe('fieldDate in print and PDF export', () => {
+  test('getFieldDate answers a copy of the date, or undefined without one', () => {
+    expect(mount().getFieldDate()).toBeUndefined();
+    const date = new Date(MOMENT.getTime());
+    const editor = mount({ fieldDate: date });
+    date.setFullYear(2031);
+    const first = editor.getFieldDate()!;
+    expect(first.getTime()).toBe(MOMENT.getTime());
+    first.setFullYear(2032);
+    expect(editor.getFieldDate()!.getTime()).toBe(MOMENT.getTime());
+    expect(shown(editor).body).toBe('5 March 2026');
+  });
+
+  test('PDF export passes the date in the view and keeps saved results in the bytes', async () => {
+    const editor = mount({ fieldDate: MOMENT });
+    const { calls, handlers } = recordingHandler();
+    await runChromeExport(editor, 'pdf', handlers);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.view?.fieldDate?.getTime()).toBe(MOMENT.getTime());
+    const saved = unzipSync(calls[0]!.source);
+    const body = strFromU8(saved['word/document.xml']!);
+    const footer = strFromU8(saved['word/footer1.xml']!);
+    expect(body).toContain('1 January 2020');
+    expect(footer).toContain('01/01/2020');
+    expect(body + footer).not.toContain('2026');
+  });
+
+  test('print passes the date with the chosen print settings', async () => {
+    const editor = mount({ fieldDate: MOMENT });
+    const { calls, handlers } = recordingHandler();
+    const job = await runChromePrint(editor, handlers, document, { comments: false });
+    job.dispose();
+    expect(calls[0]!.view?.fieldDate?.getTime()).toBe(MOMENT.getTime());
+    expect(calls[0]!.view?.comments).toBe(false);
+  });
+
+  test('an editor without fieldDate leaves it out of the view', async () => {
+    const { calls, handlers } = recordingHandler();
+    await runChromeExport(mount(), 'pdf', handlers);
+    expect(calls[0]!.view).toBeDefined();
+    expect('fieldDate' in calls[0]!.view!).toBe(false);
   });
 });

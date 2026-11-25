@@ -2,7 +2,7 @@ import { capturePointPosition, createEditorPointMembers } from './editor-point-t
 import { createUnsupportedElementState } from './unsupported-element-state.ts';
 import { createEditorEvents } from './editor-events.ts';
 import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnostics.ts';
-import { surfaceFieldResultsScope } from './field-results-scope.ts';
+import { copyValidFieldDate } from '../layout/field-date.ts';
 import { createReviewDialogs } from './review-dialogs.ts';
 import { withCompareOutcome } from './compare-documents-state.ts';
 import * as replacing from './replace-document-command.ts';
@@ -144,7 +144,7 @@ import { proposalCapabilityRefusal } from './proposal-capability.ts';
 import { drawingPasteRefusal } from './drawing-paste-target.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
-import { configSurfaceOptions } from './docx-editor-surface-config.ts';
+import { configSurfaceOptions, editorFieldScope } from './docx-editor-surface-config.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   customNodeDiagnosticReporter,
@@ -575,12 +575,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     throw new TypeError('Invalid reviewDisplayMode');
   if (config.reviewDisplayMode && config.reviewDisplayMode !== 'proposed' && !reviewEnabled)
     throw new TypeError('reviewDisplayMode requires a review module');
-  // Refused, not approximated: a collaboration session shares one unit per field.
-  const fieldScope = surfaceFieldResultsScope({
-    fieldResults: config.fieldResults,
-    collaborationModel: modules.collaboration ?? undefined,
-    fieldDate: config.fieldDate,
-  });
+  const fieldScope = editorFieldScope(config, modules.collaboration ?? undefined);
   // Closures only: every dependency is read when a command runs, not at construction.
   const protection = createDocumentProtectionCommands({
     surface: () => surface,
@@ -2261,6 +2256,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     isReviewPaneOpen: () => reviewPaneOpen,
 
     getEditingMode: () => editingMode,
+    getFieldDate: () => copyValidFieldDate(fieldScope.layout.fieldDate),
     getReviewAuthors: () =>
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
     ...createReviewAuthorCommands(reviewAuthorVisibility, {

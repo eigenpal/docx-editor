@@ -119,10 +119,13 @@ export function initialChromePrintSettings(
  * `container` receives the hidden print frame. For an editor inside a modal dialog,
  * pass an element inside that dialog. `settings` carries the user's print settings, such
  * as the display mode and whether comments print. Omitted settings keep the current view.
+ * The PDF handler also receives the editor's `fieldDate`, so the print shows the dates the
+ * editor shows.
  * @public
  */
 export async function runChromePrint(
-  editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>,
+  editor: Pick<Editor, 'save'> &
+    Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors' | 'getFieldDate'>>,
   handlers: ChromeExportHandlers = {},
   container: Document | Element = globalThis.document,
   settings: ChromePrintSettings = {}

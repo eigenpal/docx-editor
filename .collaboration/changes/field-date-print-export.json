@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Print and PDF export from the editor show the saved results of DATE and TIME fields.",
+  "after": "Print and PDF export from the editor pass its fieldDate to the PDF handler, and exporters take a fieldDate option. The saved document keeps the saved results.",
+  "reason": "The date reaches only the export view and the export layout. Shared nodes, paragraph text, offsets, operations, and package serialization remain unchanged, and the saved bytes passed to the handler keep the saved results.",
+  "tests": [
+    "packages/core/src/editor/__tests__/field-date-editor.test.ts",
+    "packages/core/src/export/__tests__/export-session-field-date.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-field-date.test.ts"
+  ],
+  "changeset": "field-date-print-export",
+  "migration": null
+}

@@ -164,8 +164,9 @@ export interface DocxEditorRootProps {
   fieldResults?: FieldResultsMode;
   /**
    * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
-   * Display only: the document, printing, and PDF export keep the saved results. Absent (the
-   * default), fields show their saved results. Read once, when the editor is created: a later
+   * The saved document keeps the saved results. Print and PDF export from the File menu pass the
+   * date to the PDF handler as `ChromeExportView.fieldDate`. Absent (the default), fields show
+   * their saved results. Read once, when the editor is created: a later
    * change to a different time is ignored, with a development warning. A new `Date` with the same
    * time does nothing. Refused with a `TypeError` when it is not a valid `Date`, or with
    * `fieldResults: 'editable'`.

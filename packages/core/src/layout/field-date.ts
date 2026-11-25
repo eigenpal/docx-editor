@@ -344,3 +344,23 @@ export function withFieldDate<T>(date: Date | undefined, run: () => T): T {
     current = outer;
   }
 }
+
+/** The refusal for a `fieldDate` that is not a valid `Date`, in the editor and in export. */
+const INVALID_FIELD_DATE_REFUSAL = 'Invalid fieldDate: use a valid Date';
+
+/**
+ * A copy of `value` in this realm, or undefined without one. A `TypeError` refuses any value that
+ * is not a valid `Date`, also one from another window (no `instanceof`). The copy keeps a caller
+ * that mutates its own `Date` later from changing a layout that keys its caches on the date.
+ */
+export function copyValidFieldDate(value: unknown): Date | undefined {
+  if (value === undefined) return undefined;
+  let time = Number.NaN;
+  try {
+    time = Date.prototype.getTime.call(value);
+  } catch {
+    // Not a Date: refused below.
+  }
+  if (Number.isNaN(time)) throw new TypeError(INVALID_FIELD_DATE_REFUSAL);
+  return new Date(time);
+}

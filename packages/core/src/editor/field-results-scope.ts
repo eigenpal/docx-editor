@@ -15,6 +15,7 @@ import {
   withWholeFieldDeletion,
   type FieldResultsMode,
 } from '../store/package/field-result-mode.ts';
+import { copyValidFieldDate } from '../layout/field-date.ts';
 
 /** The entry-point wrappers of one editor's field-result mode. @internal */
 export interface FieldResultsScope {
@@ -178,13 +179,11 @@ export function surfaceFieldResultsScope(options: {
   if (mode === 'editable' && options.collaborationModel) {
     throw new TypeError(COLLABORATION_FIELD_RESULTS_REFUSAL);
   }
-  if (options.fieldDate !== undefined) {
-    if (!isValidFieldDate(options.fieldDate)) throw new TypeError(INVALID_FIELD_DATE_REFUSAL);
-    if (mode === 'editable') throw new TypeError(EDITABLE_FIELD_DATE_REFUSAL);
-  }
   // One copy per surface: layout compares the installed date by identity, and a host that
   // mutates its own `Date` later cannot desynchronize layout caches.
-  const layout = { fieldResults: mode, fieldDate: copyFieldDate(options.fieldDate) };
+  const fieldDate = copyValidFieldDate(options.fieldDate);
+  if (fieldDate && mode === 'editable') throw new TypeError(EDITABLE_FIELD_DATE_REFUSAL);
+  const layout = { fieldResults: mode, fieldDate };
   return { ...createFieldResultsScope(mode), layout };
 }
 
@@ -196,23 +195,5 @@ export interface SurfaceFieldResultsScope extends FieldResultsScope {
   };
 }
 
-const INVALID_FIELD_DATE_REFUSAL = 'Invalid fieldDate: use a valid Date';
 const EDITABLE_FIELD_DATE_REFUSAL =
   "fieldDate is not supported with fieldResults: 'editable'; saved results are editable text";
-
-/**
- * A copy of a validated `fieldDate`, in this realm, or undefined without one. The surface keeps
- * the copy, so a host that mutates its own `Date` later cannot desynchronize layout caches.
- */
-export function copyFieldDate(value: Date | undefined): Date | undefined {
-  return value === undefined ? undefined : new Date(Date.prototype.getTime.call(value));
-}
-
-/** A valid `Date`, also one from another window (no `instanceof`). */
-function isValidFieldDate(value: unknown): boolean {
-  try {
-    return !Number.isNaN(Date.prototype.getTime.call(value));
-  } catch {
-    return false;
-  }
-}
