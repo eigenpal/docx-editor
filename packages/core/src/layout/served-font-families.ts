@@ -12,6 +12,10 @@
 // `w:embedBoldItalic`, `CT_FontRel`, ECMA-376 Part 1, §17.8.3.6, §17.8.3.3, §17.8.3.5,
 // §17.8.3.4). An omitted embedding stores no face of that style, so a face that the family
 // lacks stands in through its own nearest face, which its own paint alias also holds.
+//
+// The name that a run uses (`w:rFonts`, `CT_Fonts`, ECMA-376 Part 1, §17.3.2.26) and the name
+// of the bytes can be two names of one font: a localized East Asian name and its English name.
+// Bytes under either name are the family's own faces, in both directions.
 
 import type { FontConfiguration, FontSourceSubstitution } from '../contracts/editor.ts';
 import { englishFamily } from '../store/package/default-font-faces.ts';
@@ -26,12 +30,13 @@ const fold = (family: string): string => family.trim().toLowerCase();
  * The faces of a family that stand in for a face it lacks, nearest first. This is CSS font
  * matching over the four static faces, which paint applies to the family's alias: the requested
  * style decides first, then the nearest weight, and the other style comes last. The PDF
- * converter's stand-in origin keeps the same order (`nearestFaceOrder` in docx-to-pdf).
+ * converter's stand-in origin uses this same list, so the editor and the PDF pick one face.
+ * @internal
  */
-function nearestFaceOrder(
+export function nearestFaceOrder(
   weight: number,
-  style: Face['style']
-): readonly (readonly [number, Face['style']])[] {
+  style: 'normal' | 'italic'
+): readonly (readonly [number, 'normal' | 'italic'])[] {
   const otherWeight = weight >= 600 ? 400 : 700;
   const otherStyle = style === 'italic' ? 'normal' : 'italic';
   return [
@@ -64,12 +69,18 @@ export interface ServedFontFamilies {
   nearestFace(family: string, request: Face): Supplied | undefined;
   /**
    * Whether the configuration supplies bytes for at least one face of `family` under its own
-   * name, or under its English name (`メイリオ` supplied as `Meiryo`). Such a family paints
+   * name, under its English name (`メイリオ` supplied as `Meiryo`), or under a localized name
+   * whose English name is `family` (`Meiryo` supplied as `メイリオ`). Such a family paints
    * through the alias of those bytes, so its other faces stand in through its own nearest face
    * (`ownNearestFace`), never through another family.
    */
   suppliesOwnFaces(family: string): boolean;
-  /** The nearest face of `family` among its own sources, in `nearestFaceOrder`. */
+  /**
+   * The nearest face of `family` among its own sources, in `nearestFaceOrder`. With sources
+   * under the family's exact name, a face that a host substitution supplies in the same style
+   * from another family is a candidate too: the family's paint alias holds that face
+   * (`embedded-font-faces.ts`), so CSS font matching picks it as well.
+   */
   ownNearestFace(family: string, request: Face): Supplied | undefined;
 }
 
@@ -78,6 +89,14 @@ export function servedFontFamilies(configuration: FontConfiguration): ServedFont
     configuration.sources.map((source) => [fontRequestKey(source.request), source.request])
   );
   const own = new Set(configuration.sources.map((source) => fold(source.request.family)));
+  // Each English name whose bytes come only under a localized name (`Meiryo` supplied as
+  // `メイリオ`), with that name as the sources spell it.
+  const ownLocalizedByEnglish = new Map<string, string>();
+  for (const { request } of configuration.sources) {
+    const english = fold(englishFamily(request.family));
+    if (english !== fold(request.family) && !ownLocalizedByEnglish.has(english))
+      ownLocalizedByEnglish.set(english, request.family.trim());
+  }
   // Each family that a substitution serves, with the face that serves each of its faces. Only a
   // substitution that reaches bytes counts: a resolver names its targets before it fetches
   // them, and a failed fetch must not make a family look served. Bytes under the document's
@@ -127,11 +146,13 @@ export function servedFontFamilies(configuration: FontConfiguration): ServedFont
     }
     return undefined;
   };
-  // The name that holds a family's own bytes: the family itself, else its English name.
+  // The name that holds a family's own bytes: the family itself, else its English name, else a
+  // localized name whose English name it is.
   const ownName = (family: string): string | undefined => {
     if (own.has(fold(family))) return family;
     const english = englishFamily(family);
-    return own.has(fold(english)) ? english : undefined;
+    if (own.has(fold(english))) return english;
+    return ownLocalizedByEnglish.get(fold(family));
   };
   return {
     servingName(family) {
@@ -150,8 +171,16 @@ export function servedFontFamilies(configuration: FontConfiguration): ServedFont
     suppliesOwnFaces: (family) => ownName(family) !== undefined,
     ownNearestFace(family, request) {
       const name = ownName(family);
-      const to = name === undefined ? undefined : nearestSource(name, request);
-      return to ? { to } : undefined;
+      if (name === undefined) return undefined;
+      const key = fold(family);
+      const hosted = fold(name) === key ? served.get(key)?.faces : undefined;
+      for (const [weight, style] of nearestFaceOrder(request.weight, request.style)) {
+        const to = sources.get(fontRequestKey({ family: name, weight, style }));
+        if (to) return { to };
+        const host = hosted?.get(fontRequestKey({ family: key, weight, style }));
+        if (host && host.to.style === style && fold(host.to.family) !== key) return host;
+      }
+      return undefined;
     },
   };
 }
