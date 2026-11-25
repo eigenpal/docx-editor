@@ -10,6 +10,7 @@
 //   clockwise for top-to-bottom lines, counterclockwise for bottom-to-top ones.
 
 import type { TextboxLegacyFrame } from '../store/package/drawing-shape-projection.ts';
+import { quarterTurned } from '../store/package/drawing-group-transform.ts';
 import { textAreaOf } from '../store/package/legacy-vml-textbox-geometry.ts';
 
 /** The content frame of a text box story, in drawing-extent points. */
@@ -67,8 +68,7 @@ export function fitTextboxFrame(
   return { frame: textboxContentFrame(extentWidth, height, sized, frame), extentHeight: height };
 }
 
-const turned = (degrees: number) =>
-  (degrees >= 45 && degrees < 135) || (degrees >= 225 && degrees < 315);
+const turned = quarterTurned;
 
 /**
  * The frame a story lays out in. `insets` hold the story insets, the outline's inner half and
@@ -99,16 +99,18 @@ export function textboxContentFrame(
   const flowTurn = frame.flow === 'vertical' ? 90 : frame.flow === 'verticalBottomToTop' ? 270 : 0;
   if (flowTurn) [width, height] = [height, width];
   let rotationDegrees = flowTurn;
-  if (frame.textTurnsWithShape && theta !== 0) {
+  // A vertical flip turns the text a half turn more than the shape turns.
+  const textTurn = (theta + (frame.textFlipped ? 180 : 0)) % 360;
+  if (frame.textTurnsWithShape && textTurn !== 0) {
     // The text area's centre turns about the box centre with the shape.
     const ex = extentWidth / 2,
       ey = extentHeight / 2;
-    const radians = (theta * Math.PI) / 180;
+    const radians = (textTurn * Math.PI) / 180;
     const dx = cx - ex,
       dy = cy - ey;
     cx = ex + dx * Math.cos(radians) - dy * Math.sin(radians);
     cy = ey + dx * Math.sin(radians) + dy * Math.cos(radians);
-    rotationDegrees = (flowTurn + theta) % 360;
+    rotationDegrees = (flowTurn + textTurn) % 360;
   }
   return Object.freeze({
     x: cx - width / 2,

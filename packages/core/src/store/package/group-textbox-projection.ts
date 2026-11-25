@@ -13,8 +13,11 @@ import {
   rootGroupSpace,
   turnGroupPoint,
   turnGroupTextAngle,
+  type GroupSpace,
 } from './drawing-group-members.ts';
+import { quarterTurned } from './drawing-group-transform.ts';
 import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
+import { shapeTextAreaEmu } from './drawing-textbox-frame.ts';
 import { shapeTransformElement } from './drawing-shape-transform.ts';
 import {
   readDrawingGroupFrame,
@@ -148,6 +151,116 @@ function turnedInsets(insets: Insets, flowTurn: 0 | 90 | 270): Insets {
   return { ...insets };
 }
 
+/**
+ * Insets that keep the centre of the text area and swap its width and height: the area of
+ * upright text in a shape that turns nearer a quarter turn. An inset can be negative, where
+ * the swapped area leaves the box.
+ */
+function swappedTextArea(insets: Insets, box: Readonly<{ cx: number; cy: number }>): Insets {
+  const width = box.cx - insets.left - insets.right;
+  const height = box.cy - insets.top - insets.bottom;
+  const shift = (width - height) / 2;
+  return {
+    top: insets.top - shift,
+    right: insets.right + shift,
+    bottom: insets.bottom - shift,
+    left: insets.left + shift,
+  };
+}
+
+/** The net flip of the groups around a member: two flips on one axis cancel. */
+function netGroupFlips(space: GroupSpace): { flipH: boolean; flipV: boolean } {
+  let flipH = false;
+  let flipV = false;
+  for (const { turn } of space.turns ?? []) {
+    if (turn.flipH) flipH = !flipH;
+    if (turn.flipV) flipV = !flipV;
+  }
+  return { flipH, flipV };
+}
+
+/** A member's story with the box it lays out in and the turn its text paints with. */
+export interface MemberStoryPlacement {
+  /** The size of the box the story lays out in: the member box, swapped for vertical text. */
+  readonly cx: number;
+  readonly cy: number;
+  /** The story, with insets that hold the shape's text rectangle, as edges of the laid-out box. */
+  readonly story: TextboxStoryProjection;
+  /** Clockwise turn of the painted story about the centre of the member box, in [0, 360). */
+  readonly rotationDegrees: number;
+}
+
+/**
+ * The story of a text box member of a group or a canvas, placed in its shape.
+ *
+ * The text lays out in the text rectangle of the member's geometry (`a:rect`, CT_GeomRect,
+ * ECMA-376 Part 1, 20.1.9.22) less the body insets (`wps:bodyPr`, CT_TextBodyProperties,
+ * 21.1.2.1.1), as the text of a top-level shape does. The rectangle is evaluated at
+ * `geometry.extent`, the extent the member's outline is projected at, and scaled with it, so
+ * it stays on the painted geometry. The story's insets carry it, which keeps one text layout
+ * and both painters.
+ *
+ * `box` is the member box at its painted size. `shapeTurnDegrees` is the turn the text takes
+ * from the shape and the groups around it, and `groupFlips` the net flip of those groups.
+ * Upright text (`@upright`) ignores that turn; where the turn is nearer a quarter turn, its
+ * text area keeps its centre and swaps its sides.
+ * Vertical text (`@vert`) lays out across the box and adds its quarter turn.
+ */
+export function projectMemberStory(
+  member: OoxmlElement,
+  box: Readonly<{ cx: number; cy: number }>,
+  geometry: Readonly<{
+    extent: Readonly<{ cx: number; cy: number }>;
+    scaleX: number;
+    scaleY: number;
+  }>,
+  shapeTurnDegrees: number,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupFlips?: Readonly<{ flipH: boolean; flipV: boolean }>
+): MemberStoryPlacement | null {
+  // Vertical text lays out across the box, with the sides swapped about its centre, and
+  // turns a quarter: clockwise for top-to-bottom lines, counterclockwise for bottom-to-top.
+  const flowTurn = verticalFlowTurn(member);
+  const [cx, cy] = flowTurn === 0 ? [box.cx, box.cy] : [box.cy, box.cx];
+  const story = projectWspTextboxStory(
+    member,
+    { cx, cy },
+    resolveSchemeColor,
+    resolveStyleMatrixReference
+  );
+  if (!story) return null;
+  const spPr = findDirectChild(member.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'spPr',
+  });
+  const area = spPr ? shapeTextAreaEmu(spPr, geometry.extent, groupFlips) : null;
+  const scaleX = Math.abs(geometry.scaleX);
+  const scaleY = Math.abs(geometry.scaleY);
+  let insets: Insets = area
+    ? {
+        top: story.insetsEmu.top + Math.round(area.top * scaleY),
+        right: story.insetsEmu.right + Math.round(area.right * scaleX),
+        bottom: story.insetsEmu.bottom + Math.round(area.bottom * scaleY),
+        left: story.insetsEmu.left + Math.round(area.left * scaleX),
+      }
+    : story.insetsEmu;
+  const upright = textStaysUpright(member);
+  if (upright && quarterTurned(shapeTurnDegrees)) insets = swappedTextArea(insets, box);
+  return {
+    cx,
+    cy,
+    story: Object.freeze({
+      ...story,
+      insetsEmu: Object.freeze(turnedInsets(insets, flowTurn)),
+    }),
+    // Group flips and turns carry the shape's turn; the vertical flow turns after them, so
+    // top-to-bottom text stays top-to-bottom in a flipped group. Upright text keeps only
+    // its flow turn.
+    rotationDegrees: upright ? flowTurn : (((shapeTurnDegrees + flowTurn) % 360) + 360) % 360,
+  };
+}
+
 /** The `w:txbxContent` root of a `wps:wsp`, or null when it holds no story. */
 function storyRootOf(wsp: OoxmlElement): OoxmlElement | null {
   const txbx = findDirectChild(wsp.children, {
@@ -230,17 +343,17 @@ export function projectGroupTextboxes(
     );
     const boxCx = Math.round(place.extent.cx * place.scaleX);
     const boxCy = Math.round(place.extent.cy * place.scaleY);
-    // Vertical text lays out across the box, with the sides swapped about its centre, and
-    // turns a quarter: clockwise for top-to-bottom lines, counterclockwise for bottom-to-top.
-    const flowTurn = verticalFlowTurn(child);
-    const [cx, cy] = flowTurn === 0 ? [boxCx, boxCy] : [boxCy, boxCx];
-    const story = projectWspTextboxStory(
+    const placed = projectMemberStory(
       child,
-      { cx, cy },
+      { cx: boxCx, cy: boxCy },
+      place,
+      turnGroupTextAngle(space, rotationDegrees),
       resolveSchemeColor,
-      resolveStyleMatrixReference
+      resolveStyleMatrixReference,
+      netGroupFlips(space)
     );
-    if (!story) continue;
+    if (!placed) continue;
+    const { cx, cy, story } = placed;
     // The box keeps its size under a turn; its centre moves where the turns take it.
     const centre = turnGroupPoint(space, {
       x: place.offset.x + boxCx / 2,
@@ -255,16 +368,8 @@ export function projectGroupTextboxes(
           cx,
           cy,
         }),
-        story: Object.freeze({
-          ...story,
-          insetsEmu: Object.freeze(turnedInsets(story.insetsEmu, flowTurn)),
-        }),
-        // Group flips and turns carry the shape's turn; the vertical flow turns after them, so
-        // top-to-bottom text stays top-to-bottom in a flipped group. Upright text keeps only
-        // its flow turn.
-        rotationDegrees: textStaysUpright(child)
-          ? flowTurn
-          : (turnGroupTextAngle(space, rotationDegrees) + flowTurn) % 360,
+        story,
+        rotationDegrees: placed.rotationDegrees,
       })
     );
   }

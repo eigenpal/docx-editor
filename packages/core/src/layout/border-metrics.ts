@@ -213,3 +213,23 @@ const LINE_BORDER_VALS = new Set([
 export function isLineBorderVal(val: string): boolean {
   return LINE_BORDER_VALS.has(val);
 }
+
+/** Whether two character border edges draw the same border, so their runs share one outline. */
+export function sameBorderEdge(
+  a: {
+    readonly val: string;
+    readonly color: string | null;
+    readonly widthPt: number;
+    readonly spacePt: number;
+    readonly shadow?: true;
+  },
+  b: typeof a
+): boolean {
+  return (
+    a.val === b.val &&
+    a.color === b.color &&
+    a.widthPt === b.widthPt &&
+    a.spacePt === b.spacePt &&
+    a.shadow === b.shadow
+  );
+}

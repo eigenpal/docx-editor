@@ -1,4 +1,4 @@
-import { inlinePictureExtent } from './inline-picture-extent.ts';
+import { inlineEffectInsetsPt, inlinePictureExtent } from './inline-picture-extent.ts';
 import type { DrawingChartSummary } from '../store/package/chart-summary.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // Drawing extents convert from EMUs to points here; intrinsic image dimensions do not resize layout.
@@ -105,8 +105,10 @@ export interface InlineDrawingMeasure {
   readonly height: number;
   /** Horizontal advance on the line: distL + effectL + width + effectR + distR. */
   readonly totalWidth: number;
-  /** Vertical contribution: distT + effectT + height + effectB + distB. */
+  /** Vertical contribution: distT + effectT + height + effectB + distB, with the turned box. */
   readonly lineContribution: number;
+  /** How far the box of a quarter-turned shape reaches above and below its extent; else 0. */
+  readonly turnedInset: number;
 }
 
 export function measureInlineDrawing(projection: DrawingProjection): InlineDrawingMeasure {
@@ -117,10 +119,8 @@ export function measureInlineDrawing(projection: DrawingProjection): InlineDrawi
   const distR = 0;
   const distT = 0;
   const distB = 0;
-  const effectL = emuToPoints(projection.effectExtentEmu.left);
-  const effectR = emuToPoints(projection.effectExtentEmu.right);
-  const effectT = emuToPoints(projection.effectExtentEmu.top);
-  const effectB = emuToPoints(projection.effectExtentEmu.bottom);
+  const effect = inlineEffectInsetsPt(projection);
+  const { left: effectL, right: effectR, top: effectT, bottom: effectB } = effect;
   const extent = inlinePictureExtent(projection);
   const width = emuToPoints(extent.cx),
     height = emuToPoints(extent.cy);
@@ -136,7 +136,8 @@ export function measureInlineDrawing(projection: DrawingProjection): InlineDrawi
     width,
     height,
     totalWidth: distL + effectL + width + effectR + distR,
-    lineContribution: distT + effectT + height + effectB + distB,
+    lineContribution: distT + effectT + height + 2 * effect.turned + effectB + distB,
+    turnedInset: effect.turned,
   });
 }
 
@@ -162,11 +163,11 @@ export function inlineDrawingVerticalLayout(
   measure: InlineDrawingMeasure,
   runPositionPt = 0
 ): InlineDrawingVerticalLayout {
-  const extentTopY = Math.max(
-    measure.distT + measure.effectT,
-    textBaseline - measure.height - runPositionPt
-  );
-  const drawingBottom = extentTopY + measure.height + measure.effectB;
+  // A quarter-turned shape sits on the line as its turned box, with its extent centred in it.
+  const height = measure.height + 2 * measure.turnedInset;
+  const boxTopY = Math.max(measure.distT + measure.effectT, textBaseline - height - runPositionPt);
+  const extentTopY = boxTopY + measure.turnedInset;
+  const drawingBottom = boxTopY + height + measure.effectB;
   const baseline = Math.max(textBaseline, drawingBottom + runPositionPt);
   // A drawing raised by its run's `w:position` can move the baseline.
   // Its line still holds the text descent.
@@ -209,27 +210,6 @@ export function shiftInlineDrawingRecord(
       y: drawing.hitBounds.y + dy,
     }),
     geometry: shiftGeometry(drawing.geometry, dx, dy),
-  });
-}
-
-export function repositionInlineDrawingsForBaseline(
-  drawings: readonly InlineDrawingRecord[],
-  baseline: number
-): readonly InlineDrawingRecord[] {
-  if (drawings.length === 0) return drawings;
-  return drawings.map((drawing) => {
-    const effectB = drawing.geometry.effectInsets.bottom;
-    const extentTopY = baseline - drawing.height - effectB - (drawing.runPositionPt ?? 0);
-    const dy = extentTopY - drawing.y;
-    if (Math.abs(dy) < 0.000_1 && drawing.baselineOffset === baseline) return drawing;
-    return Object.freeze({
-      ...drawing,
-      y: extentTopY,
-      baselineOffset: baseline,
-      geometry: shiftGeometry(drawing.geometry, 0, dy),
-      paintBounds: Object.freeze({ ...drawing.paintBounds, y: drawing.paintBounds.y + dy }),
-      hitBounds: Object.freeze({ ...drawing.hitBounds, y: drawing.hitBounds.y + dy }),
-    });
   });
 }
 

@@ -272,6 +272,11 @@ export interface TextboxLegacyFrame {
    * them bottom to top, stacked left to right.
    */
   readonly flow: 'horizontal' | 'vertical' | 'verticalBottomToTop';
+  /**
+   * The shape is flipped vertically (`a:xfrm/@flipV`): its text turns a further half turn
+   * about the box centre. The shape's outline is already flipped and does not turn.
+   */
+  readonly textFlipped?: true;
   /** The shape paints and its text does not, as a text area some shapes write hides it. */
   readonly textHidden?: true;
   /** How the text area follows the box size, for a box that fits its text. */
