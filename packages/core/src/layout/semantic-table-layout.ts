@@ -1598,7 +1598,6 @@ export function layoutRowFragmentBounded(
   // A row that only they hold has had nothing raise it (`unsizedRowFloorPt`, 17.4.84).
   if (rowBottom <= rowTop + 0.001) {
     const floorPt = unsizedRowFloorPt({
-      cells: row.cells,
       flowed,
       detached: (cell) => detachedSpans?.has(cell.id) === true,
       waits,

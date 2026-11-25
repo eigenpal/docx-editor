@@ -148,6 +148,26 @@ export function cellReservedMarkHeights(
   };
 }
 
+const defaultsStyles = new WeakMap<
+  readonly unknown[],
+  {
+    readonly theme: StyleCascadeTable['themeFonts'] | undefined;
+    readonly style: ReturnType<typeof resolveRunStyle>;
+  }
+>();
+
+/** The document's default run properties, resolved once per style table and theme. */
+function defaultsRunStyle(deps: TableFlowDeps): ReturnType<typeof resolveRunStyle> {
+  const defaults = deps.styleCascade?.docDefaultsRun ?? [];
+  if (defaults.length === 0) return DEFAULT_RUN_STYLE;
+  const theme = deps.styleCascade?.themeFonts;
+  const known = defaultsStyles.get(defaults);
+  if (known && known.theme === theme) return known.style;
+  const style = resolveRunStyle(defaults, theme);
+  defaultsStyles.set(defaults, { theme, style });
+  return style;
+}
+
 /**
  * The height a row asks of its FIRST cell when no ordinary cell sizes it
  * (`unsizedRowFloorPt`). The merged text belongs to the span, so it does not count.
@@ -159,7 +179,8 @@ export function cellReservedMarkHeights(
  * line. A continuation gives its whole box, as {@link cellContinuationHeight} does. A head
  * whose first line is 12pt over an 8pt end paragraph gave the 8pt line. A first cell with
  * `w:hideMark` (17.4.21) gave the line of the document's default run properties, whatever the
- * other cells held. A hidden or unmeasurable mark takes that line too (not measured).
+ * other cells held. A hidden or unmeasurable mark takes that line too (not measured), and a
+ * default face that does not resolve takes the fallback line.
  */
 export function mergedRowFirstCellHeight(
   cell: SemanticTableCell,
@@ -168,13 +189,11 @@ export function mergedRowFirstCellHeight(
 ): number {
   const box = endMarkBox(cell, widthPt, deps);
   if (box === null) {
-    const defaults = deps.styleCascade?.docDefaultsRun ?? [];
-    const style =
-      defaults.length > 0
-        ? resolveRunStyle(defaults, deps.styleCascade?.themeFonts)
-        : DEFAULT_RUN_STYLE;
-    if (style.hidden || deps.measurer.hasResolvedFont?.(style) === false) return 0;
-    return deps.measurer.lineMetrics(style).height;
+    const style = defaultsRunStyle(deps);
+    if (style.hidden) return 0;
+    // A face that did not resolve cannot be measured: take the fallback line instead.
+    const measured = deps.measurer.hasResolvedFont?.(style) === false ? DEFAULT_RUN_STYLE : style;
+    return deps.measurer.lineMetrics(measured).height;
   }
   const before = cell.vMergeContinue ? Math.max(0, box.spacing.before) : 0;
   return before + box.linePt + Math.max(0, box.spacing.after);

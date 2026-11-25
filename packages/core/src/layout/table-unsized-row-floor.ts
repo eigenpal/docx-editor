@@ -12,7 +12,6 @@ import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-
 
 /** What {@link unsizedRowFloorPt} needs of a row whose cells have laid out. */
 export interface UnsizedRowInput {
-  readonly cells: readonly SemanticTableCell[];
   readonly flowed: readonly {
     readonly cell: SemanticTableCell;
     readonly width: number;
@@ -53,7 +52,7 @@ export function unsizedRowFloorPt(input: UnsizedRowInput): number {
   let head = false;
   let waiting = false;
   let other = false;
-  for (const cell of input.cells) {
+  for (const { cell } of flowed) {
     if (cell.vMergeContinue) continue;
     if (input.detached(cell)) head = true;
     else if (input.waits(cell)) waiting = true;

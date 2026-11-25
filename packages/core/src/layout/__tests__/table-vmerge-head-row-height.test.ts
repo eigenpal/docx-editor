@@ -90,13 +90,13 @@ const shapes = {
   ),
 };
 
-function rowHeights(table: string): readonly number[] {
+function rowHeights(table: string, rowMeasurer = measurer): readonly number[] {
   const source = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body>${table}${p('After')}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!source.ok) throw new Error(source.reason);
-  const layout = layoutSemanticDocument(source.part, 0, { measurer });
+  const layout = layoutSemanticDocument(source.part, 0, { measurer: rowMeasurer });
   const fragment = layout.pages[0]!.fragments.find(
     (f): f is TableFragmentRecord => f.kind === 'table'
   )!;
@@ -319,4 +319,11 @@ test('a row of btLr cells with hidden marks keeps the default line', () => {
     tr('', [vertical]) +
     '</w:tbl>';
   expect(rowHeights(table)[0]).toBeCloseTo((14 * 10) / 11, 6);
+});
+
+// No face resolves, so no end mark can be measured: the row keeps the fallback line (10pt).
+test('a row of merge heads whose faces do not resolve keeps the fallback line', () => {
+  const heads = [tc(7767, twoLines, 'restart'), tc(2993, p('Code'), 'restart')];
+  const unresolved = { ...measurer, hasResolvedFont: () => false };
+  expect(rowHeights(band(heads, low), unresolved)[1]).toBeCloseTo((14 * 10) / 11, 6);
 });
