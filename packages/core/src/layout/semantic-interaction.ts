@@ -735,8 +735,18 @@ export function moveCaret(
     return target ? { position: target, desiredX: null } : null;
   }
   if (!options.stops && (command === 'up' || command === 'down')) {
-    const paragraphIndex = documentOrderIndex(layout).get(position.paragraphId);
+    const orderIndex = documentOrderIndex(layout);
+    let paragraphIndex = orderIndex.get(position.paragraphId);
     if (paragraphIndex === undefined) return null;
+    // A merged line holds several paragraphs. Its stops are the line's, and the neighbour
+    // search starts past every member, so Up or Down never lands on the same line.
+    const group = mergedCaretGroup(layout, position.paragraphId);
+    if (group) {
+      const members = group.members
+        .map((id) => orderIndex.get(id))
+        .filter((value): value is number => value !== undefined);
+      paragraphIndex = command === 'up' ? Math.min(...members) : Math.max(...members);
+    }
     const deps = lineEdgeDeps(layout, options.measurer);
     const start = verticalStartOnAffineLine(position, options.lineId, deps);
     const moved = moveVerticalCaret(
@@ -745,7 +755,7 @@ export function moveCaret(
       desiredX ?? start?.x ?? null,
       documentOrder(layout),
       paragraphIndex,
-      (paragraphId) => paragraphCaretStops(layout, paragraphId, options.measurer)
+      (paragraphId) => navigationCaretStops(layout, paragraphId, options.measurer)
     );
     const end = moved && verticalLineEndTarget(layout, moved.position, moved.desiredX, deps);
     return end ? { ...end, desiredX: moved!.desiredX } : moved;
