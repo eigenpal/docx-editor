@@ -23,6 +23,7 @@ import {
   FontResolutionError,
   type FontResourceSnapshot,
 } from '../layout/font-resource.ts';
+import { isOwnFamilyHostFace } from '../layout/served-font-families.ts';
 import { sfntFaceIsBold } from '../layout/synthetic-bold.ts';
 import { materializeCollectionFace } from './font-collection-face.ts';
 
@@ -290,8 +291,8 @@ export async function registerEmbeddedFontFaces(
  * that face as a synthesized style of an own face instead. Such a family therefore paints
  * through an alias of its own: its own faces, plus each substituted face under the weight and
  * style of the document face that it answers. A face that stands in through another style
- * stays out. Measurement takes its stand-ins from the same faces (`ownNearestFace` in
- * `served-font-families.ts`), so CSS font matching picks the same nearest face.
+ * stays out. Measurement takes its stand-ins from the same faces by the same rule
+ * (`isOwnFamilyHostFace`), so CSS font matching picks the same nearest face.
  *
  * The family's first alias stays as it was: another family that borrows it measures through
  * the family's own faces only.
@@ -315,8 +316,8 @@ async function registerHostFacesOfOwnFamilies(
   const hostFaces = new Map<string, { as: FontSourceSubstitution['from']; source: FontSource }[]>();
   for (const { from, to } of substitutions) {
     const family = familyKey(from.family);
-    if (!aliases.has(family) || !byFamily.has(family) || familyKey(to.family) === family) continue;
-    const source = from.style === to.style ? sourceOf.get(faceKey(to)) : undefined;
+    if (!aliases.has(family) || !byFamily.has(family) || !isOwnFamilyHostFace(from, to)) continue;
+    const source = sourceOf.get(faceKey(to));
     if (!source) continue;
     const list = hostFaces.get(family);
     if (list) list.push({ as: from, source });

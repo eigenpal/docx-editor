@@ -47,6 +47,17 @@ export function nearestFaceOrder(
   ];
 }
 
+/**
+ * Whether a host substitution from `from` to `to` gives a family with its own faces one more
+ * face: the same style from another family. Paint registers such a face in the family's alias
+ * (`registerHostFacesOfOwnFamilies` in `embedded-font-faces.ts`), and measurement takes it as a
+ * stand-in candidate (`ownNearestFace`); both apply this one rule so CSS font matching and
+ * measurement pick the same face. Both also require sources under the family's exact name.
+ */
+export function isOwnFamilyHostFace(from: Face, to: Face): boolean {
+  return from.style === to.style && fold(from.family) !== fold(to.family);
+}
+
 /** The faces of a family in the order that decides which family serves it. */
 const SERVING_ORDER = [
   [400, 'normal'],
@@ -177,8 +188,11 @@ export function servedFontFamilies(configuration: FontConfiguration): ServedFont
       for (const [weight, style] of nearestFaceOrder(request.weight, request.style)) {
         const to = sources.get(fontRequestKey({ family: name, weight, style }));
         if (to) return { to };
-        const host = hosted?.get(fontRequestKey({ family: key, weight, style }));
-        if (host && host.to.style === style && fold(host.to.family) !== key) return host;
+        // Paint holds this face only when the browser loads the whole composite alias; when it
+        // does not, paint falls back to the own alias (best effort) while this stays the answer.
+        const from = { family, weight, style };
+        const host = hosted?.get(fontRequestKey({ ...from, family: key }));
+        if (host && isOwnFamilyHostFace(from, host.to)) return host;
       }
       return undefined;
     },
