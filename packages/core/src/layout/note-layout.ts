@@ -34,7 +34,6 @@ import { paragraphBorders } from './paragraph-style.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { withResolvedListItems } from './list-resolve.ts';
 import { noteSeparatorRuleBox } from './note-separator-rule.ts';
-import { separatorStatesSpaceAfter } from './note-separator-spacing.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { noteStoryBlocks } from './story-roots.ts';
@@ -568,7 +567,11 @@ export function layoutNoteSeparator(
         options.displayMode,
         options.revisionAuthorFilter
       );
-      let flowHeight = laid.flowHeight;
+      // The separator mark sits in an ordinary paragraph (ECMA-376 Part 1, §17.11.23
+      // separator), so its flow height keeps the space after from the paragraph cascade
+      // (§17.7.2), including the application default for an omitted `w:pPrDefault`
+      // (§17.7.5.3). Word renders the first note below that space.
+      const flowHeight = laid.flowHeight;
       let ruleBox: LayoutBox | undefined;
       let ruleColor: string | null | undefined;
       let singleRule = false;
@@ -580,25 +583,6 @@ export function layoutNoteSeparator(
           )
         );
         singleRule = markers.length === 1;
-        const last = paragraphs.at(-1);
-        const authoredBlocks = noteStoryBlocks(
-          authored,
-          options.displayMode,
-          options.revisionAuthorFilter
-        );
-        const lastBlock = authoredBlocks.at(-1);
-        const properties =
-          lastBlock?.kind === 'paragraph'
-            ? lastBlock.children.find((child) => child.kind === 'paragraphProperties')
-            : undefined;
-        // The separator keeps every space after the document sets, from its own `w:pPr`,
-        // its style chain or `w:docDefaults`; only the application default for an omitted
-        // `w:pPrDefault` stays off. See `separatorStatesSpaceAfter`.
-        const keepsSpaceAfter = separatorStatesSpaceAfter(
-          properties?.kind === 'paragraphProperties' ? properties.children : [],
-          options.styleCascade
-        );
-        if (!keepsSpaceAfter) flowHeight -= last?.spacing.after ?? 0;
         const marker = markers[0];
         if (marker) {
           ruleColor = marker.span.style.color;

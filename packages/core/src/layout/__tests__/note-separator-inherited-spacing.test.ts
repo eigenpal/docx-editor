@@ -4,10 +4,10 @@ import { layoutNoteSeparator } from '../note-layout.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 
-// A plain footnote separator paragraph takes its space after from the whole paragraph cascade,
-// like any paragraph. Word reference renders show the first note 12 pt further below the rule
-// when the Normal style sets 12 pt after. Only the application default for an omitted
-// `w:pPrDefault` stays off the separator.
+// A footnote separator paragraph takes its space after from the whole paragraph cascade, like
+// any paragraph (ECMA-376 Part 1, §17.7.2). Word renders the first note 12 pt further below the
+// rule when the Normal style sets 12 pt after, and 8 pt further when the document omits
+// `w:pPrDefault` (§17.7.5.3).
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer: TextMeasurer = {
@@ -99,12 +99,9 @@ describe('footnote separator space after', () => {
     expect(separatorHeight(styles, '<w:pPr><w:spacing w:after="0"/></w:pPr>')).toBe(LINE);
   });
 
-  test('drops only the application default of an omitted w:pPrDefault', () => {
-    // An omitted pPrDefault supplies 8 pt after and 278/240 auto line spacing (ECMA-376 Part 1, §17.7.5.3).
-    // The separator keeps the line spacing but not that trailing space.
-    const omitted = separatorHeight(cascade({ defaults: null }));
-    const authoredEmpty = separatorHeight(cascade({}));
-    expect(authoredEmpty).toBe(LINE);
-    expect(omitted).toBeCloseTo((LINE * 278) / 240, 6);
+  test('keeps the application default of an omitted w:pPrDefault', () => {
+    // An omitted pPrDefault supplies 8 pt after and 278/240 auto line spacing (§17.7.5.3).
+    expect(separatorHeight(cascade({}))).toBe(LINE);
+    expect(separatorHeight(cascade({ defaults: null }))).toBeCloseTo((LINE * 278) / 240 + 8, 6);
   });
 });
