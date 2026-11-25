@@ -160,6 +160,25 @@ describe('paragraphs that keep their line', () => {
   });
 });
 
+// A content control can wrap a paragraph inside the field codes. Its mark is still field code,
+// so a table cell and the top level of a story count and lay it out the same way.
+describe('a content control around a field-code paragraph', () => {
+  const sdt = (content: string) =>
+    `<w:sdt><w:sdtPr/><w:sdtContent>${content}</w:sdtContent></w:sdt>`;
+  const body = `${item(text('first'))}${ifField([sdt(item(instr('Item')))], 'Result')}${item(text('last'))}`;
+
+  test('counts a wrapped list item the same in a table cell and at the top level', () => {
+    const top = laidOut(body);
+    const cell = laidOut(`<w:tbl><w:tr><w:tc>${body}</w:tc></w:tr></w:tbl><w:p/>`);
+    const lines = ['first', 'before', 'Result after', 'last'];
+    expect(top.lines.map((line) => line.trim())).toEqual(lines);
+    expect(cell.lines.map((line) => line.trim())).toEqual([...lines, '']);
+    expect(top.markers).toEqual(['1.', '2.']);
+    const cellMarkers = [...JSON.stringify(cell.layout).matchAll(/"marker":\{"text":"([^"]*)"/g)];
+    expect(cellMarkers.map((match) => match[1])).toEqual(['1.', '2.']);
+  });
+});
+
 // A field nested past the field machine's cap is left out on its own. The fields around it and
 // every other field in the story still hide their field-code paragraphs.
 describe('a field nested past the nesting cap', () => {

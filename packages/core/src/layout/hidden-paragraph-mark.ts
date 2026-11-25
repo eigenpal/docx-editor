@@ -184,17 +184,18 @@ export function withoutHiddenMarkParagraphs(
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     const { block } = entry;
-    if (
-      block.kind === 'paragraph' &&
+    // A field-code paragraph leaves the flow whatever follows it, also at the end of a content
+    // control: the field's last paragraph always comes after it. A hidden mark joins the next
+    // block, so it needs one in its own container.
+    const leaves =
       next !== undefined &&
-      next.parentKey === entry.parentKey &&
-      (next.block.kind === 'paragraph' ||
-        (next.block.kind === 'table' && !directSpaceBefore(block))) &&
-      !carriesSectionBreak(block) &&
       (insideInstructions.has(index) ||
-        (paragraphMarkHidden(block) &&
-          paragraphRendersNothingVisible(block, displayMode, authorFilter)))
-    ) {
+        (next.parentKey === entry.parentKey &&
+          (next.block.kind === 'paragraph' ||
+            (next.block.kind === 'table' && !directSpaceBefore(block))) &&
+          paragraphMarkHidden(block) &&
+          paragraphRendersNothingVisible(block, displayMode, authorFilter)));
+    if (block.kind === 'paragraph' && leaves && !carriesSectionBreak(block)) {
       (removed ??= new Set()).add(index);
       continue;
     }

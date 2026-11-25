@@ -1520,7 +1520,7 @@ A body `LISTNUM` field SHALL display the next number of its list, computed from 
 
 ### Requirement: Paragraphs inside a field instruction take no line
 
-A paragraph that starts and ends inside the field codes of one closed complex field SHALL take no line box, spacing, or list marker. The field codes run from `begin` to `separate`, or to `end` without a `separate` (ECMA-376 §17.16.18). The paragraph SHALL stay in the tree and SHALL NOT advance list counters. A join SHALL NOT absorb it.
+A paragraph that starts and ends inside the field codes of one closed complex field SHALL take no line box, spacing, or list marker. The field codes run from `begin` to `separate`, or to `end` without one (ECMA-376 §17.16.18, `CT_FldChar`; §17.18.29, `ST_FldCharType`). The paragraph SHALL stay in the tree. It SHALL NOT advance list counters, in a table cell or a content control too. A join SHALL NOT absorb it.
 
 #### Scenario: An IF field's text spans paragraphs
 
@@ -1529,6 +1529,12 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 - **THEN** the lines are the text before the field, then the saved result with the text after the field
 - **AND** a nested field's saved result inside those paragraphs adds no line
 - **AND** Backspace before the result and Delete before the field keep the paragraphs of the field codes
+
+#### Scenario: A content control wraps a field-code paragraph
+
+- **GIVEN** a list paragraph inside the field codes, wrapped in a block content control, at the top level of a story or in a table cell
+- **WHEN** the story lays out
+- **THEN** the paragraph takes no line and the list after the field continues as if it were absent, in both places
 
 #### Scenario: A field nested past the nesting cap
 
