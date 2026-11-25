@@ -1,7 +1,8 @@
-// An `=` formula whose only operand is a page field (`{ = { PAGE } }`) shows the page's value.
-// Templates build "Page X of Y" this way. The formula has a value on each page, so the result
-// saved in the file is only the value of one page. ECMA-376 Part 1, 17.16.1 (the `=` field)
-// and 17.16.3 (a field that results in a single value as a formula operand).
+// An `=` formula over page fields (`{ = { PAGE } }`, `{ = { PAGE } + 1 }`) shows the page's
+// value. Templates build "Page X of Y" this way. The formula has a value on each page, so the
+// result saved in the file is only the value of one page. ECMA-376 Part 1, 17.16.1 (the `=`
+// field) and 17.16.3 (formulas and expressions, with fields that result in a single value as
+// operands).
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import {
@@ -248,8 +249,9 @@ describe('a formula that wraps one page field', () => {
 
 describe('formulas that stay inert', () => {
   const inert: readonly [string, string][] = [
-    ['arithmetic', formula([pageOperand()], '6', ' = ', ' + 1 ')],
-    ['two operands', formula([pageOperand(), pageOperand('NUMPAGES')], '10', ' = ', ' ')],
+    ['two operands without an operator', formula([pageOperand(), pageOperand('NUMPAGES')], '10')],
+    ['a division by zero', formula([pageOperand()], '!Zero Divide', ' = ', ' / 0 ')],
+    ['a function', formula([pageOperand()], '1', ' = ABS( ', ' ) ')],
     ['an operand with a number format', formula([pageOperand('PAGE \\* roman')], 'v')],
     ['an operand with a picture', formula([pageOperand('PAGE \\# "00"')], '5')],
     ['a field that is not a page field', formula([complexField('SEQ Figure', '5')], '5')],
@@ -326,9 +328,20 @@ describe('a formula in the result of another complex field', () => {
     expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual(['[5]', '[5]', '[5]']);
   });
 
-  test('keeps the saved result for arithmetic', () => {
-    const arithmetic = `<w:p>${outer(formula([pageOperand()], '6', ' = ', ' + 1 '))}</w:p>`;
-    expect(footerTexts(arithmetic)).toEqual(['6', '6', '6']);
+  test('evaluates arithmetic', () => {
+    const arithmetic = `<w:p>${outer(formula([pageOperand()], '6', ' = ', ' + 10 '))}</w:p>`;
+    expect(footerTexts(arithmetic)).toEqual(['11', '12', '13']);
+  });
+
+  test('keeps the saved result on a page where the formula has no value', () => {
+    const operands = [pageOperand(), pageOperand('NUMPAGES'), pageOperand()];
+    const field = BEGIN + instr(' = 6 / ( ') + operands[1] + instr(' - ') + operands[2];
+    const divided = field + instr(' ) ') + SEPARATE + text('9') + END;
+    expect(footerTexts(`<w:p>${outer(text('[') + divided + text(']'))}</w:p>`)).toEqual([
+      '[3]',
+      '[6]',
+      '[9]',
+    ]);
   });
 });
 
@@ -406,5 +419,72 @@ describe('a formula in a complex field inside a simple field result', () => {
 
   test('keeps the saved result over a PAGE operand in a roman section', () => {
     expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual(['5', '5', '5']);
+  });
+});
+
+describe('a formula with arithmetic', () => {
+  test('shows each page its own value in a footer', () => {
+    const footer =
+      '<w:p>' +
+      formula([pageOperand()], '9', ' = ', ' + 1 ') +
+      text('|') +
+      formula([pageOperand('NUMPAGES'), pageOperand()], '9', ' = ', ' ').replace(
+        `${END}${BEGIN}`,
+        `${END}${instr(' - ')}${BEGIN}`
+      ) +
+      text('|') +
+      formula([pageOperand()], '9', ' = ( ', ' + 1 ) * 2 \\# "00" ') +
+      text('|') +
+      formula([pageOperand()], '9', ' = ', ' / 2 ') +
+      '</w:p>';
+    expect(footerTexts(footer)).toEqual(['2|2|04|0.5', '3|1|06|1', '4|0|08|1.5']);
+    expect(detectStoryPageFields(footerPart(footer).root)).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
+  });
+
+  test('keeps the saved result on a page where it has no value', () => {
+    const field =
+      BEGIN +
+      instr(' = 6 / ( ') +
+      pageOperand('NUMPAGES') +
+      instr(' - ') +
+      pageOperand() +
+      instr(' ) ') +
+      SEPARATE +
+      text('saved') +
+      END;
+    expect(footerTexts(`<w:p>${field}</w:p>`)).toEqual(['3', '6', 'saved']);
+  });
+
+  test('keeps the saved result over a PAGE operand in a roman section', () => {
+    const footer =
+      '<w:p>' +
+      formula([pageOperand()], '9', ' = ', ' + 1 ') +
+      text('|') +
+      formula([pageOperand('PAGE \\* Arabic')], '9', ' = ', ' + 1 ') +
+      '</w:p>';
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual(['9|2', '9|3', '9|4']);
+  });
+
+  test('shows the page value in the body', () => {
+    const filler = Array.from({ length: 60 }, () => `<w:p>${text('Line')}</w:p>`).join('');
+    const field = `<w:p>${text('[')}${formula([pageOperand()], '7', ' = ', ' * 10 ')}${text(']')}</w:p>`;
+    const layout = layoutOf(packageOf(filler + field, ''));
+    expect(layout.pages.length).toBe(2);
+    expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[20]');
+  });
+
+  test('keeps the saved result in the body on a page where it has no value', () => {
+    const filler = Array.from({ length: 60 }, () => `<w:p>${text('Line')}</w:p>`).join('');
+    const divided =
+      BEGIN + instr(' = 1 / ( ') + pageOperand() + instr(' - 2 ) ') + SEPARATE + text('77') + END;
+    const layout = layoutOf(
+      packageOf(`${filler}<w:p>${text('[')}${divided}${text(']')}</w:p>`, '')
+    );
+    expect(layout.pages.length).toBe(2);
+    expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[77]');
   });
 });

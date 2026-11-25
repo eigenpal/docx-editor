@@ -13,11 +13,15 @@
 // four levels down (under an inert REF, say) still evaluates instead of losing its digits.
 //
 // This tracker owns only that state: which inner field is armed, at which level, and whether
-// its cached result was seen and whether any of it was visible. Extracted so the walks stay a
-// straight-line reading of the field machine.
+// its cached result was seen and whether any of it was visible, and the visible text of that
+// result, which a formula with no value on the page shows instead. Extracted so the walks stay
+// a straight-line reading of the field machine.
 
 import type { AllowlistedPageFieldMatch } from './field-instruction.ts';
-import { projectPageFieldValue, type FieldPageContext } from './field-page-furniture.ts';
+import { pageFieldText, type FieldPageContext } from './field-page-furniture.ts';
+
+/** Longest saved result the tracker keeps for a formula with no value on the page. */
+const MAX_TRACKED_SAVED_RESULT = 256;
 
 export interface NestedPageTracker {
   /** True while an armed inner live field is skipping its cached digits. */
@@ -41,8 +45,11 @@ export interface NestedPageTracker {
   onEnd(level: number, pageContext: FieldPageContext | undefined): string | null;
   /** Disarm and forget (outer begin, budget abort). */
   reset(): void;
-  /** Record one piece of the inner field's cached result, visible or not. */
-  noteResult(visible: boolean): void;
+  /**
+   * Record one piece of the inner field's cached result, visible or not. `text` is the piece's
+   * visible text: a formula with no value on the page (a division by zero) shows it.
+   */
+  noteResult(visible: boolean, text?: string): void;
 }
 
 export function createNestedPageTracker(): NestedPageTracker {
@@ -50,11 +57,13 @@ export function createNestedPageTracker(): NestedPageTracker {
   let level = 0;
   let seen = false;
   let visible = false;
+  let savedResult = '';
   const reset = (): void => {
     field = null;
     level = 0;
     seen = false;
     visible = false;
+    savedResult = '';
   };
   return {
     get active(): boolean {
@@ -67,6 +76,7 @@ export function createNestedPageTracker(): NestedPageTracker {
       level = atLevel;
       seen = false;
       visible = false;
+      savedResult = '';
     },
     onEnd(atLevel: number, pageContext: FieldPageContext | undefined): string | null {
       if (field === null || atLevel > level) return null;
@@ -74,15 +84,17 @@ export function createNestedPageTracker(): NestedPageTracker {
       const suppressed = seen && !visible;
       const value =
         closesTracked && pageContext && !suppressed
-          ? projectPageFieldValue(field.kind, pageContext, field)
+          ? (pageFieldText(field, pageContext) ?? savedResult)
           : '';
       reset();
       return closesTracked ? value : null;
     },
     reset,
-    noteResult(wasVisible: boolean): void {
+    noteResult(wasVisible: boolean, text = ''): void {
       seen = true;
-      if (wasVisible) visible = true;
+      if (!wasVisible) return;
+      visible = true;
+      if (savedResult.length + text.length <= MAX_TRACKED_SAVED_RESULT) savedResult += text;
     },
   };
 }

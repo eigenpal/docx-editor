@@ -752,7 +752,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
             // link — exactly like the ordinary result branch: when the atom's first visible
             // result content is the nested digits wrapped in `w:ins` or `w:hyperlink`, the
             // live value that replaces them must paint attributed and linked the same way.
-            nestedPage.noteResult(!style.hidden);
+            nestedPage.noteResult(!style.hidden, hyphen?.measureText ?? text);
             if (style.hidden) continue;
             donateResultCapture(text);
             continue;

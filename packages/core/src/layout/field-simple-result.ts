@@ -261,7 +261,7 @@ export function collectSimpleFieldDisplay(args: {
           if (!revisionSuppressed) sawResultContent = true;
           const suppressed = style.hidden || revisionSuppressed;
           if (tracker.active) {
-            tracker.noteResult(!suppressed);
+            tracker.noteResult(!suppressed, value);
             if (!suppressed) captureStyle(props, style, value);
             continue;
           }

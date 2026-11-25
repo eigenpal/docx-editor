@@ -3,8 +3,8 @@
 // Field instructions are attacker-controlled and MUST NEVER execute. This module recognizes
 // only exact normalized allowlisted `PAGE`, `NUMPAGES`, and `SECTIONPAGES` instructions with
 // the numeric picture and number-format switches `field-page-switches.ts` accepts, and an `=`
-// formula whose only operand is one of them (`= { PAGE }`). Everything else, including formula
-// arithmetic, stays inert. Legacy form-field payloads under `w:fldChar` (`w:ffData`, entry/exit
+// formula over them that `field-formula.ts` compiles (`= { PAGE } + 1`). Everything else stays
+// inert. Legacy form-field payloads under `w:fldChar` (`w:ffData`, entry/exit
 // macros) are never read or auto-resolved.
 //
 // Detection and piece projection share one bounded complex-field machine: no recursive walk
@@ -28,6 +28,12 @@ import {
   type PageFieldSwitches,
   type ParsedPageFieldInstruction,
 } from './field-page-switches.ts';
+import {
+  compilePageFormula,
+  MAX_FORMULA_OPERANDS,
+  type FormulaOperandSlot,
+  type PageFormula,
+} from './field-formula.ts';
 
 /**
  * Caps hostile instruction blobs and nesting depth (fail closed → inert).
@@ -100,6 +106,18 @@ export interface AllowlistedPageFieldMatch extends PageFieldSwitches {
    * {@link formulaOperandIsNumber}.
    */
   readonly formulaOperandFollowsSection?: true;
+  /**
+   * Set for an `=` formula with arithmetic (`= { PAGE } + 1`): the compiled expression. `kind`
+   * is then its first operand's kind, and the switches render the formula's value.
+   */
+  readonly formula?: PageFormula;
+}
+
+/** The page fields a match reads: each operand of a formula, else its own kind. */
+export function pageFieldKindsOf(
+  match: AllowlistedPageFieldMatch
+): readonly AllowlistedPageField[] {
+  return match.formula?.kinds ?? [match.kind];
 }
 
 /**
@@ -134,45 +152,59 @@ export function matchAllowlistedPageField(instruction: string): AllowlistedPageF
 }
 
 /**
- * An `=` formula whose only operand is a nested page field (`= { PAGE }`), as that page field.
- * Applies at every nesting level: a formula in another field's result reads the same way.
+ * An `=` formula over nested page fields, as a page-field match. Applies at every nesting
+ * level: a formula in another field's result reads the same way.
  *
  * ECMA-376 Part 1, 17.16.1 defines the `=` field (`"=", expression`), and 17.16.3 lets a
  * formula take a field that results in a single value as an operand. The operand is `PAGE`
  * (17.16.5.44), `NUMPAGES` (17.16.5.42), or `SECTIONPAGES` (17.16.5.55), nested through
  * `w:fldChar` (17.16.18, `CT_FldChar`).
  *
- * `instruction` is the formula's own text at its level, without the nested field. The formula's `\#` and
- * `\*` switches (17.16.4) render the value, and a formula without them shows plain digits. The
- * operand must carry no switch other than `\* Arabic` or `\* MERGEFORMAT`. Arithmetic and every
- * other operand stay inert.
+ * `instruction` is the formula's own text at its level, without the nested fields, and
+ * `capture` holds each operand at its offset in that text (`field-formula.ts` compiles both).
+ * A formula that is one operand (`= { PAGE }`) is that page field. Otherwise the match carries
+ * the compiled formula. The formula's `\#` and `\*` switches (17.16.4) render the value. Each
+ * operand must carry no switch other than `\* Arabic` or `\* MERGEFORMAT`.
  *
  * `hasLiveInstruction` is false when every `=` instruction chunk is a `w:delInstrText`
  * (17.16.13): the whole formula is a tracked deletion (17.13.5.14). Such a formula keeps its
- * saved result. A tracked insertion (17.13.5.18), or a tracked deletion of only the operand
+ * saved result. A tracked insertion (17.13.5.18), or a tracked deletion of only an operand
  * field, still evaluates: the `=` itself stays.
  */
 function formulaPageField(
   instruction: string,
-  operand: FormulaOperand,
+  capture: FormulaCapture,
   hasLiveInstruction: boolean
 ): AllowlistedPageFieldMatch | null {
-  if (!hasLiveInstruction) return null;
-  if (typeof operand === 'string') return null;
-  if (operand.picture !== undefined) return null;
-  if (operand.numberFormat !== undefined && operand.numberFormat !== 'decimal') return null;
-  const split = splitPageFieldInstruction(instruction);
-  if (split === null) return null;
-  const { keyword, ...switches } = split;
-  if (keyword !== '=') return null;
-  const followsSection =
-    operand.kind === 'PAGE' && operand.numberFormat === undefined
-      ? { formulaOperandFollowsSection: true as const }
-      : {};
-  if (switches.picture === undefined && switches.numberFormat === undefined) {
-    return { kind: operand.kind, numberFormat: 'decimal', ...followsSection };
+  if (!hasLiveInstruction || capture.inert || capture.operands.length === 0) return null;
+  const slots: FormulaOperandSlot[] = [];
+  for (const operand of capture.operands) {
+    if (operand.match === 'open') return null;
+    slots.push({ offset: operand.offset, match: operand.match });
   }
-  return { kind: operand.kind, ...switches, ...followsSection };
+  const compiled = compilePageFormula(instruction, slots);
+  if (compiled === null) return null;
+  // A bare PAGE operand yields the page number in the section's format, which may not be a
+  // number (`formulaOperandIsNumber`).
+  const followsSection = slots.some(
+    ({ match }) => match.kind === 'PAGE' && match.numberFormat === undefined
+  )
+    ? { formulaOperandFollowsSection: true as const }
+    : {};
+  const { switches } = compiled;
+  if ('formula' in compiled) {
+    return {
+      kind: slots[0]!.match.kind,
+      ...switches,
+      formula: compiled.formula,
+      ...followsSection,
+    };
+  }
+  const kind = compiled.single.kind;
+  if (switches.picture === undefined && switches.numberFormat === undefined) {
+    return { kind, numberFormat: 'decimal', ...followsSection };
+  }
+  return { kind, ...switches, ...followsSection };
 }
 
 /** Exact allowlist for live page-field projection — {@link matchAllowlistedPageField}'s kind. */
@@ -237,7 +269,7 @@ interface NestedInstructionLevel {
   sawLive: boolean;
   separated: boolean;
   /** The fields nested in this level's instruction, as {@link formulaPageField} reads them. */
-  formulaOperand: FormulaOperand;
+  formula: FormulaCapture;
 }
 
 export interface ComplexFieldParseState {
@@ -271,15 +303,27 @@ export interface ComplexFieldParseState {
   /** Level N (2..{@link MAX_FIELD_NESTING}) at index N-2; deeper levels are never captured. */
   inner: NestedInstructionLevel[];
   /** The fields nested in the level-1 instruction, as {@link formulaPageField} reads them. */
-  formulaOperand: FormulaOperand;
+  formula: FormulaCapture;
 }
 
 /**
  * The fields nested in one level's instruction (level 1 here, level N in
- * {@link NestedInstructionLevel}): `none` yet, one field one level down still `open`, its
- * page-field match once it closes, or `other` once anything else nests there.
+ * {@link NestedInstructionLevel}), each at the length its level's LIVE instruction buffer had
+ * when the field began. The last one is `open` until its end, then its page-field match.
+ * `inert` once anything else nests there: a field that is not a page field, a field inside an
+ * operand's code, or more than {@link MAX_FORMULA_OPERANDS} operands. Replaced, never mutated,
+ * so a shallow copy of the parse state keeps its own capture.
  */
-type FormulaOperand = 'none' | 'open' | 'other' | AllowlistedPageFieldMatch;
+interface FormulaCapture {
+  readonly operands: readonly {
+    readonly offset: number;
+    readonly match: AllowlistedPageFieldMatch | 'open';
+  }[];
+  readonly inert: boolean;
+}
+
+const NO_FORMULA_OPERANDS: FormulaCapture = Object.freeze({ operands: [], inert: false });
+const INERT_FORMULA: FormulaCapture = Object.freeze({ operands: [], inert: true });
 
 export function createFieldParseState(): ComplexFieldParseState {
   return {
@@ -292,7 +336,7 @@ export function createFieldParseState(): ComplexFieldParseState {
     nestingOverflow: false,
     phase: 'idle',
     inner: [],
-    formulaOperand: 'none',
+    formula: NO_FORMULA_OPERANDS,
   };
 }
 
@@ -306,7 +350,7 @@ export function resetFieldParseState(state: ComplexFieldParseState): void {
   state.nestingOverflow = false;
   state.phase = 'idle';
   state.inner.length = 0;
-  state.formulaOperand = 'none';
+  state.formula = NO_FORMULA_OPERANDS;
 }
 
 /** The instruction that would take effect if the field's tracked edits were accepted. */
@@ -345,7 +389,7 @@ export function onFldCharBegin(state: ComplexFieldParseState): void {
     state.nestingOverflow = false;
     state.phase = 'instruction';
     state.inner.length = 0;
-    state.formulaOperand = 'none';
+    state.formula = NO_FORMULA_OPERANDS;
   } else {
     noteNestedBegin(state);
   }
@@ -362,7 +406,7 @@ export function onFldCharBegin(state: ComplexFieldParseState): void {
       deletedOverflow: false,
       sawLive: false,
       separated: false,
-      formulaOperand: 'none',
+      formula: NO_FORMULA_OPERANDS,
     };
   }
 }
@@ -377,34 +421,53 @@ function levelInInstruction(state: ComplexFieldParseState, k: number): boolean {
   return level !== undefined && !level.separated;
 }
 
-function formulaOperandOf(state: ComplexFieldParseState, k: number): FormulaOperand {
-  return k === 1 ? state.formulaOperand : (state.inner[k - 2]?.formulaOperand ?? 'other');
+function formulaOf(state: ComplexFieldParseState, k: number): FormulaCapture {
+  return k === 1 ? state.formula : (state.inner[k - 2]?.formula ?? INERT_FORMULA);
 }
 
-function setFormulaOperand(state: ComplexFieldParseState, k: number, value: FormulaOperand): void {
-  if (k === 1) state.formulaOperand = value;
+function setFormula(state: ComplexFieldParseState, k: number, value: FormulaCapture): void {
+  if (k === 1) state.formula = value;
   else {
     const level = state.inner[k - 2];
-    if (level) level.formulaOperand = value;
+    if (level) level.formula = value;
   }
+}
+
+/** Length of level `k`'s live instruction buffer: where a field nested there now begins. */
+function liveInstructionLength(state: ComplexFieldParseState, k: number): number {
+  return k === 1 ? state.instruction.length : (state.inner[k - 2]?.instruction.length ?? 0);
 }
 
 /**
  * Record a nested `begin` against the formula operands of the open levels. The innermost level
- * in its instruction gains an operand: its first one opens, and any later one makes the
- * formula inert. An outer level in its instruction whose operand is still in ITS instruction
- * now holds a field nested in the operand's code, which also makes it inert. A field in the
- * operand's saved result does not: the operand is evaluated, and its result is replaced
- * (17.16.2). Bounded by {@link MAX_FIELD_NESTING}.
+ * in its instruction gains an operand at its live buffer's current length. An outer level in
+ * its instruction whose operand is still in ITS instruction now holds a field nested in the
+ * operand's code, which makes the formula inert. A field in the operand's saved result does
+ * not: the operand is evaluated, and its result is replaced (17.16.2). Bounded by
+ * {@link MAX_FIELD_NESTING}.
  */
 function noteNestedBegin(state: ComplexFieldParseState): void {
   const innermost = Math.min(state.nesting, MAX_FIELD_NESTING);
   for (let k = 1; k <= innermost; k += 1) {
     if (!levelInInstruction(state, k)) continue;
+    const formula = formulaOf(state, k);
+    if (formula.inert) continue;
     if (k === state.nesting) {
-      setFormulaOperand(state, k, formulaOperandOf(state, k) === 'none' ? 'open' : 'other');
+      setFormula(
+        state,
+        k,
+        formula.operands.length >= MAX_FORMULA_OPERANDS
+          ? INERT_FORMULA
+          : {
+              operands: [
+                ...formula.operands,
+                { offset: liveInstructionLength(state, k), match: 'open' },
+              ],
+              inert: false,
+            }
+      );
     } else if (k + 1 > MAX_FIELD_NESTING || levelInInstruction(state, k + 1)) {
-      setFormulaOperand(state, k, 'other');
+      setFormula(state, k, INERT_FORMULA);
     }
   }
 }
@@ -579,7 +642,7 @@ export function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPag
     if (effective.overflow) return null;
     return (
       matchAllowlistedPageField(effective.instruction) ??
-      formulaPageField(effective.instruction, state.formulaOperand, state.sawLiveInstruction)
+      formulaPageField(effective.instruction, state.formula, state.sawLiveInstruction)
     );
   }
   const level = innerLevelOf(state);
@@ -590,24 +653,30 @@ export function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPag
   // A formula nested in another field's result evaluates the same way as one at level 1.
   return (
     matchAllowlistedPageField(effective.instruction) ??
-    formulaPageField(effective.instruction, level.formulaOperand, level.sawLive)
+    formulaPageField(effective.instruction, level.formula, level.sawLive)
   );
 }
 
 export function onFldCharEnd(state: ComplexFieldParseState): void {
   // The end of an operand field: the enclosing level's formula now knows that operand.
   const outer = state.nesting - 1;
-  if (
-    outer >= 1 &&
-    outer <= MAX_FIELD_NESTING &&
-    levelInInstruction(state, outer) &&
-    formulaOperandOf(state, outer) === 'open'
-  ) {
+  const formula = outer >= 1 && outer <= MAX_FIELD_NESTING ? formulaOf(state, outer) : null;
+  const last = formula?.operands.at(-1);
+  if (formula && !formula.inert && last?.match === 'open' && levelInInstruction(state, outer)) {
     const level = innerLevelOf(state);
     const effective = level ? effectiveLevelInstruction(level) : null;
     const match =
       effective && !effective.overflow ? matchAllowlistedPageField(effective.instruction) : null;
-    setFormulaOperand(state, outer, match ?? 'other');
+    setFormula(
+      state,
+      outer,
+      match
+        ? {
+            operands: [...formula.operands.slice(0, -1), { offset: last.offset, match }],
+            inert: false,
+          }
+        : INERT_FORMULA
+    );
   }
   if (state.nesting > 0) state.nesting -= 1;
   if (state.nesting === 0) resetFieldParseState(state);
@@ -687,7 +756,8 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
       // Detection does not know the section's page-number format, so a formula over a bare
       // PAGE in a roman section is noted although it keeps its saved result. The cost is only
       // a per-sheet layout that paints the same text.
-      if (match && (level <= 1 || phase === 'result')) pendingNotes.push(match.kind);
+      if (match && (level <= 1 || phase === 'result'))
+        pendingNotes.push(...pageFieldKindsOf(match));
       return;
     }
 

@@ -17,7 +17,7 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 
 | Field | Behavior |
 | --- | --- |
-| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers, footers, and the body. A hidden saved result stays hidden. An `=` formula whose only operand is one of these fields, such as `{ = { PAGE } }`, updates the same way. In headers and footers, these fields and formulas also update inside another field's result. Formulas with arithmetic show the saved result. So does a formula over `PAGE` in a section whose page numbers are not digits, such as roman numerals. A formula that is a tracked deletion keeps its saved result, but a deleted `PAGE` field shows the live value. |
+| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers, footers, and the body. A hidden saved result stays hidden. An `=` formula over these fields, such as `{ = { PAGE } }` or `{ = { NUMPAGES } - { PAGE } }`, updates the same way. See [Page number formulas](#page-number-formulas). In headers and footers, these fields and formulas also update inside another field's result. A deleted `PAGE` field shows the live value. |
 | `STYLEREF` | Updates supported character-style and paragraph-style references in headers. A paragraph without a paragraph style matches the default paragraph style. A paragraph style outranks a character style with the same name. Supports `\l` and `\* MERGEFORMAT`. With `\n` or `\w`, shows the list number of a paragraph-style match: `\n` shows only the number text of the paragraph's own level, and `\w` adds the higher levels. A match without a number shows `0`. |
 | `REF` | Resolves bookmark text or numbering in the body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |
@@ -29,6 +29,20 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 | `FILENAME`, `SEQ`, `EQ`, `CITATION`, `BIBLIOGRAPHY` | Show the saved result. No new value is calculated. |
 
 Other fields show their saved result. `REF`, `PAGEREF`, and `NOTEREF` with `\h` link to their bookmark. For switch support, wrapping, and header pagination, see [DOCX fidelity](/docs/2.x/docx-fidelity#fields-links-and-table-of-contents).
+
+## Page number formulas
+
+An `=` formula updates on each page when its operands are `PAGE`, `NUMPAGES`, or `SECTIONPAGES` fields and numbers, such as `{ = { PAGE } + 1 }`.
+
+- The operators are unary minus, `^`, `*`, `/`, `+`, `-`, and the comparisons `=`, `<>`, `<`, `<=`, `>`, and `>=`. Parentheses group terms. A comparison shows `1` or `0`.
+- The result shows as many decimal places as its most precise number, and at least two after a division. Trailing zeros are removed: `{ = { PAGE } / 3 }` shows `0.33` on page 1 and `1` on page 3.
+- A `\#` picture without a decimal point rounds the result to a whole number. A negative result shows only through a picture of `0` digits, such as `00`.
+- A `\*` number format, such as `\* roman`, shows only whole results of zero or more.
+- An operand can have the `\* Arabic` switch. Any other operand switch keeps the saved result.
+- A formula keeps its saved result on a page where it has no value, such as after a division by zero, or a result its switches cannot show.
+- A formula keeps its saved result when it uses functions, bookmarks, table cells, `%`, a repeated `^`, a negative exponent, a formula as an operand, or a picture with a decimal point.
+- A formula over a bare `PAGE` keeps its saved result in a section whose page numbers are not digits, such as roman numerals. Use `{ PAGE \* Arabic }` as the operand there.
+- A formula without a page field, and a formula that is a tracked deletion, keep their saved results.
 
 ## Show the current date
 

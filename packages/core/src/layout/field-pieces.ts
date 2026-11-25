@@ -26,6 +26,7 @@ import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField, AllowlistedPageFieldMatch } from './field-instruction.ts';
 import type { PageFieldNumberFormat, PageFieldSwitches } from './field-page-switches.ts';
+import type { PageFormula } from './field-formula.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { ListNumFieldSpec } from './field-listnum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
@@ -114,6 +115,10 @@ export interface FieldAtomMarker {
     readonly picture?: string;
     /** The field's `\*` number format, applied when finalize substitutes the value. */
     readonly numberFormat?: PageFieldNumberFormat;
+    /** A formula field's compiled expression, which finalize evaluates per page. */
+    readonly formula?: PageFormula;
+    /** A formula field's saved result, painted where the formula has no value. */
+    readonly savedResult?: string;
   };
   /**
    * A BODY `PAGEREF` atom whose value is the page number its bookmark target lands on.
@@ -470,7 +475,8 @@ export interface PendingFieldProjection {
    * instruction buffer is reset before the flush runs. For an `=` formula it also says whether
    * the operand follows the section's page-number format.
    */
-  pageSwitches: PageFieldSwitches & Pick<AllowlistedPageFieldMatch, 'formulaOperandFollowsSection'>;
+  pageSwitches: PageFieldSwitches &
+    Pick<AllowlistedPageFieldMatch, 'formulaOperandFollowsSection' | 'formula'>;
   /**
    * Parsed SYMBOL instruction, or null when the field is not one.
    *

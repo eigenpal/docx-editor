@@ -29,7 +29,7 @@ import {
   pageFieldMarker,
   pageFieldMeasuredText,
   PAGE_FIELD_PLACEHOLDER,
-  projectPageFieldValue,
+  pageFieldText,
   type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
@@ -117,13 +117,12 @@ export function synthesizeAtomicField(
   const pageKind = formulaOperandIsNumber(pending.pageSwitches, sectionFormat)
     ? pending.kind
     : null;
-  if (pageKind && ctx.pageContext) {
-    return {
-      text: projectPageFieldValue(pageKind, ctx.pageContext, pending.pageSwitches),
-      props: pending.props,
-      style: pending.style,
-    };
-  }
+  // A formula with no value on this page (a division by zero, say) keeps its saved result.
+  const liveText =
+    pageKind && ctx.pageContext
+      ? pageFieldText({ ...pending.pageSwitches, kind: pageKind }, ctx.pageContext)
+      : null;
+  if (liveText !== null) return { text: liveText, props: pending.props, style: pending.style };
   // A BODY page field (no page context) paints the page it lands on, whatever the file cached:
   // the value is a property of pagination, so a saved result is stale as soon as the layout
   // moves. Paint a placeholder now and record the kind so document finalize substitutes the
@@ -146,7 +145,7 @@ export function synthesizeAtomicField(
       ),
       props: pending.props,
       style: pending.style,
-      pageField: pageFieldMarker(pageKind, pending.pageSwitches),
+      pageField: pageFieldMarker(pageKind, pending.pageSwitches, pending.cachedText),
     };
   }
   // A REF resolves live from its bookmark target and the resolved numbering — the cached
