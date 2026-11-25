@@ -502,9 +502,9 @@ function projectSimpleFieldDisplay(
   // Names follow the language of the run that holds the instruction (17.16.4.1). A simple
   // field holds its instruction in `w:instr` (17.16.19, `CT_SimpleField`), not in a run, so
   // the language comes from the paragraph's run properties without direct formatting: the
-  // document defaults, table style, and paragraph style. When none of them sets a language,
-  // the result run's language decides, so a field whose result is in another language never
-  // shows English names. The paragraph mark's `w:rPr` does not name it.
+  // document defaults, table style, and paragraph style. A language set there decides, also
+  // over a result run in another language. The result run's language decides only when none
+  // of them sets one. The paragraph mark's `w:rPr` never names it.
   const dateSpec = parseDateFieldInstruction(instr);
   const fieldDate = dateSpec ? currentFieldDate() : undefined;
   const languageProps =

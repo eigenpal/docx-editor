@@ -169,11 +169,11 @@ export interface DocxEditorConfig {
    */
   fieldResults?: FieldResultsMode;
   /**
-   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local
-   * time. Display only: the document keeps its saved results. Absent (the default), fields show
-   * their saved results. Day and month names are English; a picture with a name keeps its saved
-   * result in a run of another language. Fixed for the instance. Refused with a `TypeError`
-   * when it is not a valid `Date`, or with the `editable` {@link fieldResults} mode.
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
+   * Display only: the document, printing, and PDF export keep the saved results. Absent (the
+   * default), fields show their saved results. Day and month names are English; a picture with a
+   * name keeps its saved result in a run of another language. Fixed for the instance. Refused with
+   * a `TypeError` when it is not a valid `Date`, or with the `editable` {@link fieldResults} mode.
    */
   fieldDate?: Date;
   /**

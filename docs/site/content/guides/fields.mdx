@@ -47,11 +47,11 @@ const editor = createDocxEditor({
 - Only fields with a `\@` date-time picture show the date. A field without a picture, or with `\l`, `\h`, `\s`, or a casing switch, shows its saved result.
 - Pictures support `d`, `dd`, `ddd`, `dddd`, `M`, `MM`, `MMM`, `MMMM`, `y`, `yy`, `yyyy`, `Y`, `YY`, `YYYY`, `h`, `hh`, `H`, `HH`, `m`, `mm`, `ss`, `AM/PM`, `am/pm`, and quoted text. Both `AM/PM` and `am/pm` show `AM` or `PM`. Any other letter, a Thai picture item, or a backquoted SEQ name keeps the saved result.
 - Month and day names are English. A picture with a name keeps its saved result when the language of the field instruction is not English.
-- A complex field takes the language of the run that holds its instruction. A simple field (`w:fldSimple`) takes the language from the document defaults, table style, and paragraph style. When none of them sets a language, the result run's language applies.
+- A complex field takes the language of the run that holds its instruction. A simple field (`w:fldSimple`) takes the language set by the document defaults, table style, or paragraph style. The result run's language applies only when none of them sets one.
 - The date shows in the local time zone.
 - The date is display-only. Saved files and collaboration sessions keep the saved results.
 - `CREATEDATE`, `SAVEDATE`, and `PRINTDATE` always show their saved results.
-- PDF export shows saved results.
+- Printing and PDF export show saved results, also from the editor's File menu. The PDF converter (`@docx-editor.dev/docx-to-pdf`) has no `fieldDate` option.
 - An invalid `Date`, or `fieldDate` with `fieldResults: 'editable'`, throws a `TypeError`. The option applies only at creation.
 - The React and Vue components take the same `fieldDate` prop. They read it once, when they create the editor. To show another date, remount the component.
 
