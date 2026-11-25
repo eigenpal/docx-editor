@@ -20,11 +20,12 @@ import { composeFontConfiguration } from '../font-composition.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
-/** A Calibri document that sets one run in `family`, with an optional font table entry. */
+/** A document that sets one run in `family`, with an optional font table entry. */
 function documentWith(
   family: string,
   tableEntry = `<w:font w:name="${family}"/>`,
-  slots = `w:ascii="${family}" w:hAnsi="${family}"`
+  slots = `w:ascii="${family}" w:hAnsi="${family}"`,
+  defaultFamily = 'Calibri'
 ) {
   const opened = openHeadlessDocument(
     zipSync({
@@ -42,7 +43,7 @@ function documentWith(
       ),
       'word/fontTable.xml': strToU8(`<w:fonts xmlns:w="${W}">${tableEntry}</w:fonts>`),
       'word/styles.xml': strToU8(
-        `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+        `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${defaultFamily}" w:hAnsi="${defaultFamily}"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
       ),
     })
   );
@@ -266,4 +267,30 @@ test('a listed font name reads its font table entry under its first family', () 
     '<w:font w:name="&quot;Stray&quot;, serif"><w:family w:val="modern"/></w:font>'
   );
   expect([...fontTableClasses(stray.currentPackage()).keys()]).toEqual([]);
+});
+
+test('a family the host answers for some faces gets no class fallback for its other faces', () => {
+  // The host answers the faces that text used first. The italic arrives later, and the
+  // serif document default sends the swiss family to the sans-serif fallback face.
+  const document = documentWith(
+    'Brand Light',
+    '<w:font w:name="Brand Light"><w:family w:val="swiss"/></w:font><w:font w:name="Times New Roman"><w:family w:val="roman"/></w:font>',
+    undefined,
+    'Times New Roman'
+  );
+  const plan = documentFontSubstitutionPlan(document, ['Brand Light'], [], 'Times New Roman');
+  expect(plan.fallbacks.get('brand light')).toBe('Arial');
+  const host = hostFonts();
+  const answered = ([400, 700] as const).map((weight) => ({
+    from: { family: 'Brand Light', weight, style: 'normal' as const },
+    to: { family: 'Carlito', weight, style: 'normal' as const },
+  }));
+  const fonts = applyDocumentFontSubstitutions(
+    composeFontConfiguration({ ...host, substitutions: [...answered, ...host.substitutions!] }),
+    plan
+  );
+  const brand = fonts.substitutions?.filter(
+    (substitution) => substitution.from.family === 'Brand Light'
+  );
+  expect(brand?.map((substitution) => substitution.to.family)).toEqual(['Carlito', 'Carlito']);
 });

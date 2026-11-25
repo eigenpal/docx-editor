@@ -336,6 +336,12 @@ export function applyDocumentFontSubstitutions(
     if (!hosted || !target) return undefined;
     return hosted.lineMetrics ? { to: target, lineMetrics: hosted.lineMetrics } : { to: target };
   };
+  // A host answers only the faces that text uses, so the family decides, not the face.
+  const hostFamilies = new Set(
+    (configuration.substitutions ?? []).map((substitution) =>
+      substitution.from.family.trim().toLowerCase()
+    )
+  );
   let remaining = Math.max(0, HARD_MAX_FONT_SOURCES - existing.size);
   for (const family of plan.families) {
     const key = family.trim().toLowerCase();
@@ -353,7 +359,9 @@ export function applyDocumentFontSubstitutions(
         // substitutions for a fallback is only for families the host has no answer for. The
         // class fallback is not a face the document names: a host substitute (Segoe UI to its
         // metric twin) keeps the family even when the host has the fallback face installed.
-        const hostAnswered = hostSubstitutions.has(fontRequestKey(from));
+        // The font table class (`w:family`, `CT_FontFamily`, ECMA-376 Part 1, §17.8.3.9) only
+        // locates a substitute for a font that is not available, and a host's family is.
+        const hostAnswered = hostFamilies.has(key);
         for (const candidate of hostAnswered
           ? [english, alternate]
           : [english, alternate, fallback]) {
