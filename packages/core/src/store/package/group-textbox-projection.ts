@@ -17,7 +17,7 @@ import {
 } from './drawing-group-members.ts';
 import { quarterTurned } from './drawing-group-transform.ts';
 import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
-import { shapeTextAreaEmu } from './drawing-textbox-frame.ts';
+import { shapeTextAreaEmu, stacksLinesLeftToRight } from './drawing-textbox-frame.ts';
 import { shapeTransformElement } from './drawing-shape-transform.ts';
 import {
   readDrawingGroupFrame,
@@ -120,7 +120,8 @@ function textStaysUpright(member: OoxmlElement): boolean {
 
 /**
  * The quarter turn that `wps:bodyPr/@vert` (ST_TextVerticalType, ECMA-376 Part 1, 20.1.10.83)
- * gives a member's text: 90 for `vert` and `eaVert`, 270 for `vert270`, and 0 otherwise. As for
+ * gives a member's text: 90 for `vert`, `eaVert` and the modes that stack their lines from the
+ * left ({@link stacksLinesLeftToRight}), 270 for `vert270`, and 0 otherwise. As for
  * a text box outside a group, `eaVert` lays out as a turned block, so East Asian glyphs turn
  * with the line instead of standing upright.
  */
@@ -131,7 +132,7 @@ function verticalFlowTurn(member: OoxmlElement): 0 | 90 | 270 {
   });
   const raw = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'vert') : undefined;
   const vert = raw === undefined ? undefined : collapseSchemaWhitespace(raw);
-  if (vert === 'vert' || vert === 'eaVert') return 90;
+  if (vert === 'vert' || vert === 'eaVert' || stacksLinesLeftToRight(vert)) return 90;
   return vert === 'vert270' ? 270 : 0;
 }
 

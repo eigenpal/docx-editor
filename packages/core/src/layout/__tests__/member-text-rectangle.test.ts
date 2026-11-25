@@ -260,6 +260,27 @@ for (const [name, host] of [
       expect(area(record)).toEqual([RECT.top, RECT.right, HEIGHT, WIDTH]);
       expect(record.rotationDegrees).toBe(90);
     });
+
+    // Word shows these modes as text turned a quarter clockwise, the first line at the left
+    // (ST_TextVerticalType, ECMA-376 Part 1, 20.1.10.83).
+    for (const mode of ['wordArtVert', 'wordArtVertRtl', 'mongolianVert']) {
+      test(`${mode} text turns a quarter and starts at the left of the rectangle`, () => {
+        const turned = (body: string) =>
+          member(host(shape(RIGHT_TRIANGLE, 10, 10, { linePt: 0, body })));
+        const record = turned(` vert="${mode}"`);
+        const plain = turned(' vert="vert"');
+        expect(record.box).toEqual(plain.box);
+        expect(record.rotationDegrees).toBe(90);
+        // The left of the turned text is the bottom of the story before the turn: the text
+        // ends there, where `vert` text with a bottom anchor ends.
+        const { contentOffset, flowHeight } = record.story;
+        expect(contentOffset.x).toBeCloseTo(RECT.top, 6);
+        expect(contentOffset.y + flowHeight).toBeCloseTo(RECT.right + WIDTH, 6);
+        // A bottom anchor puts it at the right, where `vert` text starts.
+        const anchored = turned(` vert="${mode}" anchor="b"`);
+        expect(anchored.story.contentOffset.y).toBeCloseTo(plain.story.contentOffset.y, 6);
+      });
+    }
   });
 }
 
