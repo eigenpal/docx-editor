@@ -51,6 +51,7 @@ const editor = createDocxEditor({
 - `CREATEDATE`, `SAVEDATE`, and `PRINTDATE` always show their saved results.
 - PDF export shows saved results.
 - An invalid `Date`, or `fieldDate` with `fieldResults: 'editable'`, throws a `TypeError`. The option applies only at creation.
+- The React and Vue components take the same `fieldDate` prop. They read it once, when they create the editor. To show another date, remount the component.
 
 ## Edit saved field results
 

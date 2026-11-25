@@ -340,6 +340,7 @@ const docxEditorFrameProps = {
   revisionMarkup: Object as PropType<RevisionMarkupOptions>,
   reviewDisplayMode: String as PropType<ReviewDisplayMode>,
   fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
+  fieldDate: { type: Date as PropType<Date>, default: undefined },
   contentLockPolicy: { type: Object as PropType<ContentLockPolicy>, default: undefined },
   lockedControlNavigation: {
     type: String as PropType<LockedControlNavigation>,
@@ -576,6 +577,7 @@ const DocxEditorFrame = defineComponent({
           revisionMarkup: props.revisionMarkup,
           reviewDisplayMode: props.reviewDisplayMode,
           ...(props.fieldResults !== undefined ? { fieldResults: props.fieldResults } : {}),
+          ...(props.fieldDate !== undefined ? { fieldDate: props.fieldDate } : {}),
           ...(props.contentLockPolicy !== undefined
             ? { contentLockPolicy: props.contentLockPolicy }
             : {}),

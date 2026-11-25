@@ -139,6 +139,7 @@ export const DocxEditorRoot = defineComponent({
     revisionMarkup: Object as PropType<RevisionMarkupOptions>,
     reviewDisplayMode: String as PropType<ReviewDisplayMode>,
     fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
+    fieldDate: { type: Date as PropType<Date>, default: undefined },
     contentLockPolicy: { type: Object as PropType<ContentLockPolicy>, default: undefined },
     lockedControlNavigation: {
       type: String as PropType<LockedControlNavigation>,
