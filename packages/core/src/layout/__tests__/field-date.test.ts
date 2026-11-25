@@ -120,7 +120,7 @@ describe('DATE and TIME pictures', () => {
       'DATE \\@ "dd/MM/yyyy" \\h',
       'DATE \\@ "dd/MM/yyyy" \\* Upper',
       'DATE \\@ "d MMMM yyyy" \\@ "d/M/yy"',
-      'DATE \\@ "HH:mm:ss"',
+      'DATE \\@ "HH:mm:s"',
       'DATE \\@ "yyy"',
       'DATE \\@ "\'unterminated"',
       'DATE \\@ "unterminated',
@@ -240,6 +240,20 @@ describe('DATE fields in layout', () => {
     expect(format('DATE \\@ "d\rM"')).toBe('5 3');
     expect(format('DATE \\@ "d\r\n\r\nM"')).toBe('5  3');
     expect(format(`DATE \\@ "d'\r\n'M"`)).toBe('5 3');
+  });
+
+  test('format year synonyms and seconds', () => {
+    const spec = parseDateFieldInstruction('DATE \\@ "y Y YY YYYY HH:mm:ss"')!;
+    expect(formatDateField(spec, new Date(2026, 2, 5, 14, 7, 9))).toBe('26 26 26 2026 14:07:09');
+  });
+
+  test('keep the saved result for Thai picture items and SEQ references', () => {
+    expect(format('DATE \\@ "\u0E27\u0E27/\u0E14\u0E14/\u0E1B\u0E1B\u0E1B\u0E1B"')).toBeNull();
+    expect(format('DATE \\@ "d `Figure` M"')).toBeNull();
+    // Letters outside the codes keep the saved result; other scripts and punctuation are literal.
+    expect(format('DATE \\@ "yyy"')).toBeNull();
+    expect(format('DATE \\@ "s"')).toBeNull();
+    expect(format('DATE \\@ "d\u2013M\u00b7d\u5e74M"')).toBe('5\u20133\u00b75\u5e743');
   });
 
   test('add no text for empty quotes', () => {

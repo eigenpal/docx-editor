@@ -42,14 +42,19 @@ type DatePictureCode =
   | 'MM'
   | 'MMM'
   | 'MMMM'
+  | 'y'
   | 'yy'
   | 'yyyy'
+  | 'Y'
+  | 'YY'
+  | 'YYYY'
   | 'h'
   | 'hh'
   | 'H'
   | 'HH'
   | 'm'
   | 'mm'
+  | 'ss'
   | 'AM/PM'
   | 'am/pm';
 
@@ -76,14 +81,19 @@ const CODES: ReadonlySet<string> = new Set<DatePictureCode>([
   'MM',
   'MMM',
   'MMMM',
+  'y',
   'yy',
   'yyyy',
+  'Y',
+  'YY',
+  'YYYY',
   'h',
   'hh',
   'H',
   'HH',
   'm',
   'mm',
+  'ss',
 ]);
 
 const MONTHS = [
@@ -103,6 +113,8 @@ const MONTHS = [
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const isAsciiLetter = (char: string): boolean => /^[A-Za-z]$/.test(char);
+/** The Thai picture item letters of 17.16.4.1: day (`ว`), weekday (`ด`), and year (`ป`). */
+const THAI_PICTURE_LETTERS: ReadonlySet<string> = new Set(['\u0E27', '\u0E14', '\u0E1B']);
 /**
  * A line break in a picture: CR LF, CR, or LF. A field result shows each one as one space,
  * so a CR LF pair is one space, not two.
@@ -114,7 +126,8 @@ const isSpace = (char: string | undefined): boolean => char !== undefined && /^\
  * Split a `\@` picture into items, or null when it holds a letter outside the codes.
  *
  * A run of one code letter is one code (`dd`, `MMMM`). Text in single quotes is literal
- * (17.16.4.1, `'text'`), and every other character that is not a letter is literal too. Empty
+ * (17.16.4.1, `'text'`), and so is every other character that is not a letter, a Thai picture
+ * letter, or a backquote: punctuation, spaces, and other scripts show as they are. Empty
  * quotes add no text, so a picture of only `''` shows an empty result. A line break shows as
  * one space.
  */
@@ -141,6 +154,9 @@ function parseDatePicture(picture: string): DatePictureItem[] | null {
       index += char === '\r' && picture[index + 1] === '\n' ? 2 : 1;
       continue;
     }
+    // A Thai picture item (`ว`, `ด`, `ป`) formats in Thai numerals or the Thai Buddhist Era,
+    // and a backquoted item names a SEQ number (17.16.4.1). Neither is built in.
+    if (THAI_PICTURE_LETTERS.has(char) || char === '`') return null;
     if (!isAsciiLetter(char)) {
       items.push({ kind: 'text', text: char });
       index += 1;
@@ -232,9 +248,13 @@ function codeText(code: DatePictureCode, date: Date): string {
       return MONTHS[date.getMonth()]!.slice(0, 3);
     case 'MMMM':
       return MONTHS[date.getMonth()]!;
+    case 'y':
     case 'yy':
+    case 'Y':
+    case 'YY':
       return padded(date.getFullYear() % 100);
     case 'yyyy':
+    case 'YYYY':
       return String(date.getFullYear());
     case 'h':
       return String(date.getHours() % 12 || 12);
@@ -248,6 +268,9 @@ function codeText(code: DatePictureCode, date: Date): string {
       return String(date.getMinutes());
     case 'mm':
       return padded(date.getMinutes());
+    case 'ss':
+      // 17.16.4.1 shows `h:mm:ss am/pm` as `5:28:34 PM`.
+      return padded(date.getSeconds());
     case 'AM/PM':
     case 'am/pm':
       // 17.16.4.1: `h:mm am/pm` shows `5:28 PM`. Both spellings show upper case.
