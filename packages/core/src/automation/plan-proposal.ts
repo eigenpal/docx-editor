@@ -1,5 +1,9 @@
 // Tracked inline planning shares the canonical story transaction and snapshot anchors.
 import { lineBreakRefusal } from './line-break-text.ts';
+import {
+  fieldCodeDeleteRefusal,
+  fieldCodeParagraphDeleteRefusal,
+} from './field-code-split-refusal.ts';
 import { revisionDateNow } from './revision-date.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
@@ -63,6 +67,8 @@ export function trackedProposalOf(
     };
   const { story, paragraphId, index } = paragraph.value;
   const reads = packageReads.story(story);
+  const fieldCode = reads && fieldCodeParagraphDeleteRefusal(reads.part, paragraphId);
+  if (fieldCode) return fieldCode;
   const nextId = reads?.paragraphIds[index + 1];
   if (
     !reads ||
@@ -161,6 +167,8 @@ export function planProposal(
         'tracked ranges require adjacent sibling paragraphs',
         'span'
       );
+    const fieldCode = fieldCodeDeleteRefusal(reads.part, ids);
+    if (fieldCode) return fieldCode;
     if (range.start.offset === 0) {
       const adjacent = ownMarkDeletionRefusal(reads.part, ids[0]!, operation.author);
       if (adjacent) return adjacent;

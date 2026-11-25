@@ -111,6 +111,8 @@ const codes = await runtime.run(async (context) => {
 | `Field.code` | Writing `'PAGE'` or `'NUMPAGES'` keeps the cached result. Code writes refuse on protected fields, unsupported instructions, and while tracking. |
 | `Field.delete()` | Removes the field. Its proxy becomes invalid. |
 
+A field whose instruction spans paragraphs is not listed in `Body.fields` or `Range.fields`, so `Field.delete()` cannot remove it. A delete that would remove a paragraph mark inside that instruction fails with `NotSupported`. Delete the text on each side of the field instead.
+
 ## Configure measured server pagination
 
 Server result updates require `CreateServerOptions.pagination`, a `ServerPaginationOptions` with a required `measurer` and optional `producer`:

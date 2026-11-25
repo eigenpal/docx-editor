@@ -238,6 +238,8 @@ Resolvers run when the editor resolves fonts and again when an edit adds a famil
 | Rule | Behavior |
 | --- | --- |
 | Precedence | An explicit source beats an embedded face. An embedded face beats a substitution. The first fragment wins between equal sources. |
+| Fallback | A family that no source serves falls back to a face of its class. A family that your resolver substitutes for any face is served, when the substitution target loaded. |
+| Partial families | A face that a served family lacks uses the nearest face of the family that serves it, with a synthesized bold or italic style. The editor and PDF export draw it the same way, and the export report shows the family as partial. A font table alternate (`w:altName`) counts only when it has bytes of its own. Embedded faces under the document's own name keep the class fallback for their missing faces. A family whose faces reach several target families paints through the regular face's target. |
 | Duplicates | Composition removes duplicate faces. |
 | Retry | The editor requests each family once per load. Reload the document to retry a failed request. |
 | Updates | Later family requests read current arguments. Reload to replace loaded faces. |

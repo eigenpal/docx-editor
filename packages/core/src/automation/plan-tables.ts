@@ -1,5 +1,6 @@
 // Table protocol dispatch. Handles never expose canonical node identities.
 import { findNode } from '../store/package/ooxml-edit.ts';
+import { fieldCodeTableRefusal } from './field-code-split-refusal.ts';
 import { revisionDateNow } from './revision-date.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { isWritableStyleName, styleDefinitionsOf } from './style-definitions.ts';
@@ -17,6 +18,7 @@ import {
   tableRead,
   tableCellRead,
   planInsertTable,
+  nextParagraphSibling,
   planTableMutation,
   type AutomationTableMutation,
 } from './tables.ts';
@@ -135,6 +137,14 @@ export function planTableOperation(
         );
       return refuse('unsupported-content', edge ? 'table-at-body-edge' : 'nested-table-authoring');
     }
+    const fieldCode = fieldCodeTableRefusal(
+      reads.part,
+      point.paragraphId,
+      point.offset,
+      (reads.rawText(point.paragraphId) ?? '').length,
+      nextParagraphSibling(reads.part, point.paragraphId)
+    );
+    if (fieldCode) return fieldCode;
     const planned = planInsertTable(
       reads,
       point.paragraphId,

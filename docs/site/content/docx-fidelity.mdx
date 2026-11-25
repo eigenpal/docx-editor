@@ -135,6 +135,7 @@ See [Pages and sections](#pages-and-sections) for page break and section rules.
 
 - `LISTNUM` fields count on the counters of their list's numbered paragraphs. The number replaces any saved result.
 - Saved results of fields nested in another field's instruction add no text, breaks, or links.
+- Paragraphs inside a field instruction, such as the text of an `IF` field, take no line, show no list marker, and do not advance list numbers.
 - `STYLEREF` headers resolve supported display-name references. See [Fields and cross-references](/docs/2.x/guides/fields).
 
 ### Document structure and content controls
@@ -242,7 +243,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 | Fixed-height row at a page end | The bottom rule sits outside the authored height. Applies to collapsed, equal single rules up to 12pt. Eighth-point widths, including 0.625pt, keep their size. |
 | Row minimum height | A row starts only where its minimum height and closing rule fit. A split row keeps its minimum on the next page. |
 | Keep-with-next tables | Measure at most 256 kept rows and the next row. |
-| Vertical merges | Shared rows count once. Content that does not fit is clipped at the last row. |
+| Vertical merges | Shared rows count once. A row of merged cells takes the height of its first cell's end paragraph, or its taller minimum. Content that does not fit is clipped at the last row. |
 | Merges clipped at the first row | Nested or overlapping merges, a shorter merge starting in the same row, and a two-row span across a page. |
 | Legacy unsplittable row taller than a page, with a nested table | Splits, although it should stay whole. This is a known difference. |
 | Legacy unsplittable row taller than a page, with footnotes | The page keeps the first line of the first footnote. The rest continues on the next page. |

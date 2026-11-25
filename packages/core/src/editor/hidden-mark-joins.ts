@@ -34,11 +34,17 @@ import type {
   SemanticPosition,
   SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { paragraphsInsideFieldInstructions } from '../layout/field-instruction-paragraphs.ts';
 import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks } from '../layout/story-roots.ts';
+import {
+  blockAnchorOutsideFieldCodes,
+  blockBeforeInsideFieldCodes,
+  splitInsideFieldCodes,
+} from '../layout/field-code-marks.ts';
 
 /** The revision view the page is laid out in. */
 export interface RevisionView {
@@ -49,9 +55,27 @@ export interface RevisionView {
 const NONE: ReadonlySet<string> = new Set();
 
 /**
+ * The reason an editor write gives when it would add a paragraph mark or a table inside field
+ * codes that hold paragraph marks: inside a paragraph wholly in the field codes, or at the start
+ * of the paragraph where they end. A new mark there would change the field instruction
+ * (`w:fldChar`, ECMA-376 Part 1, 17.16.18) and show no change, so the write is refused.
+ */
+export const FIELD_CODE_SPLIT_REFUSAL =
+  'field-code-mark: this would add a paragraph mark inside a field instruction';
+
+/**
+ * The informational rejection a rich paste leaves when it would have added paragraph marks
+ * inside field codes and landed as plain text instead (`surface-clipboard-ops.ts`).
+ */
+export const FIELD_CODE_PASTE_NOTICE =
+  'field-code-mark: the paste kept only its text, because its paragraphs would land inside a field instruction';
+
+/**
  * Ids of the paragraphs among `children` that layout removes under a hidden mark in `view`.
  *
- * Asks the same collector layout uses for that container, so the two cannot disagree.
+ * Asks the same collector layout uses for that container, so the two cannot disagree. A
+ * paragraph inside a field instruction is left out: its mark is part of the field code
+ * (§17.16.18), so a join never absorbs it.
  */
 export function hiddenMarkRemovedIds(
   children: readonly OoxmlNode[],
@@ -61,7 +85,10 @@ export function hiddenMarkRemovedIds(
   const all = numberingFlowBlocks(flow);
   if (all === flow) return NONE;
   const laidOut = new Set(flow.map((block) => block.id));
-  return new Set(all.flatMap((block) => (laidOut.has(block.id) ? [] : [block.id])));
+  const fieldCode = paragraphsInsideFieldInstructions(all);
+  return new Set(
+    all.flatMap((block, index) => (laidOut.has(block.id) || fieldCode.has(index) ? [] : [block.id]))
+  );
 }
 
 /**
@@ -111,6 +138,32 @@ export function hiddenParagraphsBetween(
   if (between.length === 0) return between;
   const ids = removed();
   return between.every((id) => ids.has(id)) ? between : null;
+}
+
+/**
+ * True when `firstId` and `secondId` are siblings and only paragraphs inside a field instruction
+ * stand between them. Those marks are field code (ECMA-376 Part 1, 17.16.18), so no join
+ * crosses them; Delete moves the caret over them instead, as Backspace does.
+ */
+export function onlyFieldCodeBetween(
+  part: OoxmlPart,
+  firstId: string,
+  secondId: string,
+  view: RevisionView
+): boolean {
+  const parent = parentNodeOf(part, firstId);
+  if (parent === null || parentNodeOf(part, secondId)?.id !== parent.id) return false;
+  const all = numberingFlowBlocks(
+    mergedFlowBlocks(parent.children, view.displayMode, view.authorFilter)
+  );
+  const first = all.findIndex((block) => block.id === firstId);
+  const second = all.findIndex((block) => block.id === secondId);
+  if (first === -1 || second <= first + 1) return false;
+  const fieldCode = paragraphsInsideFieldInstructions(all);
+  for (let index = first + 1; index < second; index += 1) {
+    if (!fieldCode.has(index)) return false;
+  }
+  return true;
 }
 
 /**
@@ -224,6 +277,62 @@ export function absorbRemovedAfter(
   return ops.length > 0 ? ops : null;
 }
 
+/**
+ * Whether `ops` add a paragraph mark, or a table, inside field codes that hold paragraph marks
+ * (see `layout/field-code-marks.ts`). The surface's journaled write asks this for every batch
+ * (`surface-journaled-apply.ts`), so Enter, a section break, a table, and a table of contents
+ * all refuse in one place; a rich paste asks {@link fieldCodePasteRefusal} before its package
+ * transaction. The check reads the tree before the batch, where a collapsed caret's ops point.
+ * An op that a batch moves after an earlier op, such as a split behind inserted text, is read
+ * at its pre-batch offset. That can only miss a refusal, never refuse a write wrongly: the
+ * offsets this refuses sit before the field codes in the pre-batch tree.
+ */
+export function opsAddFieldCodeMark(
+  partOf: (paragraphId: string) => OoxmlPart | null,
+  ops: readonly TreeDocOp[]
+): boolean {
+  const inside = (id: string, offset: number) => {
+    const part = partOf(id);
+    return part !== null && splitInsideFieldCodes(part, id, offset);
+  };
+  return ops.some((op) => {
+    switch (op.op) {
+      case 'splitParagraph':
+        return inside(op.paragraphId, op.offset);
+      case 'splitParagraphMany':
+        return op.offsets.some((offset) => inside(op.paragraphId, offset));
+      case 'insertFragment':
+        // One paragraph's inline content adds no mark; anything more splits at the offset.
+        return (
+          (op.blocks.length > 1 || op.blocks.some((block) => block.kind !== 'paragraph')) &&
+          inside(op.paragraphId, op.offset)
+        );
+      case 'insertTable':
+      case 'insertToc': {
+        const part = partOf(op.beforeParagraphId);
+        return part !== null && blockBeforeInsideFieldCodes(part, op.beforeParagraphId);
+      }
+      default:
+        return false;
+    }
+  });
+}
+
+/**
+ * {@link FIELD_CODE_SPLIT_REFUSAL} when a rich paste at `position` could add a paragraph mark
+ * inside field codes, else null. Its blocks are not known before the merge, so any paste at
+ * such a position is refused; the plain text flavour then lands outside the field codes.
+ */
+export function fieldCodePasteRefusal(
+  partOf: (paragraphId: string) => OoxmlPart | null,
+  position: SemanticPosition
+): string | null {
+  const part = partOf(position.paragraphId);
+  return part !== null && splitInsideFieldCodes(part, position.paragraphId, position.offset)
+    ? FIELD_CODE_SPLIT_REFUSAL
+    : null;
+}
+
 /** The editing surface's view of the rules above, over its live layout, story, and view. */
 export function createHiddenMarkEditing(deps: {
   readonly layout: () => SemanticLayout;
@@ -232,10 +341,15 @@ export function createHiddenMarkEditing(deps: {
 }): {
   /** Ops joining two neighbours in paragraph order; see {@link joinAcrossHiddenMarks}. */
   joinOps(firstId: string, secondId: string): TreeDocOp[] | null;
-  /** Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. */
-  forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | null;
+  /**
+   * Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. The ops Delete applies at the end of `firstId`, or `'step'` when only field-code paragraphs
+   * stand between: the caret then steps over them, the mirror of Backspace at the field result.
+   */
+  forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | 'step' | null;
   /** See {@link shownPosition}. */
   shown(position: SemanticPosition): SemanticPosition;
+  /** Where a table or a table of contents at `position` goes: `blockAnchorOutsideFieldCodes`. */
+  lineFirst(position: SemanticPosition): string;
   /** A collapsed selection moved to where it shows; a range is left alone. */
   shownSelection(selection: SemanticSelection): SemanticSelection;
   /** The same for an ordered range: moved only when it is collapsed. */
@@ -256,8 +370,10 @@ export function createHiddenMarkEditing(deps: {
       joinAcrossHiddenMarks(deps.part(), firstId, secondId, deps.view()),
     forwardJoinOps: (firstId, nextId) =>
       joinAcrossHiddenMarks(deps.part(), firstId, nextId, deps.view()) ??
-      absorbRemovedAfter(deps.part(), firstId, deps.view()),
+      absorbRemovedAfter(deps.part(), firstId, deps.view()) ??
+      (onlyFieldCodeBetween(deps.part(), firstId, nextId, deps.view()) ? 'step' : null),
     shown,
+    lineFirst: (position) => blockAnchorOutsideFieldCodes(deps.part(), position.paragraphId),
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),
     shownRange: (range) => {

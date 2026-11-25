@@ -323,6 +323,52 @@ describe('mergeParagraphs', () => {
     }
   });
 
+  // ECMA-376 Part 1, 17.16.18 (CT_FldChar): the marks inside an IF field's field codes, and the
+  // mark of the paragraph that holds `begin`, are field code. Backspace and Delete never join
+  // across them, so the command refuses instead of rewriting the field instruction.
+  test('refuses to join a paragraph mark that is field code', () => {
+    const field =
+      paragraph('top') +
+      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve">IF 1 = 1 "</w:instrText></w:r></w:p>' +
+      '<w:p><w:r><w:instrText>Inside</w:instrText></w:r></w:p>' +
+      '<w:p><w:r><w:instrText xml:space="preserve">" ""</w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Yes</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+      paragraph('bottom');
+    const { editor, dispose } = mount(field);
+    try {
+      const ids = editor.surface!.session.paragraphIds();
+      const before = bodyXml(editor);
+      const refusal = {
+        ok: false,
+        code: 'unsupported',
+        reason: expect.stringContaining('field-code-mark'),
+      };
+      // The caret in the paragraph that opens the field, and in a paragraph inside it.
+      for (const index of [1, 2]) {
+        select(editor, index, 0);
+        expect(editor.can({ type: 'mergeParagraphs' })).toMatchObject(refusal);
+        expect(editor.exec({ type: 'mergeParagraphs' })).toMatchObject(refusal);
+      }
+      // A range from the top paragraph across the field.
+      editor.surface!.setSelection({
+        anchor: { paragraphId: ids[0]!, offset: 0 },
+        head: { paragraphId: ids[3]!, offset: 1 },
+      });
+      expect(editor.exec({ type: 'mergeParagraphs' })).toMatchObject(refusal);
+      expect(bodyXml(editor)).toBe(before);
+      // The mark after the field result is an ordinary one.
+      select(editor, 3, 0);
+      expect(editor.exec({ type: 'mergeParagraphs' })).toEqual({ ok: true, changed: true });
+      // And so is the mark before the field.
+      select(editor, 0, 0);
+      expect(editor.exec({ type: 'mergeParagraphs' })).toEqual({ ok: true, changed: true });
+    } finally {
+      dispose();
+    }
+  });
+
   test('proposes removing the mark in suggesting mode', () => {
     const { editor, dispose } = mount(paragraph('first') + paragraph('second'));
     try {

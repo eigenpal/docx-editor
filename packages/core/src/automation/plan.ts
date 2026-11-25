@@ -172,6 +172,11 @@ interface Slot {
 }
 
 import type { BatchPlanner, BatchPlannerHost } from './plan-planner-types.ts';
+import {
+  fieldCodeDeleteRefusal,
+  fieldCodeParagraphDeleteRefusal,
+  fieldCodeSplitRefusal,
+} from './field-code-split-refusal.ts';
 export type { BatchPlanner, BatchPlannerHost };
 
 /** A handle whose object an edit, a peer, or an undo removed: reading again finds a fresh one. */
@@ -613,6 +618,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       // is left of the two ends, because that is what deleting a stretch of a document means.
       // The join is the canonical `joinParagraphs`, so a span that spills across a table cell
       // is refused there and the whole batch with it.
+      const fieldCode = fieldCodeDeleteRefusal(reads.part, ids);
+      if (fieldCode) return fieldCode;
       for (const paragraphId of ids) {
         const conflict = claim(plan, paragraphId);
         if (conflict) return conflict;
@@ -805,7 +812,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (!anchorSlot) return refuse('invalid-handle', 'that paragraph is not in the body');
     const anchorLength = (reads.rawText(anchor.paragraphId) ?? '').length;
     const edge = where === 'after' ? anchorLength : 0;
-    const lineBreak = lineBreakRefusal(reads.part, anchor.paragraphId, edge, edge, text);
+    const lineBreak =
+      lineBreakRefusal(reads.part, anchor.paragraphId, edge, edge, text) ??
+      fieldCodeSplitRefusal(reads.part, anchor.paragraphId, [edge]);
     if (lineBreak) return lineBreak;
     const ops: TreeDocOp[] = [];
     // One paragraph becomes two by splitting one: `splitParagraph` leaves the HEAD on the
@@ -890,6 +899,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       pieces.push(text.slice(previous));
     }
 
+    const fieldCode = fieldCodeSplitRefusal(plan.reads.part, paragraph.paragraphId, offsets);
+    if (fieldCode) return fieldCode;
     if (offsets.length > 0)
       ops.push({ op: 'splitParagraphMany', paragraphId: paragraph.paragraphId, offsets });
 
@@ -919,6 +930,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const planDeleteParagraph = (plan: StoryPlan, paragraph: ResolvedPoint): PlannedOperation => {
     const pin = pinWrite(plan);
     if (pin) return pin;
+    const fieldCode = fieldCodeParagraphDeleteRefusal(plan.reads.part, paragraph.paragraphId);
+    if (fieldCode) return fieldCode;
     const conflict = claim(plan, paragraph.paragraphId);
     if (conflict) return conflict;
     const slot = plan.slotById.get(paragraph.paragraphId);

@@ -28,6 +28,8 @@ import {
 } from '../store/package/field-marker-scope.ts';
 import { MAX_FIELD_RESULT_NODES } from '../store/package/field-result-text.ts';
 import { parseButtonInstruction } from './field-button.ts';
+import { currentFieldDate, formatDateField, parseDateFieldInstruction } from './field-date.ts';
+import { runTextLanguage } from './run-proofing.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
@@ -67,6 +69,7 @@ import {
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
+  formulaOperandIsNumber,
   PAGE_FIELD_PLACEHOLDER,
   pageFieldMarker,
   pageFieldMeasuredText,
@@ -203,8 +206,11 @@ export function collectSimpleFieldDisplay(args: {
             if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
               // A field inside an enclosing instruction never arms: its value feeds that
               // instruction and is not displayed.
+              // A formula without a numeric operand keeps its cached result.
               const shown = displayed() && !isInsideOpenFieldInstruction(nested);
-              tracker.onSeparate(pageContext && shown ? match : null, separateLevel);
+              const live =
+                pageContext && shown && match && formulaOperandIsNumber(match, pageContext.format);
+              tracker.onSeparate(live ? match : null, separateLevel);
             }
             continue;
           }
@@ -494,6 +500,27 @@ function projectSimpleFieldDisplay(
         return { text: value, props, style };
       }
     }
+  }
+
+  // DATE and TIME show the layout's field date over a saved result, like the complex shape.
+  // Names follow the language of the run that holds the instruction (17.16.4.1). A simple
+  // field holds its instruction in `w:instr` (17.16.19, `CT_SimpleField`), not in a run, so
+  // the language comes from the paragraph's run properties without direct formatting: the
+  // document defaults, table style, and paragraph style. A language set there decides, also
+  // over a result run in another language. The result run's language decides only when none
+  // of them sets one. The paragraph mark's `w:rPr` never names it.
+  const dateSpec = parseDateFieldInstruction(instr);
+  const fieldDate = dateSpec ? currentFieldDate() : undefined;
+  const languageProps =
+    runTextLanguage(inheritedRunProperties) !== null ? inheritedRunProperties : props;
+  const dateText =
+    dateSpec && fieldDate && (display.text.length > 0 || !display.sawResultContent)
+      ? formatDateField(dateSpec, fieldDate, languageProps)
+      : null;
+  if (dateText !== null) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return null;
+    return { text: dateText, props, style };
   }
 
   // Synthesis fills only a result the file never cached: a cached result that exists but is

@@ -910,7 +910,7 @@ export function moveRowToTop(
   rowBottom = Math.min(Number.POSITIVE_INFINITY, Math.max(rowBottom, top));
   for (const needed of bottoms)
     if (needed > rowBottom && needed <= Number.POSITIVE_INFINITY + 0.001) rowBottom = needed;
-  // Placement gives a row nothing raised its line-height fallback; this does not repeat it.
+  // Placement gives a row nothing raised its floor (`unsizedRowFloorPt`); this does not repeat it.
   if (rowBottom <= top + 0.001) return noteShiftedRowRefusal('floor');
   rowBottom = Math.min(Number.POSITIVE_INFINITY, rowBottom);
   const authoredFloorPt =

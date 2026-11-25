@@ -72,6 +72,12 @@ export interface PaginatedSurfaceOptions {
    * complex field results are not supported. Refused with a {@link collaborationModel}.
    */
   readonly fieldResults?: FieldResultsMode;
+  /**
+   * The moment DATE and TIME fields with a `\@` picture show. Display only: the document, printing,
+   * and PDF export keep the saved results. Absent, fields show their saved results. Refused with
+   * the `editable` {@link fieldResults} mode.
+   */
+  readonly fieldDate?: Date;
   readonly measurer?: TextMeasurer;
   /** Ambient author for tracked edits. Required before suggesting can write anything. */
   readonly author?: string;

@@ -96,6 +96,15 @@ export interface DocxEditorProps {
    */
   fieldResults?: FieldResultsMode;
   /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
+   * Display only: the document, printing, and PDF export keep the saved results. Absent (the
+   * default), fields show their saved results. Read once, when the editor is created: a later
+   * change to a different time is ignored, with a development warning. A new `Date` with the same
+   * time does nothing. Refused with a `TypeError` when it is not a valid `Date`, or with
+   * `fieldResults: 'editable'`.
+   */
+  fieldDate?: Date;
+  /**
    * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
    * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
    * protected. Read once, when the editor is created: a later change in value is ignored,

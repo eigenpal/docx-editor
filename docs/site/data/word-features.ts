@@ -1048,7 +1048,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page fields calculate page numbers and totals in the body, headers, and footers. Supported number formats follow section settings or field switches. Unsupported switches keep saved results, and wider calculated values do not move following text.',
+      'Page fields, and `=` formulas that wrap one, calculate page numbers and totals in the body, headers, and footers. Supported number formats follow section settings or field switches. Unsupported switches keep saved results, and wider calculated values do not move following text.',
   },
   {
     id: 'fields.toc',
@@ -1118,7 +1118,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Most fields display saved results without recalculation; supported symbol and metadata fields display their values. You can enable editing for selected field results outside collaboration. The editor never executes macros or external field instructions.',
+      'Supported fields show computed values, DATE and TIME can show a host-supplied date, and others show saved results. You can enable editing for selected field results outside collaboration. The editor never executes macros or external field instructions.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {

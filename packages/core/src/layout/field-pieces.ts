@@ -24,7 +24,7 @@ import {
 import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
-import type { AllowlistedPageField } from './field-instruction.ts';
+import type { AllowlistedPageField, AllowlistedPageFieldMatch } from './field-instruction.ts';
 import type { PageFieldNumberFormat, PageFieldSwitches } from './field-page-switches.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { ListNumFieldSpec } from './field-listnum.ts';
@@ -467,9 +467,10 @@ export interface PendingFieldProjection {
    * The `\#` picture and `\*` number format of {@link kind}; empty when the field states none.
    *
    * Captured beside the kind, and for the same reason the specs below are: the machine's
-   * instruction buffer is reset before the flush runs.
+   * instruction buffer is reset before the flush runs. For an `=` formula it also says whether
+   * the operand follows the section's page-number format.
    */
-  pageSwitches: PageFieldSwitches;
+  pageSwitches: PageFieldSwitches & Pick<AllowlistedPageFieldMatch, 'formulaOperandFollowsSection'>;
   /**
    * Parsed SYMBOL instruction, or null when the field is not one.
    *
@@ -513,6 +514,18 @@ export interface PendingFieldProjection {
    * empty cache.
    */
   docPropertySpec: DocPropertyField | null;
+  /**
+   * Recognized DATE or TIME instruction with a `\@` picture, or absent/null. When the layout
+   * call has a field date, the field shows it through the picture, over a non-empty cache.
+   */
+  dateSpec?: import('./field-date.ts').DateFieldSpec | null;
+  /**
+   * The cascaded properties of the first live run with level-1 instruction text. A DATE or
+   * TIME picture shows day and month names in that run's language (ECMA-376 Part 1, 17.16.4.1).
+   */
+  instructionProps?: readonly OoxmlProperty[];
+  /** The same for the first `w:delInstrText` run; used only when no live instruction exists. */
+  deletedInstructionProps?: readonly OoxmlProperty[];
   /**
    * Recognized REF cross-reference instruction, or null when the field is not one.
    *
