@@ -111,7 +111,8 @@
 // a row has to add a guard for that. `fixedSpanBeside` is the one exception: it adds a second
 // decision inside the rows of the first, at the same head row. That is safe because all its rows
 // are `hRule="exact"`, so it adds no floor or surplus, and its rows lie inside the first span,
-// so `heldRows` already keeps them with the first head.
+// so `heldRows` already keeps them with the first head. They lie inside because `spansByRow`
+// visits the longest span of a head row first, so the plan that exists is never the shorter one.
 //
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
