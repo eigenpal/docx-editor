@@ -10,6 +10,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import {
+  FIELD_CODE_PASTE_NOTICE,
   hiddenMarkRemovedIds,
   hiddenParagraphsBetween,
   shownPosition,
@@ -645,6 +646,10 @@ describe('paragraphs inside a field instruction', () => {
       );
       expect(codes.match(/<w:p[ >/]/g)).toHaveLength(3);
       expect(surface.session.paragraphIds()).toHaveLength(ids.length + 1);
+      // A rich paste says that it kept only its text; plain lines have nothing to report.
+      expect(surface.state().lastRejection).toBe(
+        label === 'a rich paste' ? FIELD_CODE_PASTE_NOTICE : null
+      );
     });
   }
 

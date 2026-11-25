@@ -204,6 +204,21 @@ describe('a field nested past the nesting cap', () => {
       'Result after',
     ]);
   });
+
+  test('counts the result text of a field past the cap as stray text, conservatively', () => {
+    // The outer IF and three nested IF fields are tracked; the REF field is the fifth level.
+    // Its saved result reads as stray text, so the outer IF keeps its paragraphs.
+    const nested =
+      `${fldChar('begin')}${instr('IF ')}`.repeat(3) +
+      `${fldChar('begin')}${instr('REF x')}${fldChar('separate')}${text('x')}${fldChar('end')}` +
+      `${fldChar('end')}`.repeat(3);
+    expect(lineTexts(ifField([para(nested), para('')], 'Result'))).toEqual([
+      'before ',
+      '',
+      '',
+      'Result after',
+    ]);
+  });
 });
 
 // Showing field instructions applies to table of contents fields. An `IF` field keeps its saved

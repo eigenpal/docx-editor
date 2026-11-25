@@ -64,6 +64,13 @@ export const FIELD_CODE_SPLIT_REFUSAL =
   'field-code-mark: this would add a paragraph mark inside a field instruction';
 
 /**
+ * The informational rejection a rich paste leaves when it would have added paragraph marks
+ * inside field codes and landed as plain text instead (`surface-clipboard-ops.ts`).
+ */
+export const FIELD_CODE_PASTE_NOTICE =
+  'field-code-mark: the paste kept only its text, because its paragraphs would land inside a field instruction';
+
+/**
  * Ids of the paragraphs among `children` that layout removes under a hidden mark in `view`.
  *
  * Asks the same collector layout uses for that container, so the two cannot disagree. A
@@ -276,6 +283,9 @@ export function absorbRemovedAfter(
  * (`surface-journaled-apply.ts`), so Enter, a section break, a table, and a table of contents
  * all refuse in one place; a rich paste asks {@link fieldCodePasteRefusal} before its package
  * transaction. The check reads the tree before the batch, where a collapsed caret's ops point.
+ * An op that a batch moves after an earlier op, such as a split behind inserted text, is read
+ * at its pre-batch offset. That can only miss a refusal, never refuse a write wrongly: the
+ * offsets this refuses sit before the field codes in the pre-batch tree.
  */
 export function opsAddFieldCodeMark(
   partOf: (paragraphId: string) => OoxmlPart | null,
