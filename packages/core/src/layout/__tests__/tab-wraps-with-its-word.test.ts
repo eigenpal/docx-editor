@@ -1,5 +1,6 @@
-// Word keeps a tab with the word after it. When the word would overflow the line, the tab
-// opens the next line and reaches its stop there. The word does not open the line alone.
+// A tab stays with the unbreakable word after it (`w:tab`, Tab Character, `CT_Empty`, ECMA-376
+// Part 1, 17.3.3.32). When the word would overflow the line, the tab opens the next line and
+// reaches its stop there. The word does not open the line alone.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
@@ -64,4 +65,31 @@ test('a word too wide to follow its tab on any line still opens the next line al
   );
 
   expect(texts(lines)).toEqual(['Text\t', '12']);
+});
+
+test('ideographs after a tab break between characters, so the tab stays on its line', () => {
+  // Each ideograph is a break opportunity, so the word after the tab is one character wide.
+  const lines = layout(run('A'.repeat(50)) + tab + run('日'.repeat(30)));
+
+  expect(texts(lines)[0]!.startsWith(`${'A'.repeat(50)}\t日`)).toBe(true);
+});
+
+test('an optional hyphen after a tab ends the word, so the tab stays and the word hyphenates', () => {
+  // 300pt of text, a tab to 324pt, then 60pt of letters and a 6pt hyphen fit before 400pt.
+  const lines = layout(
+    run('A'.repeat(50)) + tab + run('Abcdefghij') + '<w:r><w:softHyphen/></w:r>' + run('klmnopqrst')
+  );
+
+  expect(texts(lines)[0]!.startsWith(`${'A'.repeat(50)}\tAbcdefghij`)).toBe(true);
+  expect(texts(lines)[1]).toBe('klmnopqrst');
+});
+
+test('a second leading tab moves down with a word that fits after one tab on a fresh line', () => {
+  // Two tabs reach 72pt, and the 360pt word overflows there. On a fresh line one tab reaches
+  // 36pt and the word fits, so the first line keeps only the first tab.
+  const lines = layout(tab + tab + run('L'.repeat(60)));
+
+  expect(texts(lines)).toEqual(['\t', `\t${'L'.repeat(60)}`]);
+  const word = lines[1]!.spans.find((span) => span.text.startsWith('L'))!;
+  expect(word.box.x).toBeCloseTo(36, 5);
 });

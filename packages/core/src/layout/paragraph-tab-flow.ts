@@ -208,9 +208,11 @@ export function tabPlacement(
 }
 
 /**
- * Whether a tab opens the next line with the word after it. Word keeps the two together: when
- * the word would overflow the line after the tab, the tab moves down and reaches its stop on the
- * next line. When the two would not fit on a fresh line either, the word opens it alone.
+ * Whether a tab opens the next line with the word after it (`w:tab`, Tab Character, `CT_Empty`,
+ * ECMA-376 Part 1, 17.3.3.32). The standard defines only where a tab advances to. A tab and the
+ * unbreakable word after it stay together: when the word would overflow the line after the tab,
+ * the tab moves down and reaches its stop on the next line. When the two would not fit on a
+ * fresh line either, the word opens it alone.
  */
 export function tabCarriesItsWord(
   context: TabContext,

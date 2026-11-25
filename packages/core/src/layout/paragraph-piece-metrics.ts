@@ -6,6 +6,7 @@
 import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
 import {
   BREAK_AFTER_DASH,
+  cjkBreakAllowedBetween,
   STARTS_WITH_BREAKING_SPACE,
   ZERO_WIDTH_SPACE,
 } from './cjk-line-break.ts';
@@ -93,10 +94,14 @@ export function placeableContentSuffixes(
   return suffixes;
 }
 
+/** An optional hyphen (`w:softHyphen`) lays out as U+00AD; a line may end after it. */
+const OPTIONAL_HYPHEN = '\u00ad';
+
 /**
- * The width of the word right after a tab: its text up to the first break opportunity, which is
- * a breaking space, a zero-width space, a dash (kept in the word), another tab or a line break.
- * No-break spaces belong to the word. A picture or an equation ends it.
+ * The width of the word right after a tab: its text up to the first break opportunity. That is a
+ * breaking space, a zero-width space, another tab, a line break, a break between two ideographs,
+ * a dash (kept in the word), or an optional hyphen (kept, with the width of the hyphen that a
+ * break there shows). No-break spaces belong to the word. A picture or an equation ends it.
  */
 export function measureWordAfterTab(
   pieces: readonly Piece[],
@@ -106,33 +111,41 @@ export function measureWordAfterTab(
   pageBreaksIgnored = false
 ): number {
   let width = 0;
+  let previous: number | undefined;
   for (let index = pieceIndex; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     if (piece.unsupported || piece.inlineDrawing || piece.equation) return width;
     const from = index === pieceIndex ? offsetInPiece : 0;
     let to = from;
     let ended = false;
+    let hyphen = false;
     while (to < piece.text.length && !ended) {
       const ch = piece.text[to]!;
+      const codePoint = piece.text.codePointAt(to)!;
       if (
         ch === '\t' ||
         ch === '\n' ||
         ch === ZERO_WIDTH_SPACE ||
         (ch === PAGE_BREAK_CHAR && !pageBreaksIgnored) ||
-        STARTS_WITH_BREAKING_SPACE.test(ch)
+        STARTS_WITH_BREAKING_SPACE.test(ch) ||
+        (previous !== undefined && cjkBreakAllowedBetween(previous, codePoint))
       ) {
         ended = true;
         break;
       }
-      to += 1;
-      ended = BREAK_AFTER_DASH.has(ch);
+      to += codePoint > 0xffff ? 2 : 1;
+      previous = codePoint;
+      hyphen = ch === OPTIONAL_HYPHEN;
+      ended = hyphen || BREAK_AFTER_DASH.has(ch);
     }
     const slice = piece.text.slice(from, to);
-    const visible = pageBreaksIgnored ? slice.replaceAll(PAGE_BREAK_CHAR, '') : slice;
-    if (visible) {
-      const style = styleForFontSlot(piece.style, piece.fontSlot);
-      width += measurer.measure(displayText(visible, style), style);
-    }
+    const visible = (pageBreaksIgnored ? slice.replaceAll(PAGE_BREAK_CHAR, '') : slice).replaceAll(
+      OPTIONAL_HYPHEN,
+      ''
+    );
+    const style = styleForFontSlot(piece.style, piece.fontSlot);
+    if (visible) width += measurer.measure(displayText(visible, style), style);
+    if (hyphen) width += measurer.measure('-', style);
     if (ended) return width;
   }
   return width;
