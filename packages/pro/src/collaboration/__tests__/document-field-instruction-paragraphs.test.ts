@@ -4,11 +4,13 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Two participants edit around an `IF` field whose field codes span paragraphs. Layout removes
-// those paragraphs in both editors, a remote edit that makes the field codes well formed lays
-// them out again, and Delete before the field shares no join.
+// those paragraphs in both editors and lays the text on either side of the field codes out as
+// one line. A remote edit that makes the field codes well formed lays them out again, edits on
+// both sides of that line converge, and a peer's caret on it paints on that one line.
 import { expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createFixedMeasurer, linesOf } from '@docx-editor.dev/core/layout';
+import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import {
   mountPaginatedSurface,
   type PaginatedSurface,
@@ -30,15 +32,19 @@ const measurer = createFixedMeasurer(6, 14);
 test('participants agree on field-code paragraphs through edits, undo, and save', async () => {
   const harness = createPeerHarness('field-instruction-paragraphs');
   const active: PaginatedSurface[] = [];
+  const containers = new Map<PaginatedSurface, HTMLElement>();
   const open = (bytes: Uint8Array, peer?: Peer) => {
     peer?.detach();
-    const result = mountPaginatedSurface(document.createElement('div'), bytes, {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const result = mountPaginatedSurface(container, bytes, {
       scale: 1,
       measurer,
       ...(peer ? { collaborationModel: { session: peer.room.session } } : {}),
     });
     if (!result.ok) throw new Error(result.reason);
     active.push(result.surface);
+    containers.set(result.surface, container);
     return result.surface;
   };
   const shown = (surface: PaginatedSurface) =>
@@ -66,34 +72,77 @@ test('participants agree on field-code paragraphs through edits, undo, and save'
     // Stray text in the field codes keeps every paragraph.
     converged(['before', 'Z', '', 'Yes after']);
 
-    // Alice removes the stray text while Bob types after the field: both drop the paragraphs.
+    // Alice removes the stray text while Bob types after the field: both drop the paragraphs,
+    // and the text on either side of the field codes shares one line.
     peers.pause();
     caret(alice, 1, 1);
     alice.deleteBackward();
     caret(bob, 3, 3);
     bob.type('!');
     peers.resume();
-    converged(['before', 'Yes! after']);
+    converged(['before Yes! after']);
 
-    // Delete before the field steps over the field codes in Bob's editor and shares nothing.
-    caret(bob, 0, 7);
-    bob.deleteForward();
-    expect(bob.state().lastRejection).toBeNull();
-    converged(['before', 'Yes! after']);
-
-    alice.undo();
-    converged(['before', 'Z', '', 'Yes! after']);
-    alice.redo();
-    converged(['before', 'Yes! after']);
-
-    // Concurrent edits on both sides of the field codes land in their own paragraphs.
+    // Concurrent edits on both sides of that line land in their own paragraphs.
     peers.pause();
     caret(alice, 0, 0);
     alice.type('A ');
     caret(bob, 3, 10);
     bob.type(' B');
     peers.resume();
-    converged(['A before', 'Yes! after B']);
+    converged(['A before Yes! after B']);
+
+    // Bob's caret, published through presence, paints on the merged line in Alice's editor:
+    // at the same height on either side of the field codes, further right on the result side.
+    const remoteCaret = async (index: number, offset: number) => {
+      caret(bob, index, offset);
+      applyAwarenessUpdate(
+        peers.alice.awareness,
+        encodeAwarenessUpdate(peers.bob.awareness, [peers.bob.awareness.clientID]),
+        'test-provider'
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const painted = containers.get(alice)!.querySelector<HTMLElement>('.docx-remote-caret');
+      expect(painted).not.toBeNull();
+      return { top: parseFloat(painted!.style.top), left: parseFloat(painted!.style.left) };
+    };
+    const onFirst = await remoteCaret(0, 0);
+    const onLast = await remoteCaret(3, 2);
+    expect(onLast.top).toBeCloseTo(onFirst.top, 3);
+    expect(onLast.left).toBeGreaterThan(onFirst.left);
+
+    // Delete at the end of the first side takes the first character of the second, in Bob's
+    // editor, and shares that edit.
+    caret(bob, 0, 9);
+    bob.deleteForward();
+    expect(bob.state().lastRejection).toBeNull();
+    converged(['A before es! after B']);
+    bob.undo();
+    converged(['A before Yes! after B']);
+
+    alice.undo();
+    converged(['before Yes! after B']);
+    alice.undo();
+    converged(['before', 'Z', '', 'Yes! after B']);
+    alice.redo();
+    converged(['before Yes! after B']);
+
+    // Bob types at the start of the result while Alice types at its end. Bob's insert lands at
+    // the end of the first side, outside the field codes, in both editors.
+    peers.pause();
+    caret(bob, 3, 0);
+    bob.type('Q');
+    caret(alice, 3, 12);
+    alice.type('.');
+    peers.resume();
+    converged(['before QYes! after B.']);
+    expect(alice.session.paragraphIds()).toHaveLength(4);
+    // Enter there splits before the field's begin: the field codes keep their marks.
+    caret(bob, 3, 0);
+    bob.splitParagraph();
+    converged(['before Q', 'Yes! after B.']);
+    expect(alice.session.paragraphIds()).toHaveLength(5);
+    bob.undo();
+    converged(['before QYes! after B.']);
 
     // Alice deletes the first side up to the result, while Bob types in the result. Both
     // converge on one document, and save keeps it.
@@ -110,8 +159,8 @@ test('participants agree on field-code paragraphs through edits, undo, and save'
     peers.alice.room.session.flushPendingJournals();
     peers.bob.room.session.flushPendingJournals();
     expect(alice.session.bodyText()).toBe(bob.session.bodyText());
-    // The field-code marks stay: the emptied first side keeps its own line.
-    const finalLines = ['', 'Yes?! after B'];
+    // The field-code marks stay, so the field still shows its result on one line.
+    const finalLines = ['Yes?! after B.'];
     expect(alice.session.paragraphIds()).toHaveLength(4);
     expect(shown(alice)).toEqual(finalLines);
     expect(shown(bob)).toEqual(finalLines);
@@ -120,6 +169,7 @@ test('participants agree on field-code paragraphs through edits, undo, and save'
     expect(shown(open(bob.save()))).toEqual(finalLines);
   } finally {
     for (const surface of active) surface.destroy();
+    for (const container of containers.values()) container.remove();
     harness.cleanup();
   }
 });

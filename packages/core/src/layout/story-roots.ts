@@ -46,6 +46,7 @@ import {
   withoutHiddenMarkParagraphs,
 } from './hidden-paragraph-mark.ts';
 import { projectRevisionFormatting } from './revision-formatting-projection.ts';
+import { fieldCodeMergedParagraph } from './field-code-paragraph-merge.ts';
 import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
@@ -91,6 +92,11 @@ export interface ParagraphMergeGroup {
   readonly merged: OoxmlElement;
   /** Members in document order. The last one is the survivor whose mark stays. */
   readonly members: readonly OoxmlElement[];
+  /**
+   * The members share a line because the first one's mark is field code
+   * (`field-code-paragraph-merge.ts`), not because a revision view removed a mark.
+   */
+  readonly fieldCode?: true;
 }
 
 /** Groups keyed by the synthetic node, so a caller holding one can ask what it came from. */
@@ -209,6 +215,8 @@ function mergedTrailingRun(members: readonly OoxmlElement[]): readonly OoxmlElem
  * shares its parent, which is the same rule the store applies.
  *
  * Last, an empty paragraph whose mark is hidden leaves the flow; see `hidden-paragraph-mark.ts`.
+ * A paragraph inside a field instruction leaves it too, and the paragraphs on either side of
+ * those field codes merge; see `field-code-paragraph-merge.ts`.
  */
 export function mergedFlowBlocks(
   children: readonly OoxmlNode[],
@@ -242,8 +250,33 @@ export function mergedFlowBlocks(
     accepted,
     displayMode,
     authorFilter,
-    (block) => !mergeGroups.has(block)
+    (block) => !mergeGroups.has(block),
+    // A table of contents lays out its own field chrome, so its paragraphs never merge here.
+    (first, last) =>
+      inExclusions(excludedParagraphs, first.id) || inExclusions(excludedParagraphs, last.id)
+        ? null
+        : fieldCodeMergedParagraph(first, last, {
+            viewKey: `${displayMode}|${authorFilter?.cacheKey ?? ''}|${currentFieldResultsMode()}`,
+            addressable: (block) => memberIsAddressable(block, displayMode, authorFilter),
+            balanced: fieldCharsBalanced,
+            register: (merged, members) =>
+              mergeGroups.set(merged, { merged, members, fieldCode: true }),
+          })
   );
+}
+
+/** Resolved exclusion sets, per lazy source: asked only when a field-code merge is a candidate. */
+const resolvedExclusions = new WeakMap<() => ReadonlySet<string>, ReadonlySet<string>>();
+
+function inExclusions(
+  exclusions: ReadonlySet<string> | (() => ReadonlySet<string>) | undefined,
+  id: string
+): boolean {
+  if (exclusions === undefined) return false;
+  if (typeof exclusions !== 'function') return exclusions.has(id);
+  let resolved = resolvedExclusions.get(exclusions);
+  if (!resolved) resolvedExclusions.set(exclusions, (resolved = exclusions()));
+  return resolved.has(id);
 }
 
 /**

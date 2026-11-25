@@ -9,6 +9,7 @@ import {
 } from './caret-line-edge-navigation.ts';
 import { nearestPageWithStops } from './caret-page-step.ts';
 import { mergedCaretGroup } from './merged-caret-navigation.ts';
+import { joinStartHidden } from './merged-paragraph-ranges.ts';
 import {
   bidiDirectionOfStop,
   horizontalCaretStep,
@@ -174,6 +175,14 @@ function pushSegmentCaretStops(
       }
     }
     if (isNonNavigableInterior(line, offset, segment)) continue;
+    // The start of a field's result side, after the first side on the same line, is the end of
+    // the first side: one caret stop (`joinStartHidden`).
+    if (
+      offset === 0 &&
+      lineSegments(line)[0]?.paragraphId !== segment.paragraphId &&
+      joinStartHidden(line, segment.paragraphId)
+    )
+      continue;
     // VISIBLE deleted content is fully navigable — Word lets the caret rest between struck
     // characters, and the tracked lane already accepts inserts there (`tree-op-tracked.ts`).
     // What is skipped is a deleted offset the display mode resolved AWAY: in the proposed

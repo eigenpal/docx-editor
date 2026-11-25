@@ -39,10 +39,12 @@ import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
-import { mergedFlowBlocks } from '../layout/story-roots.ts';
+import { mergedFlowBlocks, paragraphMergeGroupOf } from '../layout/story-roots.ts';
+import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
   blockAnchorOutsideFieldCodes,
   blockBeforeInsideFieldCodes,
+  markIsFieldCode,
   splitInsideFieldCodes,
 } from '../layout/field-code-marks.ts';
 
@@ -71,6 +73,21 @@ export const FIELD_CODE_PASTE_NOTICE =
   'field-code-mark: the paste kept only its text, because its paragraphs would land inside a field instruction';
 
 /**
+ * Ids of the paragraphs a container's laid-out blocks draw: each block, and each member of a
+ * merged paragraph. The paragraphs on either side of a field's field codes lay out as one
+ * merged paragraph, and both still show.
+ */
+function laidOutIds(flow: readonly OoxmlNode[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const block of flow) {
+    if (block.kind === 'textValue') continue;
+    ids.add(block.id);
+    for (const member of paragraphMergeGroupOf(block)?.members ?? []) ids.add(member.id);
+  }
+  return ids;
+}
+
+/**
  * Ids of the paragraphs among `children` that layout removes under a hidden mark in `view`.
  *
  * Asks the same collector layout uses for that container, so the two cannot disagree. A
@@ -84,7 +101,7 @@ export function hiddenMarkRemovedIds(
   const flow = mergedFlowBlocks(children, view.displayMode, view.authorFilter);
   const all = numberingFlowBlocks(flow);
   if (all === flow) return NONE;
-  const laidOut = new Set(flow.map((block) => block.id));
+  const laidOut = laidOutIds(flow);
   const fieldCode = paragraphsInsideFieldInstructions(all);
   return new Set(
     all.flatMap((block, index) => (laidOut.has(block.id) || fieldCode.has(index) ? [] : [block.id]))
@@ -105,7 +122,7 @@ function joinTargetOf(
   const flow = mergedFlowBlocks(children, view.displayMode, view.authorFilter);
   const all = numberingFlowBlocks(flow);
   if (all === flow) return null;
-  const laidOut = new Set(flow.map((block) => block.id));
+  const laidOut = laidOutIds(flow);
   if (laidOut.has(paragraphId)) return null;
   const index = all.findIndex((block) => block.id === paragraphId);
   if (index === -1) return null;
@@ -188,6 +205,9 @@ export function joinAcrossHiddenMarks(
 /**
  * Where a position shows on the page.
  *
+ * The start of a field's result side shows as the end of the first side, its one caret stop on
+ * the shared line (see {@link fieldCodeJoinStart}).
+ *
  * A position in a paragraph that layout removed shows at the start of the laid-out paragraph
  * that takes its join. Any other position, and one whose container holds nothing laid out
  * after it, shows where it is.
@@ -198,6 +218,8 @@ export function shownPosition(
   position: SemanticPosition,
   view: RevisionView
 ): SemanticPosition {
+  const join = fieldCodeJoinStart(layout, part, position);
+  if (join) return join;
   if (paragraphLinesFor(layout, position.paragraphId).length > 0) return position;
   const parent = parentNodeOf(part, position.paragraphId);
   if (parent === null) return position;
@@ -331,6 +353,57 @@ export function fieldCodePasteRefusal(
   return part !== null && splitInsideFieldCodes(part, position.paragraphId, position.offset)
     ? FIELD_CODE_SPLIT_REFUSAL
     : null;
+}
+
+/**
+ * The paragraph that opens the field when `paragraphId` is the result side of a field's shared
+ * line, or null. A field-code merge has exactly these two members (a paragraph that closes one
+ * field's codes never opens another merge), so the member drawn directly before is the first.
+ */
+function fieldCodeLineOpener(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  paragraphId: string
+): string | null {
+  const before = mergedPredecessorsOf(layout, paragraphId);
+  const opener = before.at(-1);
+  return before.length === 1 && opener !== undefined && markIsFieldCode(part, opener)
+    ? opener
+    : null;
+}
+
+/**
+ * Where an insert at `position` belongs, and where the caret shows, when the position is the
+ * start of the result side of a field's shared line (see `layout/field-code-paragraph-merge.ts`).
+ *
+ * That offset sits before the field codes that continue into the paragraph, so a split there
+ * would add a paragraph mark inside the field instruction (ECMA-376 Part 1, 17.16.18) and the
+ * page would not change. The same place on the page is the end of the first side's text,
+ * before the field's `begin`, where a split leaves the field codes whole. Null anywhere else.
+ */
+export function fieldCodeJoinStart(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition
+): SemanticPosition | null {
+  if (position.offset !== 0) return null;
+  const opener = fieldCodeLineOpener(layout, part, position.paragraphId);
+  return opener === null
+    ? null
+    : { paragraphId: opener, offset: (paragraphTextOf(part, opener) ?? '').length };
+}
+
+/**
+ * The paragraph a block goes before when the caret is in `paragraphId`: the paragraph that
+ * opens the field when `paragraphId` is the result side of a field's shared line, so a table
+ * lands before that line and not inside the field codes. `paragraphId` anywhere else.
+ */
+export function fieldCodeLineFirst(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  paragraphId: string
+): string {
+  return fieldCodeLineOpener(layout, part, paragraphId) ?? paragraphId;
 }
 
 /** The editing surface's view of the rules above, over its live layout, story, and view. */
