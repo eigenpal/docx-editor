@@ -562,7 +562,6 @@ function EditorChrome({
           <span className="demo-topbar__divider" aria-hidden="true" />
           <DemoHeaderButton
             aria-label={t('demoTopbar.openDocx')}
-            title={t('demoTopbar.openDocx')}
             disabled={busy}
             onClick={() => fileInputRef.current?.click()}
           >
