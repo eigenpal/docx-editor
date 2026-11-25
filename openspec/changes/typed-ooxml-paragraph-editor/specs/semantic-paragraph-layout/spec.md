@@ -1561,7 +1561,7 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 #### Scenario: An automation write splits inside the field codes
 
 - **GIVEN** field codes that hold paragraph marks
-- **WHEN** an automation write would add a paragraph mark in a paragraph inside them, or at the start of the paragraph where they end
+- **WHEN** an automation write would add a paragraph mark or a table in a paragraph inside them, or at the start of the paragraph where they end
 - **THEN** the planner refuses with `unsupported-capability` and the detail `field-code-mark`, which the editor API reports as `NotSupported`
 - **AND** the document does not change
 

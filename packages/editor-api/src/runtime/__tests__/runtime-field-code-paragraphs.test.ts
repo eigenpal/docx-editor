@@ -143,3 +143,36 @@ describe('a delete that would remove a paragraph mark inside field codes', () =>
     runtime.dispose();
   });
 });
+
+describe('a table that would land inside field codes', () => {
+  const item = (c: RequestContext, index: number) => c.document.body.paragraphs.items[index]!;
+  const tables: [string, (c: RequestContext) => void][] = [
+    ['before the result paragraph', (c) => item(c, 3).insertTable(1, 1, 'Before', [['x']])],
+    [
+      'after a paragraph inside the field codes',
+      (c) => item(c, 2).insertTable(1, 1, 'After', [['x']]),
+    ],
+    ['after the paragraph that holds begin', (c) => item(c, 1).insertTable(1, 1, 'After', [['x']])],
+  ];
+  for (const [label, insert] of tables) {
+    test(`${label} is refused`, async () => {
+      expect(await refusal(insert)).toBe('NotSupported');
+    });
+    test(`${label} is refused while tracking`, async () => {
+      expect(await refusal(insert, true)).toBe('NotSupported');
+    });
+  }
+
+  test('a table after the field still applies', async () => {
+    const runtime = await DocxEditor.createServer(docx(FIELD));
+    await runtime.run(async (c) => {
+      c.document.body.paragraphs.load('items');
+      await c.sync();
+      item(c, 3).insertTable(1, 1, 'After', [['x']]);
+      await c.sync();
+    });
+    const xml = await bodyXml(runtime);
+    expect(xml.indexOf('<w:tbl')).toBeGreaterThan(xml.indexOf('fldCharType="end"'));
+    runtime.dispose();
+  });
+});

@@ -8,7 +8,11 @@
 // removes such a mark is refused for the same reason.
 
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { markIsFieldCode, splitInsideFieldCodes } from '../layout/field-code-marks.ts';
+import {
+  blockBeforeInsideFieldCodes,
+  markIsFieldCode,
+  splitInsideFieldCodes,
+} from '../layout/field-code-marks.ts';
 import type { PlannedOperation } from './plan-types.ts';
 
 /** The refusal for a split at any of `offsets` of `paragraphId` inside field codes, or null. */
@@ -42,6 +46,28 @@ export function fieldCodeParagraphDeleteRefusal(
 ): PlannedOperation | null {
   if (!markIsFieldCode(part, paragraphId)) return null;
   return refusal('this paragraph holds a paragraph mark inside a field instruction');
+}
+
+/**
+ * The refusal for a table authored at `offset` of `paragraphId` when it would land inside
+ * field codes, or null. The table goes before the next paragraph at the end of a paragraph,
+ * before this paragraph at its start, and before the tail of a split anywhere else, the same
+ * placement `planInsertTable` makes.
+ */
+export function fieldCodeTableRefusal(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number,
+  length: number,
+  nextParagraphId: string | undefined
+): PlannedOperation | null {
+  const inside =
+    offset === 0
+      ? blockBeforeInsideFieldCodes(part, paragraphId)
+      : offset === length && nextParagraphId !== undefined
+        ? blockBeforeInsideFieldCodes(part, nextParagraphId)
+        : splitInsideFieldCodes(part, paragraphId, offset);
+  return inside ? refusal('a table here would land inside a field instruction') : null;
 }
 
 function refusal(message: string): PlannedOperation {
