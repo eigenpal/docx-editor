@@ -17,9 +17,10 @@
 //
 // A field without a picture keeps its saved result, because 17.16.4.1 leaves the default format
 // to the implementation. So do `\l`, `\h`, `\s`, casing switches, and any picture letter outside
-// the codes below. Month and day names follow the run's language (`w:lang`, 17.3.2.20,
-// `CT_Language`). Only English names are built in, so a picture with a name keeps its saved
-// result in a run of another language. Numeric codes and `AM/PM` do not depend on the language.
+// the codes below. Month and day names follow the language of the run that holds the field
+// instruction (`w:lang`, 17.3.2.20, `CT_Language`). Only English names are built in, so a
+// picture with a name keeps its saved result in a run of another language. Numeric codes and
+// `AM/PM` do not depend on the language.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
@@ -101,6 +102,7 @@ const MONTHS = [
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const isAsciiLetter = (char: string): boolean => /^[A-Za-z]$/.test(char);
+const isSpace = (char: string | undefined): boolean => char !== undefined && /^\s$/.test(char);
 
 /**
  * Split a `\@` picture into items, or null when it holds a letter outside the codes.
@@ -152,7 +154,7 @@ function readArgument(text: string, start: number): { value: string; end: number
     return { value: text.slice(start + 1, close), end: close + 1 };
   }
   let end = start;
-  while (end < text.length && text[end] !== ' ' && text[end] !== '\\') {
+  while (end < text.length && !isSpace(text[end]) && text[end] !== '\\') {
     if (text[end] === '"') return null;
     end += 1;
   }
@@ -162,22 +164,23 @@ function readArgument(text: string, start: number): { value: string; end: number
 /** Recognize a DATE or TIME instruction with a `\@` picture, or null (saved result shows). */
 export function parseDateFieldInstruction(raw: string): DateFieldSpec | null {
   if (raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
-  const instruction = raw.replace(/\s+/g, ' ').trim();
+  // Whitespace is not collapsed: a quoted picture keeps its spaces and tabs as literal text.
+  const instruction = raw.trim();
   let index = 0;
-  while (index < instruction.length && instruction[index] !== ' ') index += 1;
+  while (index < instruction.length && !isSpace(instruction[index])) index += 1;
   const keyword = instruction.slice(0, index).toUpperCase();
   if (keyword !== 'DATE' && keyword !== 'TIME') return null;
 
   let picture: DatePictureItem[] | null = null;
   while (index < instruction.length) {
-    if (instruction[index] === ' ') {
+    if (isSpace(instruction[index])) {
       index += 1;
       continue;
     }
     if (instruction[index] !== '\\') return null;
     const kind = instruction[index + 1];
     index += 2;
-    while (instruction[index] === ' ') index += 1;
+    while (isSpace(instruction[index])) index += 1;
     const argument = readArgument(instruction, index);
     if (argument === null || argument.value.length === 0) return null;
     index = argument.end;
@@ -248,8 +251,9 @@ function hasEnglishNames(language: string | null): boolean {
 
 /**
  * The text a recognized field shows for `date`, in the date's local time, or null when the
- * picture shows a day or month name and `props` (the run's cascaded properties) select a
- * language other than English. The field then keeps its saved result.
+ * picture shows a day or month name and `props` (the cascaded properties of the run that holds
+ * the field instruction) select a language other than English. The field then keeps its saved
+ * result.
  */
 export function formatDateField(
   spec: DateFieldSpec,

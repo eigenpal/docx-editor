@@ -519,6 +519,11 @@ export interface PendingFieldProjection {
    */
   dateSpec?: import('./field-date.ts').DateFieldSpec | null;
   /**
+   * The cascaded properties of the first run that holds the level-1 instruction. A DATE or
+   * TIME picture shows day and month names in that run's language (ECMA-376 Part 1, 17.16.4.1).
+   */
+  instructionProps?: readonly OoxmlProperty[];
+  /**
    * Recognized REF cross-reference instruction, or null when the field is not one.
    *
    * Captured at the same points as {@link symbolSpec}. Unlike {@link buttonSpec}, a resolved

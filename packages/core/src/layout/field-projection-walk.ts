@@ -534,6 +534,10 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
       }
 
       if (isInstrText(grand)) {
+        // DATE and TIME names follow the language of the run that holds the instruction.
+        if (pending && field.nesting === 1 && pending.instructionProps === undefined) {
+          pending.instructionProps = props;
+        }
         ingestInstrTextBounded(field, grand, budget, runDepth + 1);
         continue;
       }

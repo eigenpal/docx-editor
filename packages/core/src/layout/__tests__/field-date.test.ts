@@ -157,6 +157,40 @@ describe('DATE fields in layout', () => {
     expect(painted(mixed, { measurer, fieldDate: MOMENT })).toBe('1 janvier 202005/03/2026');
   });
 
+  test('take the language of the instruction run, not of the result run', () => {
+    const lang = (value: string) => `<w:rPr><w:lang w:val="${value}"/></w:rPr>`;
+    const field = (instructionLang: string, resultLang: string) =>
+      `<w:p><w:r>${instructionLang}<w:fldChar w:fldCharType="begin"/></w:r>` +
+      `<w:r>${instructionLang}<w:instrText xml:space="preserve"> DATE \\@ "d MMMM" </w:instrText></w:r>` +
+      `<w:r>${instructionLang}<w:fldChar w:fldCharType="separate"/></w:r>` +
+      `<w:r>${resultLang}<w:t>saved</w:t></w:r>` +
+      `<w:r>${instructionLang}<w:fldChar w:fldCharType="end"/></w:r></w:p>`;
+    expect(painted(field(lang('fr-FR'), ''), { measurer, fieldDate: MOMENT })).toBe('saved');
+    expect(painted(field(lang('fr-FR'), lang('en-US')), { measurer, fieldDate: MOMENT })).toBe(
+      'saved'
+    );
+    expect(painted(field(lang('en-US'), lang('fr-FR')), { measurer, fieldDate: MOMENT })).toBe(
+      '5 March'
+    );
+  });
+
+  test('keep the saved result of a picture built from a nested field', () => {
+    const nested =
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> DATE \\@ "</w:instrText></w:r>' +
+      complexField('QUOTE dd', 'dd') +
+      '<w:r><w:instrText xml:space="preserve">/MM" </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      text('saved') +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    expect(painted(nested, { measurer, fieldDate: MOMENT })).toBe('saved');
+  });
+
+  test('keep spaces and tabs inside a quoted picture', () => {
+    expect(format('DATE \\@ "d  MMMM\tyyyy"')).toBe('5  March\t2026');
+    expect(format('DATE\t\\@\t"yyyy"')).toBe('2026');
+  });
+
   test('keep the saved results while saved results are editable text', () => {
     expect(painted(body, { measurer, fieldDate: MOMENT, fieldResults: 'editable' })).toBe(
       'Dated 1 January 2020At 09:00Raw 01/01/2020'
