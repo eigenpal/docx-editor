@@ -290,7 +290,7 @@ test('merged empty cells with hidden marks keep one default line per row', () =>
         row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
     )
   );
-  // The 5pt text fits the head row's default line.
+  // The 5pt text fits the head row's default line, and the continuation row takes another.
   expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(20);
 });
 

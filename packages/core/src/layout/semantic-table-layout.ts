@@ -1448,7 +1448,11 @@ export function layoutRowFragmentBounded(
   const markSizedRow =
     row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
   // A row of continuations only takes its first cell (`cellReservedMarkHeights`, 17.4.84).
-  const onlyContinuations = row.cells.every((cell) => cell.vMergeContinue);
+  // Heads that a merged-text carry emptied hold no end paragraph, so their rows keep sizing
+  // from each cell (`table-vmerge-fragment-carry.ts`).
+  const onlyContinuations = row.cells.every(
+    (cell) => cell.vMergeContinue && cell.blocks.length > 0
+  );
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {

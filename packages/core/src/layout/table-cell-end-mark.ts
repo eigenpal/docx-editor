@@ -169,27 +169,21 @@ export function cellReservedMarkHeights(
   return { markFloor: 0, continuation: cellContinuationHeight(cell, widthPt, deps) };
 }
 
-const defaultLineStyles = new WeakMap<
-  StyleCascadeTable,
-  {
-    readonly theme: StyleCascadeTable['themeFonts'] | undefined;
-    readonly style: ReturnType<typeof resolveRunStyle>;
-  }
->();
+const defaultLineStyles = new WeakMap<StyleCascadeTable, ReturnType<typeof resolveRunStyle>>();
 
 /**
  * The run properties of a paragraph that names no style: the document defaults under the
- * default paragraph style. Resolved once per style table and theme.
+ * default paragraph style. Resolved once per style table, which also holds the theme.
  */
 function defaultParagraphRunStyle(deps: TableFlowDeps): ReturnType<typeof resolveRunStyle> {
   const table = deps.styleCascade;
   if (table === undefined) return DEFAULT_RUN_STYLE;
-  const theme = table.themeFonts;
   const known = defaultLineStyles.get(table);
-  if (known && known.theme === theme) return known.style;
+  if (known) return known;
   const properties = cascadeParagraphFormatting(table, undefined).runProperties;
-  const style = properties.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(properties, theme);
-  defaultLineStyles.set(table, { theme, style });
+  const style =
+    properties.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(properties, table.themeFonts);
+  defaultLineStyles.set(table, style);
   return style;
 }
 

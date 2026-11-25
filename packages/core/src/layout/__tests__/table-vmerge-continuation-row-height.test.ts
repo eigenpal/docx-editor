@@ -157,9 +157,60 @@ test('a header sizes its row of continuations from the first cell', () => {
   expect(tableOf(story.fragments).rows[1]!.box.height).toBeCloseTo(line(8), 6);
 });
 
-test('a retained session follows a change to the first cell', () => {
+test('a reused layout session keeps no stale row height after the first cell changes', () => {
   const session = createLayoutSession();
   expect(middleRow(continuationTable([small, big]), session)).toBeCloseTo(line(8), 6);
   expect(middleRow(continuationTable([big, small]), session)).toBeCloseTo(line(12), 6);
   expect(middleRow(continuationTable([small, big]), session)).toBeCloseTo(line(8), 6);
+});
+
+// A `w:vanish` mark is not measured, so it takes the default line as a hidden mark does.
+test('a vanished first mark gives one default line', () => {
+  const vanished =
+    '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:rPr><w:vanish/><w:sz w:val="40"/></w:rPr></w:pPr></w:p>';
+  expect(middleRow(continuationTable([{ body: vanished }, big]))).toBeCloseTo(line(10), 6);
+});
+
+// A merged-text carry empties the heads of a row whose cells all head one span. That row has
+// no end paragraph left, so it is not a row of continuations: it keeps sizing from each cell,
+// and the carry decides from those heights as before.
+test('a carried row of merge heads is not sized as a row of continuations', () => {
+  const lineOnly = '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/>';
+  const line12 = (value: string) =>
+    `<w:p><w:pPr>${lineOnly}</w:pPr><w:r><w:t>${value}</w:t></w:r></w:p>`;
+  const merged =
+    Array.from({ length: 42 }, (_, i) => line12(`Merged ${i}`)).join('') +
+    '<w:p><w:pPr><w:spacing w:before="0" w:after="480"/></w:pPr></w:p>';
+  const cell = (index: number) =>
+    `<w:tc><w:tcPr><w:vMerge${index === 0 ? ' w:val="restart"' : ''}/></w:tcPr>` +
+    `${index === 0 ? merged : `<w:p><w:pPr>${lineOnly}</w:pPr></w:p>`}</w:tc>`;
+  const rows = Array.from(
+    { length: 30 },
+    (_, index) => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(index)}${cell(index)}</w:tr>`
+  ).join('');
+  const source = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>` +
+      `<w:p><w:pPr><w:spacing w:line="4400" w:lineRule="exact"/></w:pPr><w:r><w:t>Intro</w:t></w:r></w:p>` +
+      '<w:tbl><w:tblPr><w:tblW w:w="10000" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/>' +
+      '<w:bottom w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      `<w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>${rows}</w:tbl><w:p/>` +
+      '</w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!source.ok) throw new Error(source.reason);
+  const layout = layoutSemanticDocument(source.part, 0, {
+    geometry: { width: 612, height: 720, margin: { top: 40, bottom: 40, left: 40, right: 40 } },
+    measurer: {
+      measure: (value) => [...value].length * 5,
+      lineMetrics: () => ({ height: 12, baseline: 10 }),
+    },
+  });
+  const tables = layout.pages.map((page) =>
+    page.fragments.filter((f): f is TableFragmentRecord => f.kind === 'table')
+  );
+  // The table moves whole to the next page, and its head row keeps its end paragraph's box.
+  expect(tables[0]).toHaveLength(0);
+  expect(tables[1]).toHaveLength(1);
+  expect(tables[1]![0]!.rows).toHaveLength(30);
+  expect(tables[1]![0]!.rows[0]!.box.height).toBeCloseTo(12 + 24, 6);
 });
