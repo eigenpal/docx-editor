@@ -26,6 +26,7 @@ import {
   runBorderStrokesForLine,
   spacedTableFrameBorders,
   tableSpacingShadingRegions,
+  regionCutClipBox,
   type BlockFragmentRecord,
   type LayoutBox,
   type SemanticSpanVisit,
@@ -749,7 +750,13 @@ export async function paint(
       (d.groupTextboxStories ?? []).some(
         (member) => member.story.overflowVisible || member.rotationDegrees !== 0
       );
-    const unclipped = open ? body.splice(0) : [];
+    let unclipped = open ? body.splice(0) : [];
+    // A region that cut the drawing, such as a table cell, still cuts the text on that side.
+    const regionBox = unclipped.length > 0 ? regionCutClipBox(d, bounds, visit.page.box) : null;
+    if (regionBox) {
+      const region = rect(regionBox, -visit.page.box.x, -visit.page.box.y, height);
+      unclipped = [`q ${region} W n`, ...unclipped, 'Q'];
+    }
     // Ink the walk could not tie to one member stays inside the group's bounds.
     body.push(...(buffers?.get(d) ?? []));
     if (body.length === 0 && unclipped.length === 0) return base;

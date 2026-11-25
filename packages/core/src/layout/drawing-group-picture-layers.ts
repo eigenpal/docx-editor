@@ -301,6 +301,12 @@ export function groupPictureInkReach(
       bottom = Math.max(bottom, corner.y);
     }
   }
+  // A region that cut into the extent, such as a table cell, still cuts on that side.
+  const cuts = drawing.geometry.regionCuts;
+  if (cuts && cuts.left > 0) left = ink.x;
+  if (cuts && cuts.top > 0) top = ink.y;
+  if (cuts && cuts.right > 0) right = ink.x + ink.width;
+  if (cuts && cuts.bottom > 0) bottom = ink.y + ink.height;
   if (
     left === ink.x &&
     top === ink.y &&
@@ -326,4 +332,56 @@ export function failedGroupPictureCount(
     ...(drawing.groupPictureLayers ?? []).map((layer) => layer.resource),
   ];
   return states.filter((state) => state.kind !== 'ready' && state.kind !== 'pending').length;
+}
+
+/**
+ * The box that still cuts a drawing whose members paint past its extent: `box` on each side
+ * where a layout region cut into the extent (`geometry.regionCuts`: a cell, a frame, or the
+ * page), and `far` on the other sides. Null when no region cut the drawing.
+ *
+ * @internal
+ */
+export function regionCutClipBox(
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  box: LayoutBox,
+  far: LayoutBox
+): LayoutBox | null {
+  const cuts = drawing.geometry.regionCuts;
+  if (!cuts || !(cuts.left > 0 || cuts.top > 0 || cuts.right > 0 || cuts.bottom > 0)) return null;
+  const left = cuts.left > 0 ? box.x : far.x;
+  const top = cuts.top > 0 ? box.y : far.y;
+  const right = cuts.right > 0 ? box.x + box.width : far.x + far.width;
+  const bottom = cuts.bottom > 0 ? box.y + box.height : far.y + far.height;
+  return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+}
+
+/**
+ * Whether `point` lies on a picture of the group that paints past the drawing extent.
+ *
+ * @internal
+ */
+export function pointOnGroupPicturePastExtent(
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  point: DrawingPoint
+): boolean {
+  if (!drawing.groupPicture) return false;
+  const pictures = [
+    drawing,
+    ...(drawing.groupPictureLayers ?? []).map((layer) => groupPictureLayerDrawing(drawing, layer)),
+  ];
+  return pictures.some((picture) => {
+    if (!groupPicturePaintsPastExtent(picture)) return false;
+    const corners = picture.geometry.imageTransformCorners ?? [];
+    // The point is on one side of every edge of the convex frame.
+    let sign = 0;
+    for (let at = 0; at < corners.length; at += 1) {
+      const from = corners[at]!;
+      const to = corners[(at + 1) % corners.length]!;
+      const cross = (to.x - from.x) * (point.y - from.y) - (to.y - from.y) * (point.x - from.x);
+      if (cross === 0) continue;
+      if (sign !== 0 && Math.sign(cross) !== sign) return false;
+      sign = Math.sign(cross);
+    }
+    return corners.length === 4;
+  });
 }

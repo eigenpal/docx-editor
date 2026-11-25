@@ -34,6 +34,7 @@ import {
   type ContinuedPageFurniture,
 } from '../../layout/furniture-drawing-exclusion.ts';
 import type { AnchoredDrawingRecord } from '../../layout/drawing-layout.ts';
+import { hitAnchoredDrawingAtPoint } from '../../layout/semantic-hit-test.ts';
 import type { ImageDecodePort } from '../../store/package/image-resources.ts';
 import type { PaginatedSurface } from '../paginated-surface.ts';
 
@@ -82,7 +83,7 @@ function bar(x: number, y: number, hex: string): string {
 }
 
 /** A page-anchored group at (36pt, 18pt), 400pt x 200pt, with child space in EMU. */
-function docx(members: string): Uint8Array {
+function docx(members: string, body?: string): Uint8Array {
   const cx = 400 * PT;
   const cy = 200 * PT;
   const drawing =
@@ -119,7 +120,7 @@ function docx(members: string): Uint8Array {
     'word/media/image2.gif': GIF_1X1,
     'word/document.xml': strToU8(
       `<w:document ${DRAWING_NS} xmlns:wpg="${WPG}"><w:body>` +
-        `<w:p>${drawing}<w:r><w:t>Title</w:t></w:r></w:p>` +
+        (body ?? `<w:p>${drawing}<w:r><w:t>Title</w:t></w:r></w:p>`) +
         '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
         '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>' +
         '</w:sectPr></w:body></w:document>'
@@ -568,5 +569,85 @@ describe('a picture of a group that cannot paint', () => {
   test('a group with only failed pictures is a placeholder on a layout retry', async () => {
     const pictures = picture(0, 20) + picture(150, 60, { rel: 'rIdGif' });
     await withMounted(docx(pictures), (s) => expect(placeholderWrap(s)).toBe(true), failAll);
+  });
+});
+
+// A press on a picture that paints past the group extent selects the group.
+test('a press on a picture outside the group extent hits the group', async () => {
+  // The picture runs from 50pt left of the group to 50pt inside it, 20pt under its top.
+  await withMounted(docx(picture(-50, 20)), (surface) => {
+    const drawings = surface.layout().pages[0]!.anchoredDrawings;
+    const group = groupRecord(surface).hitBounds;
+    const hit = (dx: number, dy: number) =>
+      hitAnchoredDrawingAtPoint(drawings, { x: group.x + dx, y: group.y + dy }, 0);
+    expect(hit(-30, 40)).not.toBeNull();
+    // Left of the picture, and above it beside the group, nothing is hit.
+    expect(hit(-60, 40)).toBeNull();
+    expect(hit(-30, 10)).toBeNull();
+    expect(hit(-30, 80)).toBeNull();
+  });
+});
+
+// A table cell still cuts a member that paints past the group extent (2026-11-25 Word render).
+describe('a group that a table cell cuts', () => {
+  /** An inline group, 400pt wide, in a fixed cell 200pt wide. */
+  function inCell(members: string): Uint8Array {
+    const cx = 400 * PT;
+    const cy = 100 * PT;
+    const drawing =
+      '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Group 1"/>` +
+      `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>` +
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/>` +
+      `<a:chOff x="0" y="0"/><a:chExt cx="${cx}" cy="${cy}"/></a:xfrm>` +
+      `</wpg:grpSpPr>${members}</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+    const cell = (content: string) =>
+      `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${content}</w:tc>`;
+    return docx(
+      members,
+      '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid><w:tr>' +
+        `${cell(`<w:p>${drawing}</w:p>`)}${cell('<w:p><w:r><w:t>Next</w:t></w:r></w:p>')}` +
+        '</w:tr></w:tbl><w:p/>'
+    );
+  }
+  const insetsOf = (element: HTMLElement) =>
+    /inset\((.+)\)/.exec(element.style.clipPath)![1]!.split(' ').map(parseFloat);
+
+  test('a picture above the extent stays cut at the cell edge', async () => {
+    await withMounted(inCell(picture(250, -5)), (_surface, container) => {
+      const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+      const [top, right] = insetsOf(outer);
+      // The clip opens above the extent, and not past the cell edge on the right.
+      expect(top!).toBeLessThanOrEqual(-5);
+      expect(right!).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  test('a turned picture stays cut at the cell edge', async () => {
+    const members = picture(150, 20, { xfrmAttributes: ' rot="1800000"' });
+    await withMounted(inCell(members), (_surface, container) => {
+      const outer = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+      const match = /inset\((.+)\)/.exec(outer.style.clipPath);
+      if (match) expect(parseFloat(match[1]!.split(' ')[1]!)).toBeGreaterThanOrEqual(0);
+      // With no widened clip, the outer box cuts at its paint bounds.
+      else expect(outer.style.overflow).not.toBe('visible');
+    });
+  });
+
+  test('the text of a group stays cut at the cell edge when a member reaches past', async () => {
+    const textbox =
+      '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr>' +
+      `<a:xfrm><a:off x="${150 * PT}" y="${40 * PT}"/><a:ext cx="${200 * PT}" cy="${40 * PT}"/></a:xfrm>` +
+      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></wps:spPr>' +
+      '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Text box text here</w:t></w:r></w:p>' +
+      '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
+    await withMounted(inCell(bar(20, -5, '2040C0') + textbox), (_surface, container) => {
+      const layer = container.querySelector<HTMLElement>('.docx-drawing-group-text')!;
+      expect(layer.style.overflow).toBe('visible');
+      const [top, right] = insetsOf(layer);
+      expect(top!).toBeLessThan(-1000);
+      expect(right!).toBe(0);
+    });
   });
 });

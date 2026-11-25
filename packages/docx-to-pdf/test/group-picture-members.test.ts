@@ -14,7 +14,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //   members`, and the other members still paint.
 
 import { expect, test } from 'bun:test';
-import { PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFName,
+  PDFNumber,
+  PDFRawStream,
+  decodePDFRawStream,
+} from 'pdf-lib';
 import { exportPdf, PdfFidelityError, type PdfDiagnostic } from '../src/index.ts';
 import { formatDefaultsDocx as docx } from './fixture.ts';
 
@@ -375,4 +383,32 @@ test('an upright picture that reaches past the group extent paints whole', async
     'q 72 740 m 172 740 l 172 690 l 72 690 l h W n 72 740 m 172 740 l 172 690 l 72 690 l h W n ' +
       '100 0 0 50 72 690 cm'
   );
+});
+
+test('the link of a group covers the group when a picture reaches past the extent', async () => {
+  // The group is 100pt by 200pt, from (72, 520) to (172, 720) in PDF space. The picture
+  // starts 20pt above it, and the link area stays that of the group.
+  const rects: number[][] = [];
+  for (const members of [picture(10), picture(-20)]) {
+    const body = `<w:p>${groupRun(members).replace(
+      '<wp:docPr id="1" name="Group"/>',
+      '<wp:docPr id="1" name="Group"><a:hlinkClick r:id="rIdLink"/></wp:docPr>'
+    )}<w:r><w:t>Text</w:t></w:r></w:p>`;
+    const bytes = docx(body, {
+      'word/_rels/document.xml.rels':
+        `<Relationships xmlns="${RELS}">` +
+        `<Relationship Id="rIdImg" Type="${IMAGE_RELATIONSHIP}" Target="media/image1.png"/>` +
+        `<Relationship Id="rIdLink" Type="${OFFICE}/hyperlink" Target="https://example.com/" TargetMode="External"/>` +
+        '</Relationships>',
+      'word/media/image1.png': PNG_1X1,
+    });
+    const result = await exportPdf(bytes, { useSystemFonts: false });
+    const pdf = await PDFDocument.load(result.bytes);
+    const annotations = pdf.getPage(0).node.Annots()!;
+    expect(annotations.size()).toBe(1);
+    const rect = annotations.lookup(0, PDFDict).lookup(PDFName.of('Rect'), PDFArray);
+    rects.push(rect.asArray().map((value) => (value as PDFNumber).asNumber()));
+  }
+  expect(rects[0]).toEqual([72, 520, 172, 720]);
+  expect(rects[1]).toEqual(rects[0]);
 });

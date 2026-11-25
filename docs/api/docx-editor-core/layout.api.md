@@ -1565,7 +1565,13 @@ export interface GraphemeWordSegmentRecord {
 }
 
 // @internal
+export function groupPictureInkReach(drawing: InlineDrawingRecord | AnchoredDrawingRecord, ink: LayoutBox): LayoutBox;
+
+// @internal
 export function groupPictureLayerDrawing<D extends InlineDrawingRecord | AnchoredDrawingRecord>(drawing: D, layer: DrawingGroupPictureLayerRecord): D;
+
+// @internal
+export function groupPicturePaintsPastExtent(drawing: InlineDrawingRecord | AnchoredDrawingRecord): boolean;
 
 // @public
 export interface GroupTextboxStoryRecord {
@@ -3176,6 +3182,9 @@ export interface RefNoteParts {
     // (undocumented)
     readonly footnotesPart: OoxmlPart | null;
 }
+
+// @internal
+export function regionCutClipBox(drawing: InlineDrawingRecord | AnchoredDrawingRecord, box: LayoutBox, far: LayoutBox): LayoutBox | null;
 
 // @public
 export interface RegisteredFieldLink {

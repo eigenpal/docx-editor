@@ -240,6 +240,8 @@ export { vectorShapeInkClip } from './vector-shape-ink.ts';
 export {
   groupPictureLayerDrawing,
   groupPicturePaintsPastExtent,
+  groupPictureInkReach,
+  regionCutClipBox,
   pictureCornerFrame,
   vectorPictureBand,
   type DrawingGroupPictureLayerRecord,

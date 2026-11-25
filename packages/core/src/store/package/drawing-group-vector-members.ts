@@ -59,12 +59,15 @@ function withinGroupReach(component: VectorShapeComponent, extent: Extent): bool
   return true;
 }
 
+/** How far past the extent a point must lie to count as outside it: 0.01pt, in EMU. */
+const PAST = 127;
+
 /** Whether a point of the component's geometry, in extent EMU, lies outside the extent. */
 function reachesPastExtent(component: VectorShapeComponent, extent: Extent): boolean {
   for (const paths of [component.subpathsEmu, component.arrowheadsEmu ?? []]) {
     for (const path of paths) {
       for (const { x, y } of path) {
-        if (x < -1 || y < -1 || x > extent.cx + 1 || y > extent.cy + 1) return true;
+        if (x < -PAST || y < -PAST || x > extent.cx + PAST || y > extent.cy + PAST) return true;
       }
     }
   }

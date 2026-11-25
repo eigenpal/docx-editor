@@ -7,7 +7,9 @@ import { PDFDocument, PDFName, PDFString, type PDFImage, type PDFPage } from 'pd
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
 import {
   groupPictureLayerDrawing,
+  groupPictureInkReach,
   groupPicturePaintsPastExtent,
+  regionCutClipBox,
   vectorPictureBand,
   type LayoutBox,
   type ListMarkerPictureRecord,
@@ -541,6 +543,19 @@ export class ImageWriter {
     if (d.geometry.clipPolygon && d.geometry.clipPolygon.length === 0) return '';
     // A group picture that reaches past the extent paints whole, as a shape member does.
     const turnedMember = groupPicturePaintsPastExtent(d);
+    // A region that cut the drawing, such as a table cell, still cuts such a picture there.
+    const reach = turnedMember ? groupPictureInkReach(d, d.paintBounds) : null;
+    const regionBox = reach && regionCutClipBox(d, d.paintBounds, reach);
+    const regionClip = regionBox
+      ? `${n(regionBox.x + offsetX)} ${n(pageHeight(page) - regionBox.y - offsetY - regionBox.height)} ${n(regionBox.width)} ${n(regionBox.height)} re W n `
+      : '';
+    // The link of a group covers the drawing, not one picture that paints past it.
+    const linkArea = d.geometry.clipPolygon?.length
+      ? d.geometry.clipPolygon.map((v) => ({
+          x: v.x + offsetX,
+          y: pageHeight(page) - v.y - offsetY,
+        }))
+      : null;
     const clip =
       d.geometry.clipPolygon?.length && !turnedMember
         ? d.geometry.clipPolygon.map((v) => ({
@@ -558,7 +573,7 @@ export class ImageWriter {
       // A loop, not `Math.min(...xs)`: the clip polygon is file-derived, and spreading a long
       // one into a call is the one place a large but otherwise valid shape could blow the stack.
       const bounds = [Infinity, Infinity, -Infinity, -Infinity];
-      for (const point of clip) {
+      for (const point of turnedMember && linkArea ? linkArea : clip) {
         bounds[0] = Math.min(bounds[0]!, point.x);
         bounds[1] = Math.min(bounds[1]!, point.y);
         bounds[2] = Math.max(bounds[2]!, point.x);
@@ -606,7 +621,7 @@ export class ImageWriter {
     const soft = effects?.softEdgeEmu
       ? softEdgeMask(this.doc, page, clip, effects.softEdgeEmu / EMU_PER_POINT)
       : '';
-    const picture = `q ${opacityCommand}${soft}${path} h W n ${ringPath}${matrix.map(n).join(' ')} cm /${key} Do Q`;
+    const picture = `q ${opacityCommand}${soft}${regionClip}${path} h W n ${ringPath}${matrix.map(n).join(' ')} cm /${key} Do Q`;
     const reflection = effects?.reflection;
     if (!reflection) return picture;
     // The mirror image of an upright picture, below its bottom edge and fading downward.

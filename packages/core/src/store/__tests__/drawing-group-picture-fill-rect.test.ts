@@ -564,4 +564,19 @@ describe('a picture fill that does not turn with its shape', () => {
     expect(picture.memberClipUnit).toBeUndefined();
     expect(picture.frameEmu).toEqual({ x: 0, y: 0, cx: 6_000_000, cy: 2_000_000 });
   });
+
+  test('an ellipse takes the bounding box of the turned ellipse, with small child units', () => {
+    // The child space is 3000 by 4000 units for 6 000 000 by 8 000 000 EMU. The ring flattens
+    // at the painted size, so the box is that of the true ellipse: for semi-axes a = 3 000 000
+    // and b = 1 000 000 turned 45 degrees, each side is 2 * sqrt((a^2 + b^2) / 2).
+    const picture = pictureOf(
+      shapeMember(`<a:blipFill rotWithShape="0"><a:blip r:embed="rIdImg"/>${STRETCH}</a:blipFill>`)
+        .replace('<a:xfrm>', '<a:xfrm rot="2700000">')
+        .replace('prst="rect"', 'prst="ellipse"')
+    );
+    const side = 2 * Math.sqrt((3_000_000 ** 2 + 1_000_000 ** 2) / 2);
+    expect(Math.abs(picture.frameEmu.cx - side) / side).toBeLessThan(0.002);
+    expect(Math.abs(picture.frameEmu.cy - side) / side).toBeLessThan(0.002);
+    expect(picture.memberClipUnit!.length).toBeGreaterThan(40);
+  });
 });
