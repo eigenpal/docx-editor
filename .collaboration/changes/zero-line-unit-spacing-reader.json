@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Paragraph spacing writes drop w:beforeLines and w:afterLines beside the twips they write.",
+  "after": "The writes are unchanged. Only the explanatory comment changes, and layout reads zero line units as no line units.",
+  "reason": "Spacing writes emit the same attributes and operations, so shared state and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/multi-setting-writes.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-session-locked-paragraph-format.test.ts"
+  ],
+  "changeset": "zero-line-unit-spacing",
+  "migration": null
+}
