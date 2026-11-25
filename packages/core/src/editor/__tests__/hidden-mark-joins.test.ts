@@ -579,6 +579,49 @@ describe('paragraphs inside a field instruction', () => {
     });
   }
 
+  // Every structural insert at the start of the result passes the same check as Enter.
+  const inserts: [string, (surface: PaginatedSurface) => unknown][] = [
+    ['a section break', (surface) => surface.insertSectionBreak()],
+    ['a table', (surface) => surface.insertTable(1, 1)],
+    ['a table of contents', (surface) => surface.insertToc()],
+  ];
+  for (const [label, insert] of inserts) {
+    test(`${label} at the start of the field result is refused`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      const before = await instructionParagraphs(surface);
+      caret(surface, ids[3]!, 0);
+      insert(surface);
+      expect(surface.session.paragraphIds()).toEqual(ids);
+      expect(await instructionParagraphs(surface)).toEqual(before);
+      expect(surface.state().lastRejection).toStartWith('field-code-mark');
+    });
+  }
+
+  // Pasted lines split after the text they insert, which lands after the field's `separate`.
+  // A rich paste is refused there and falls back to that plain text.
+  for (const [label, paste] of [
+    ['pasted lines', (surface: PaginatedSurface) => surface.insertPlainText('P\nQ')],
+    ['a rich paste', (surface: PaginatedSurface) => surface.pasteRich('P\nQ', '<p>P</p><p>Q</p>')],
+  ] as const) {
+    test(`${label} at the start of the field result keep the field codes`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      const before = await instructionParagraphs(surface);
+      caret(surface, ids[3]!, 0);
+      paste(surface);
+      expect(await instructionParagraphs(surface)).toHaveLength(before.length);
+      // Every paragraph start from the field's begin to its separate: the field-code marks.
+      const xml = strFromU8(unzipSync(await surface.save())['word/document.xml']!);
+      const codes = xml.slice(
+        xml.indexOf('w:fldCharType="begin"'),
+        xml.indexOf('w:fldCharType="separate"')
+      );
+      expect(codes.match(/<w:p[ >/]/g)).toHaveLength(3);
+      expect(surface.session.paragraphIds()).toHaveLength(ids.length + 1);
+    });
+  }
+
   test('Enter inside the field result still splits', () => {
     const surface = mount(field);
     const ids = surface.session.paragraphIds();

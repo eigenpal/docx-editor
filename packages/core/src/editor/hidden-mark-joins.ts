@@ -40,7 +40,7 @@ import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks } from '../layout/story-roots.ts';
-import { splitInsideFieldCodes } from '../layout/field-code-marks.ts';
+import { blockBeforeInsideFieldCodes, splitInsideFieldCodes } from '../layout/field-code-marks.ts';
 
 /** The revision view the page is laid out in. */
 export interface RevisionView {
@@ -51,13 +51,13 @@ export interface RevisionView {
 const NONE: ReadonlySet<string> = new Set();
 
 /**
- * The reason Enter gives at a split point inside field codes that hold paragraph marks: inside
- * a paragraph wholly in the field codes, or at the start of the paragraph where they end. A new
- * mark there would change the field instruction (`w:fldChar`, ECMA-376 Part 1, 17.16.18) and
- * show no change, so the split is refused.
+ * The reason an editor write gives when it would add a paragraph mark or a table inside field
+ * codes that hold paragraph marks: inside a paragraph wholly in the field codes, or at the start
+ * of the paragraph where they end. A new mark there would change the field instruction
+ * (`w:fldChar`, ECMA-376 Part 1, 17.16.18) and show no change, so the write is refused.
  */
 export const FIELD_CODE_SPLIT_REFUSAL =
-  'field-code-mark: a paragraph break here would add a paragraph mark inside a field instruction';
+  'field-code-mark: this would add a paragraph mark inside a field instruction';
 
 /**
  * Ids of the paragraphs among `children` that layout removes under a hidden mark in `view`.
@@ -266,6 +266,59 @@ export function absorbRemovedAfter(
   return ops.length > 0 ? ops : null;
 }
 
+/**
+ * Whether `ops` add a paragraph mark, or a table, inside field codes that hold paragraph marks
+ * (see `layout/field-code-marks.ts`). The surface's journaled write asks this for every batch
+ * (`surface-journaled-apply.ts`), so Enter, a section break, a table, and a table of contents
+ * all refuse in one place; a rich paste asks {@link fieldCodePasteRefusal} before its package
+ * transaction. The check reads the tree before the batch, where a collapsed caret's ops point.
+ */
+export function opsAddFieldCodeMark(
+  partOf: (paragraphId: string) => OoxmlPart | null,
+  ops: readonly TreeDocOp[]
+): boolean {
+  const inside = (id: string, offset: number) => {
+    const part = partOf(id);
+    return part !== null && splitInsideFieldCodes(part, id, offset);
+  };
+  return ops.some((op) => {
+    switch (op.op) {
+      case 'splitParagraph':
+        return inside(op.paragraphId, op.offset);
+      case 'splitParagraphMany':
+        return op.offsets.some((offset) => inside(op.paragraphId, offset));
+      case 'insertFragment':
+        // One paragraph's inline content adds no mark; anything more splits at the offset.
+        return (
+          (op.blocks.length > 1 || op.blocks.some((block) => block.kind !== 'paragraph')) &&
+          inside(op.paragraphId, op.offset)
+        );
+      case 'insertTable':
+      case 'insertToc': {
+        const part = partOf(op.beforeParagraphId);
+        return part !== null && blockBeforeInsideFieldCodes(part, op.beforeParagraphId);
+      }
+      default:
+        return false;
+    }
+  });
+}
+
+/**
+ * {@link FIELD_CODE_SPLIT_REFUSAL} when a rich paste at `position` could add a paragraph mark
+ * inside field codes, else null. Its blocks are not known before the merge, so any paste at
+ * such a position is refused; the plain text flavour then lands outside the field codes.
+ */
+export function fieldCodePasteRefusal(
+  partOf: (paragraphId: string) => OoxmlPart | null,
+  position: SemanticPosition
+): string | null {
+  const part = partOf(position.paragraphId);
+  return part !== null && splitInsideFieldCodes(part, position.paragraphId, position.offset)
+    ? FIELD_CODE_SPLIT_REFUSAL
+    : null;
+}
+
 /** The editing surface's view of the rules above, over its live layout, story, and view. */
 export function createHiddenMarkEditing(deps: {
   readonly layout: () => SemanticLayout;
@@ -288,11 +341,6 @@ export function createHiddenMarkEditing(deps: {
     from: SemanticPosition;
     to: SemanticPosition;
   };
-  /**
-   * Whether Enter at `position` would add a paragraph mark inside field codes (see
-   * `splitInsideFieldCodes`). When it would, `refuse` gets {@link FIELD_CODE_SPLIT_REFUSAL}.
-   */
-  refusesSplit(position: SemanticPosition, refuse: (reason: string) => unknown): boolean;
   /** See {@link removedCaretParagraphEdit}. */
   removedCaretEdit(
     position: SemanticPosition,
@@ -309,11 +357,6 @@ export function createHiddenMarkEditing(deps: {
       absorbRemovedAfter(deps.part(), firstId, deps.view()) ??
       (onlyFieldCodeBetween(deps.part(), firstId, nextId, deps.view()) ? 'step' : null),
     shown,
-    refusesSplit: (position, refuse) => {
-      if (!splitInsideFieldCodes(deps.part(), position.paragraphId, position.offset)) return false;
-      refuse(FIELD_CODE_SPLIT_REFUSAL);
-      return true;
-    },
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),
     shownRange: (range) => {

@@ -78,3 +78,12 @@ export function splitInsideFieldCodes(part: OoxmlPart, id: string, offset: numbe
   if (!ids) return false;
   return ids.inside.has(id) || (offset === 0 && ids.closing.has(id));
 }
+
+/**
+ * Whether a block inserted before paragraph `id` lands inside field codes: before a paragraph
+ * wholly inside them, or before the paragraph where they end.
+ */
+export function blockBeforeInsideFieldCodes(part: OoxmlPart, id: string): boolean {
+  const ids = fieldCodeIdsOf(part, id);
+  return ids !== null && (ids.inside.has(id) || ids.closing.has(id));
+}

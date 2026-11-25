@@ -1550,12 +1550,13 @@ A paragraph that starts and ends inside the field codes of one closed complex fi
 - **THEN** it refuses with the `unsupported` code and a reason that starts with `field-code-mark`
 - **AND** the document does not change
 
-#### Scenario: Enter inside the field codes
+#### Scenario: A structural insert inside the field codes
 
 - **GIVEN** field codes that hold paragraph marks
-- **WHEN** the user presses Enter, or runs `splitParagraph`, in a paragraph inside them or at the start of the paragraph where they end
-- **THEN** the split is refused with a reason that starts with `field-code-mark`
+- **WHEN** the user presses Enter, runs `splitParagraph`, or inserts a section break, a table, or a table of contents, in a paragraph inside them or at the start of the paragraph where they end
+- **THEN** the write is refused with a reason that starts with `field-code-mark`
 - **AND** the document does not change
+- **AND** a rich paste there is refused, and its plain text lands after the field's `separate`
 
 #### Scenario: An automation write splits inside the field codes
 

@@ -4644,7 +4644,6 @@ export function mountPaginatedSurface(
       // strike and the proposed break read as one decision instead of two.
       const plan = deleteSelectionPlan();
       const position = plan.replaceAt ?? plan.collapseTo;
-      if (hiddenMarks.refusesSplit(position, publishRefusal)) return;
       // Enter carries the caret run's direct formatting even when no toolbar command is
       // armed (select text, resize it, then place the caret after it). An empty tail has
       // no run to inherit from. Capture authored properties only, so a heading's inherited
@@ -4659,8 +4658,9 @@ export function mountPaginatedSurface(
         ),
         base: [],
       };
-      // `w:next`: Enter at the END of a paragraph starts one in the style its style names as
-      // its follower, so a heading is not followed by a second heading.
+      // Word's `w:next`: Enter at the END of a paragraph starts one in the style that
+      // paragraph's style names as its follower, which is what stops a heading from being
+      // followed by a second heading.
       const endsParagraph = splitEndsTheParagraph(position);
       const tailStyleId = endsParagraph
         ? nextStyle.followerStyleId(position.paragraphId)

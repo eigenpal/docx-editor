@@ -19,6 +19,7 @@ import {
   TEXT_BOX_PASTE_REASON,
 } from './surface-drawing-clipboard.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import { fieldCodePasteRefusal } from './hidden-mark-joins.ts';
 import type { DrawingPasteTarget } from './drawing-paste-target.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
@@ -467,7 +468,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         // through `applyFragmentPaste`, past `applyOps`, so without this a disconnected
         // replica landed a rich paste locally and never replicated it. The selection-
         // clearing plan is the op-shaped half of the write, so it is what the gate sees.
-        const collaborationRefusal = deps.collaborationGate(priorOps, { kind: 'body' });
+        const collaborationRefusal =
+          deps.collaborationGate(priorOps, { kind: 'body' }) ??
+          fieldCodePasteRefusal((id) => partOfNodeId(session, id), target);
         if (collaborationRefusal) {
           return {
             committed: false,
