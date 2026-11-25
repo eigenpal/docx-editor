@@ -25,21 +25,31 @@ const GRID =
 
 /**
  * Row 0 is one plain line. Row 1 heads a merge of rows 1-2 (one line, column 0) and a merge of
- * rows 1-3 (`longLines` lines, column 1), and its first paragraph starts a new page. Column 2
- * of row 3 holds `lastRowLines` lines.
+ * rows 1-3 (`longLines` lines, column 1). Column 2 of row 3 holds `lastRowLines` lines.
+ *
+ * `move` is what moves row 1 to the next page: `w:pageBreakBefore` in its first paragraph, or
+ * `w:keepNext` (`CT_OnOff`, 17.3.1.15) in every paragraph of rows 1-2, which keeps rows 1-3
+ * on one page.
  */
-function tableXml(headRowPr: string, longLines: number, lastRowLines = 1): string {
+function tableXml(
+  headRowPr: string,
+  longLines: number,
+  lastRowLines = 1,
+  move: 'pageBreakBefore' | 'keepNext' = 'pageBreakBefore'
+): string {
   const row = (trPr: string, cells: string) => `<w:tr><w:trPr>${trPr}</w:trPr>${cells}</w:tr>`;
+  const keep = move === 'keepNext';
+  const kept = keep ? '<w:p><w:pPr><w:keepNext/></w:pPr></w:p>' : '<w:p/>';
   return (
     `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>${GRID}` +
     row('', cell(para('A')) + cell(para('B')) + cell(para('C'))) +
     row(
       headRowPr,
-      cell(para('S', 1, { pageBreakBefore: true }), RESTART) +
-        cell(para('L', longLines), RESTART) +
-        cell(para('D'))
+      cell(para('S', 1, { pageBreakBefore: !keep, keep }), RESTART) +
+        cell(para('L', longLines, { keep }), RESTART) +
+        cell(para('D', 1, { keep }))
     ) +
-    row('', cell('<w:p/>', CONTINUE) + cell('<w:p/>', CONTINUE) + cell(para('E'))) +
+    row('', cell(kept, CONTINUE) + cell(kept, CONTINUE) + cell(para('E', 1, { keep }))) +
     row('', cell(para('F')) + cell('<w:p/>', CONTINUE) + cell(para('G', lastRowLines))) +
     '</w:tbl>'
   );
@@ -82,6 +92,14 @@ test('a longer merge declined at a page bottom is sized on the next page, over r
   // The head row keeps its own line, and the two lines of the longer head fit beside rows 1-3.
   expect(moved.rows.map((row) => row.box.height)).toEqual([LINE, LINE, 6 * LINE]);
   expect(linesIn(moved.rows[0]!, 1)).toHaveLength(2);
+});
+
+test('a head row that keep-with-next moves to the next page sizes its merges there', () => {
+  const pages = tablesOf(load(PREAMBLE + tableXml(EXACT_HEAD, 5, 1, 'keepNext')));
+  expect(pages[0]!.map((table) => table.rows.length)).toEqual([1]);
+  const moved = pages[1]![0]!;
+  expect(moved.rows.map((row) => row.box.height)).toEqual([LINE, LINE, 3 * LINE]);
+  expect(linesIn(moved.rows[0]!, 1)).toHaveLength(5);
 });
 
 test('a head row that starts on a page sizes its merges as one that moved there', () => {
