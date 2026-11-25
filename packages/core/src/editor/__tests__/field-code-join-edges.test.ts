@@ -216,3 +216,34 @@ describe('a composition at the start of the result side', () => {
     document.getSelection()?.removeAllRanges();
   });
 });
+
+// The first paragraph ends a section, so the two sides keep their own lines. Nothing redirects
+// an insert at the start of the result there; the editor's one field-code check refuses it.
+describe('a field whose first paragraph ends a section', () => {
+  const sectioned = field(run('Alpha'), run('Yes')).replace(
+    '<w:p>',
+    '<w:p><w:pPr><w:sectPr><w:type w:val="nextPage"/></w:sectPr></w:pPr>'
+  );
+  const inserts: [string, (surface: PaginatedSurface) => unknown][] = [
+    ['Enter', (surface) => surface.splitParagraph()],
+    ['a section break', (surface) => surface.insertSectionBreak()],
+    ['a table', (surface) => surface.insertTable(1, 1)],
+  ];
+  for (const [label, insert] of inserts) {
+    test(`${label} at the start of the result is refused`, async () => {
+      const { surface, ids } = mount(sectioned);
+      const lines = surface
+        .layout()
+        .pages.flatMap((page) => page.fragments)
+        .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+        .map((line) => line.spans.map((span) => span.text).join(''));
+      expect(lines).toEqual(['Alpha', 'Yes']);
+      const before = await fieldCodes(surface);
+      caret(surface, ids[2]!, 0);
+      insert(surface);
+      expect(surface.session.paragraphIds()).toEqual(ids);
+      expect(await fieldCodes(surface)).toBe(before);
+      expect(surface.state().lastRejection).toStartWith('field-code-mark');
+    });
+  }
+});

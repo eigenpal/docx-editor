@@ -388,7 +388,10 @@ export function fieldCodeInsertLanding(
   part: OoxmlPart,
   position: SemanticPosition
 ): SemanticPosition | null {
-  if (position.offset !== 0) return null;
+  // The stored tree decides that the position is inside field codes; the merged line only
+  // decides where the insert can go instead. With no merge, nothing redirects, and the
+  // surface's one field-code check (`opsAddFieldCodeMark`) refuses the insert.
+  if (position.offset !== 0 || !splitInsideFieldCodes(part, position.paragraphId, 0)) return null;
   const opener = fieldCodeLineOpener(layout, part, position.paragraphId);
   return opener === null
     ? null

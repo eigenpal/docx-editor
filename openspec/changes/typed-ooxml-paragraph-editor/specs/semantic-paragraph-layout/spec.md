@@ -1604,6 +1604,13 @@ When field codes hold paragraph marks, the paragraph that holds `begin` and the 
 - **THEN** the insert lands before the field's `begin`, or before the whole line for a table
 - **AND** the field codes keep exactly their paragraph marks
 
+#### Scenario: An insert at the start of a result side that keeps its own line
+
+- **GIVEN** field codes that hold paragraph marks, where the paragraph that holds `begin` ends a section, so the two sides keep their own lines
+- **WHEN** the user presses Enter, inserts a section break, or inserts a table at the start of the result side
+- **THEN** nothing redirects the insert, and it is refused with a reason that starts with `field-code-mark`
+- **AND** the field codes keep exactly their paragraph marks
+
 #### Scenario: Vertical motion and presses past the end of a merged line
 
 - **GIVEN** a line that draws two paragraphs, from shared field codes or a resolved revision view
