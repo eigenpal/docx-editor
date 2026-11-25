@@ -118,11 +118,11 @@ export function cellEndMarkHeight(
  *
  * A row of continuations only takes this box from its FIRST cell, and a first cell with
  * `w:hideMark` takes a default line instead ({@link mergedRowFirstCellHeight}). A row that
- * also holds waiting `btLr` cells, or heads that a merged-text carry emptied, still takes
- * the largest box of its cells (not measured). t6 gives a
- * continuation `w:hideMark` and its row is 23.52pt, which that rule does not derive; later
- * controls varied the mark size, its spacing, and the paragraph styles, and each gave the
- * default line.
+ * also holds waiting `btLr` cells, or a cell with no end paragraph (a head that a merged-text
+ * carry emptied, or an invalid empty `w:tc`), still takes the largest box of its cells (not
+ * measured). t6 gives a continuation `w:hideMark` and its row is 23.52pt, which that rule
+ * does not derive; later controls varied the mark size, its spacing, and the paragraph
+ * styles, and each gave the default line.
  */
 export function cellContinuationHeight(
   cell: SemanticTableCell,
