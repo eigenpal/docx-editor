@@ -2820,6 +2820,11 @@ export function goToHeading(editor: Editor, blockId: string): boolean;
 // @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
 
+// @public
+export function hasEditorClipboardCopy(owner: Node | null, options?: {
+    readonly plainText?: boolean;
+}): boolean;
+
 // @internal
 export function hasOpenNestedPopup(panel: Element | null): boolean;
 
@@ -4300,6 +4305,14 @@ export const PX_PER_INCH = 96;
 
 // @internal
 export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration): number;
+
+// @public
+export function readClipboardForPaste(owner: Node | null, options?: {
+    readonly plainText?: boolean;
+}): Promise<{
+    html: string | null;
+    text: string;
+}>;
 
 // @internal
 export function readColumnGap(style: CSSStyleDeclaration): number;
@@ -6153,6 +6166,9 @@ export function withTabStop(stops: readonly ParagraphTabStop[], stop: ParagraphT
 
 // @public @deprecated (undocumented)
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public
+export function writeTextToClipboard(owner: Node | null, text: string): Promise<void>;
 
 // @public
 export const ZOOM_MAX = 5;
