@@ -96,7 +96,7 @@ export interface AllowlistedPageFieldMatch extends PageFieldSwitches {
   /**
    * Set for an `=` formula over a `PAGE` operand without a number format. That operand yields
    * the page number in the section's `w:pgNumType/@w:fmt`, and a formula operand must be a
-   * number, so the formula has a value only in a decimal section. See
+   * number, so the formula has a value only when that format gives digits. See
    * {@link formulaOperandIsNumber}.
    */
   readonly formulaOperandFollowsSection?: true;

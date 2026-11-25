@@ -199,6 +199,20 @@ describe('a formula that wraps one page field', () => {
     expect(detectStoryPageFields(footerPart(footer).root).hasPage).toBe(true);
   });
 
+  test('shows a PAGE operand in a decimalZero section, not in a dashed one', () => {
+    const footer = `<w:p>${formula([pageOperand()], '5')}${text('|')}${pageOperand()}</w:p>`;
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="decimalZero"/>')).toEqual([
+      '1|01',
+      '2|02',
+      '3|03',
+    ]);
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="numberInDash"/>')).toEqual([
+      '5|- 1 -',
+      '5|- 2 -',
+      '5|- 3 -',
+    ]);
+  });
+
   test('shows numeric operands in a letter section', () => {
     const footer =
       '<w:p>' +

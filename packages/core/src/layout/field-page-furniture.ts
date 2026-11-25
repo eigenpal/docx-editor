@@ -194,15 +194,21 @@ export function formatPageNumber(value: number, format: string | undefined): str
  * False when a formula's page operand is not a number under the section's page-number format.
  *
  * A `PAGE` operand without a number format yields the page number in `w:pgNumType/@w:fmt`
- * (ECMA-376 Part 1, 17.6.12, `CT_PageNumber`). A roman or letter value is not a number, so the
- * formula (17.16.3) has no value, and the field keeps its saved result.
+ * (ECMA-376 Part 1, 17.6.12, `CT_PageNumber`). Only `decimal` and `decimalZero` give ASCII
+ * digits. A roman, letter, dashed, or full-width value is not a number, so the formula (17.16.3)
+ * has no value, and the field keeps its saved result.
  */
 export function formulaOperandIsNumber(
   match: Pick<AllowlistedPageFieldMatch, 'formulaOperandFollowsSection'>,
   sectionFormat: string | undefined
 ): boolean {
   if (match.formulaOperandFollowsSection !== true) return true;
-  return sectionFormat === undefined || sectionFormat === '' || sectionFormat === 'decimal';
+  return (
+    sectionFormat === undefined ||
+    sectionFormat === '' ||
+    sectionFormat === 'decimal' ||
+    sectionFormat === 'decimalZero'
+  );
 }
 
 /**

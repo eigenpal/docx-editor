@@ -17,7 +17,7 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 
 | Field | Behavior |
 | --- | --- |
-| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers and footers. Body fields with an empty saved result also update. An `=` formula whose only operand is one of these fields, such as `{ = { PAGE } }`, updates the same way. Formulas with arithmetic show the saved result, and so does a formula over `PAGE` in a section with a roman or letter page-number format. |
+| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers and footers. Body fields with an empty saved result also update. An `=` formula whose only operand is one of these fields, such as `{ = { PAGE } }`, updates the same way. Formulas with arithmetic show the saved result, and so does a formula over `PAGE` in a section whose page numbers are not digits, such as roman numerals. |
 | `STYLEREF` | Updates supported character-style and paragraph-style references in headers. A paragraph without a paragraph style matches the default paragraph style. A paragraph style outranks a character style with the same name. Supports `\l` and `\* MERGEFORMAT`. With `\n` or `\w`, shows the list number of a paragraph-style match: `\n` shows only the number text of the paragraph's own level, and `\w` adds the higher levels. A match without a number shows `0`. |
 | `REF` | Resolves bookmark text or numbering in the body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |

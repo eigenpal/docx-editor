@@ -105,7 +105,7 @@ export function synthesizeAtomicField(
   const form = formFieldResult(pending, ctx.themeFonts);
   if (form) return { text: form.text, props: form.props, style: form.style };
 
-  // A formula over a PAGE operand in a roman or letter section has no value: keep the cache.
+  // A formula over a PAGE operand that is not a number (a roman section) keeps the cache.
   const sectionFormat = ctx.pageContext
     ? ctx.pageContext.format
     : ctx.bodyPageFields
