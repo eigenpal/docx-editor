@@ -19,9 +19,9 @@
 // to the implementation. So do `\l`, `\h`, `\s`, casing switches, and any picture letter outside
 // the codes below. Month and day names follow the language of the run that holds the field
 // instruction (`w:lang`, 17.3.2.20, `CT_Language`). A simple field (17.16.19) has no such run
-// and takes the paragraph's run properties without direct formatting. Only English names are
-// built in, so a picture with a name keeps its saved result in a run of another language.
-// Numeric codes and `AM/PM` do not depend on the language.
+// and takes the paragraph's run properties without direct formatting, else its result run's
+// language. Only English names are built in, so a picture with a name keeps its saved result
+// in a run of another language. Numeric codes and `AM/PM` do not depend on the language.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';

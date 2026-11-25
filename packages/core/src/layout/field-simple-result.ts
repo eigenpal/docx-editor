@@ -29,6 +29,7 @@ import {
 import { MAX_FIELD_RESULT_NODES } from '../store/package/field-result-text.ts';
 import { parseButtonInstruction } from './field-button.ts';
 import { currentFieldDate, formatDateField, parseDateFieldInstruction } from './field-date.ts';
+import { runTextLanguage } from './run-proofing.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
@@ -501,13 +502,16 @@ function projectSimpleFieldDisplay(
   // Names follow the language of the run that holds the instruction (17.16.4.1). A simple
   // field holds its instruction in `w:instr` (17.16.19, `CT_SimpleField`), not in a run, so
   // the language comes from the paragraph's run properties without direct formatting: the
-  // document defaults, table style, and paragraph style. The result run's own `w:rPr`, its
-  // character style, and the paragraph mark's `w:rPr` do not name it.
+  // document defaults, table style, and paragraph style. When none of them sets a language,
+  // the result run's language decides, so a field whose result is in another language never
+  // shows English names. The paragraph mark's `w:rPr` does not name it.
   const dateSpec = parseDateFieldInstruction(instr);
   const fieldDate = dateSpec ? currentFieldDate() : undefined;
+  const languageProps =
+    runTextLanguage(inheritedRunProperties) !== null ? inheritedRunProperties : props;
   const dateText =
     dateSpec && fieldDate && (display.text.length > 0 || !display.sawResultContent)
-      ? formatDateField(dateSpec, fieldDate, inheritedRunProperties)
+      ? formatDateField(dateSpec, fieldDate, languageProps)
       : null;
   if (dateText !== null) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);

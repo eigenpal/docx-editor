@@ -1118,7 +1118,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Most fields display saved results; symbol fields, metadata fields, and opted-in DATE and TIME fields display current values. You can enable editing for selected field results outside collaboration. The editor never executes macros or external field instructions.',
+      'Symbol and metadata fields show current values, DATE and TIME can show a host-supplied date, and others show saved results. You can enable editing for selected field results outside collaboration. The editor never executes macros or external field instructions.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {

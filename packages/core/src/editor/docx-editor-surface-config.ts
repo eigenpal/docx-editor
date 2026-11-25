@@ -3,6 +3,7 @@
 
 import type { DocxEditorConfig } from './docx-editor-types.ts';
 import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
+import { copyFieldDate } from './field-results-scope.ts';
 
 /** The pass-through surface options of `config`, each present only when the host set it. */
 export function configSurfaceOptions(
@@ -17,6 +18,6 @@ export function configSurfaceOptions(
       : {}),
     ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
     ...(config.lockedControlNavigation === 'atomic' ? { lockedControlNavigation: 'atomic' } : {}),
-    ...(config.fieldDate ? { fieldDate: config.fieldDate } : {}),
+    ...(config.fieldDate ? { fieldDate: copyFieldDate(config.fieldDate)! } : {}),
   };
 }

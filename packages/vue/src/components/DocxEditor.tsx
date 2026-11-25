@@ -82,6 +82,7 @@ import type { DocxEditorMenuProps } from '../editor/menu';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 import { createDocxEditorRefApi } from './DocxEditor/useDocxEditorRefApi';
 import type { TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor';
+import { isDateValue } from '../editor/field-date-warning';
 
 const CONTAINER_STYLE: CSSProperties = {
   display: 'flex',
@@ -340,7 +341,12 @@ const docxEditorFrameProps = {
   revisionMarkup: Object as PropType<RevisionMarkupOptions>,
   reviewDisplayMode: String as PropType<ReviewDisplayMode>,
   fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
-  fieldDate: { type: Date as PropType<Date>, default: undefined },
+  fieldDate: {
+    // Not `type: Date`: a `Date` from another window or frame fails that check.
+    type: null as unknown as PropType<Date>,
+    default: undefined,
+    validator: (value: unknown) => value === undefined || isDateValue(value),
+  },
   contentLockPolicy: { type: Object as PropType<ContentLockPolicy>, default: undefined },
   lockedControlNavigation: {
     type: String as PropType<LockedControlNavigation>,

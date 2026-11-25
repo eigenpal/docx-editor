@@ -103,6 +103,18 @@ describe('fieldDate on createDocxEditor', () => {
     expect(editor.surface!.session.bodyText()).not.toContain('March');
   });
 
+  test('keeps the date it was created with when the host mutates its Date', () => {
+    const date = new Date(MOMENT.getTime());
+    const editor = mount({ fieldDate: date });
+    date.setFullYear(2031);
+    const surface = editor.surface!;
+    const point = { paragraphId: surface.session.paragraphIds()[0]!, offset: 0 };
+    surface.setSelection({ anchor: point, head: point });
+    surface.type('x');
+    expect(shown(editor).body).toBe('x5 March 2026');
+    expect(shown(editor).footer).toBe('Printed 05/03/2026');
+  });
+
   test('refuses a value that is not a valid date', () => {
     expect(() => mount({ fieldDate: new Date(Number.NaN) })).toThrow(TypeError);
     expect(() => mount({ fieldDate: '2026-03-05' as unknown as Date })).toThrow(TypeError);

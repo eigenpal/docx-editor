@@ -7,11 +7,13 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createApp, h, shallowRef, type Component } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
+import { runInNewContext } from 'node:vm';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
+import { resetFieldDateWarningForTests } from '../src/editor/field-date-warning';
 import { flush } from './helpers/mount';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -105,12 +107,32 @@ describe('fieldDate prop', () => {
     }
   }
 
+  test('accepts a Date from another realm without a prop warning', async () => {
+    const foreign = runInNewContext(`new Date(${MOMENT.getTime()})`) as Date;
+    expect(foreign instanceof Date).toBe(false);
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(String(args[0]));
+    try {
+      const mounted = await mount(DocxEditorRoot, () => ({ fieldDate: foreign }));
+      try {
+        expect(shown(mounted.ready.at(-1)!)).toBe('Dated 5 March 2026');
+        expect(warnings.filter((message) => message.includes('Invalid prop'))).toHaveLength(0);
+      } finally {
+        mounted.unmount();
+      }
+    } finally {
+      console.warn = original;
+    }
+  });
+
   test('a new Date with the same time does not warn; a changed time is ignored and warns once', async () => {
     const warnings: string[] = [];
     const original = console.warn;
     console.warn = (...args: unknown[]) => warnings.push(String(args[0]));
     const dateWarnings = () => warnings.filter((message) => message.includes('fieldDate changed'));
     const date = shallowRef<Date | undefined>(MOMENT);
+    resetFieldDateWarningForTests();
     try {
       const mounted = await mount(DocxEditorRoot, () =>
         date.value ? { fieldDate: date.value } : {}
@@ -123,11 +145,17 @@ describe('fieldDate prop', () => {
 
         date.value = new Date(2030, 0, 1);
         await flush();
+        expect(dateWarnings()).toHaveLength(1);
+
+        // Removing the date is a change too.
+        date.value = MOMENT;
+        await flush();
+        resetFieldDateWarningForTests();
         date.value = undefined;
         await flush();
+        expect(dateWarnings()).toHaveLength(2);
         expect(mounted.ready.at(-1)).toBe(first);
         expect(shown(first)).toBe('Dated 5 March 2026');
-        expect(dateWarnings()).toHaveLength(1);
       } finally {
         mounted.unmount();
       }

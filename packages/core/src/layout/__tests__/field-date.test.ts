@@ -248,7 +248,22 @@ describe('DATE fields in layout', () => {
     expect(format(`DATE \\@ "''"`)).toBe('');
   });
 
-  test('take the language of a simple field from the paragraph style, not the result run', () => {
+  test('take the language of a simple field from its result run when no style sets one', () => {
+    const field = (lang: string) =>
+      `<w:p><w:fldSimple w:instr=" DATE \\@ &quot;d MMMM&quot; "><w:r><w:rPr><w:lang w:val="${lang}"/></w:rPr><w:t>5 mars</w:t></w:r></w:fldSimple></w:p>`;
+    const styleCascade = buildStyleCascadeTable(
+      readStyles('<w:style w:type="paragraph" w:default="1" w:styleId="Normal"/>')
+    );
+    for (const options of [
+      { measurer, fieldDate: MOMENT },
+      { measurer, fieldDate: MOMENT, styleCascade },
+    ]) {
+      expect(painted(field('fr-FR'), options)).toBe('5 mars');
+      expect(painted(field('en-GB'), options)).toBe('5 March');
+    }
+  });
+
+  test('take the language of a simple field from the paragraph style over the result run', () => {
     const styleCascade = buildStyleCascadeTable(
       readStyles(
         '<w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault></w:docDefaults>' +
@@ -262,6 +277,18 @@ describe('DATE fields in layout', () => {
     expect(
       painted(`<w:p><w:pPr><w:rPr><w:lang w:val="en-US"/></w:rPr></w:pPr>${field}</w:p>`, options)
     ).toBe('saved');
+    // An English default wins over a French result run.
+    const englishDefaults = buildStyleCascadeTable(
+      readStyles(
+        '<w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="en-US"/></w:rPr></w:rPrDefault></w:docDefaults>'
+      )
+    );
+    expect(
+      painted(`<w:p>${field.replace('w:val="en-US"', 'w:val="fr-FR"')}</w:p>`, {
+        ...options,
+        styleCascade: englishDefaults,
+      })
+    ).toBe('5 March');
     // The paragraph style names the language.
     expect(painted(`<w:p><w:pPr><w:pStyle w:val="English"/></w:pPr>${field}</w:p>`, options)).toBe(
       '5 March'

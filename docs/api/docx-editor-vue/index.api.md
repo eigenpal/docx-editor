@@ -5798,6 +5798,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     fieldDate: {
         default: undefined;
         type: PropType<Date>;
+        validator: (value: unknown) => value is Date | undefined;
     };
     fieldResults: {
         default: undefined;
@@ -5877,6 +5878,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     fieldDate: {
         default: undefined;
         type: PropType<Date>;
+        validator: (value: unknown) => value is Date | undefined;
     };
     fieldResults: {
         default: undefined;

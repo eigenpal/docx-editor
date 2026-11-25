@@ -14,6 +14,7 @@ import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { resetFieldDateWarningForTests } from '../src/editor/field-date-warning.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -94,6 +95,7 @@ describe('fieldDate prop', () => {
     const original = console.warn;
     console.warn = (...args: unknown[]) => warnings.push(String(args[0]));
     const dateWarnings = () => warnings.filter((message) => message.includes('fieldDate changed'));
+    resetFieldDateWarningForTests();
     try {
       let instance: DocxEditorInstance | null = null;
       const onReady = (editor: unknown) => {
@@ -112,12 +114,19 @@ describe('fieldDate prop', () => {
       await act(async () => {
         view!.rerender(tree('root', new Date(2030, 0, 1), onReady));
       });
+      expect(dateWarnings()).toHaveLength(1);
+
+      // Removing the date is a change too.
+      await act(async () => {
+        view!.rerender(tree('root', MOMENT, onReady));
+      });
+      resetFieldDateWarningForTests();
       await act(async () => {
         view!.rerender(tree('root', undefined, onReady));
       });
+      expect(dateWarnings()).toHaveLength(2);
       expect(instance).toBe(first);
       expect(shown(first)).toBe('Dated 5 March 2026');
-      expect(dateWarnings()).toHaveLength(1);
     } finally {
       console.warn = original;
     }

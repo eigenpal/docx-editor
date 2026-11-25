@@ -189,6 +189,14 @@ const INVALID_FIELD_DATE_REFUSAL = 'Invalid fieldDate: use a valid Date';
 const EDITABLE_FIELD_DATE_REFUSAL =
   "fieldDate is not supported with fieldResults: 'editable'; saved results are editable text";
 
+/**
+ * A copy of a validated `fieldDate`, in this realm, or undefined without one. The surface keeps
+ * the copy, so a host that mutates its own `Date` later cannot desynchronize layout caches.
+ */
+export function copyFieldDate(value: Date | undefined): Date | undefined {
+  return value === undefined ? undefined : new Date(Date.prototype.getTime.call(value));
+}
+
 /** A valid `Date`, also one from another window (no `instanceof`). */
 function isValidFieldDate(value: unknown): boolean {
   try {
