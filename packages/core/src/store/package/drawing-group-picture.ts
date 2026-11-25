@@ -82,7 +82,7 @@ function withinGroupReach(
 /**
  * Whether a member frame, in extent EMU, stays within one extent of the drawing on every side.
  *
- * A picture paints past the extent, as Word paints it (2026-11-25 render). The bound keeps a
+ * A picture paints past the extent. The bound keeps a
  * file-supplied offset or a tiny `a:chExt` from scaling the frame into coordinates that no
  * output can represent: the frame never reaches farther than three times the drawing's own
  * extent.
@@ -274,9 +274,10 @@ function signedFraction(node: OoxmlElement | null, name: string): number | null 
  * (`a:alphaModFix`, Part 1, 20.1.8.6, and the others that a lone picture keeps). It paints
  * without its shape effects, such as a shadow.
  *
- * A shape fill with `rotWithShape` false does not turn or mirror with its shape or its groups.
- * It stretches upright over the bounding box of the turned shape, and the turned geometry of
- * the shape clips it (2026-11-25 Word render).
+ * A shape fill with `rotWithShape` false does not turn or mirror with its shape or its groups
+ * (`a:blipFill/@rotWithShape`, 20.1.8.14). It stretches upright over the bounding box of the
+ * turned shape, and the turned geometry of the shape clips it. The standard does not define
+ * the stretch.
  */
 function readPictureMember(
   member: OoxmlElement,

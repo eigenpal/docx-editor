@@ -238,7 +238,7 @@ describe('group picture projection', () => {
   });
 
   test('a picture outside the group extent, within one extent of it, paints', () => {
-    // Word does not cut a member at the group extent (2026-11-25 render).
+    // A member is not cut at the group extent.
     for (const member of [pictureMember({ x: 3100 }), pictureMember({ y: -800 })]) {
       const [projection] = projectionsOf(groupDrawing(member));
       expect(projection!.groupPicture).not.toBeNull();

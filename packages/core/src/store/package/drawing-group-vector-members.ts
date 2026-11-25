@@ -76,9 +76,9 @@ function reachesPastExtent(component: VectorShapeComponent, extent: Extent): boo
 
 /**
  * The gradient of a group fill, placed over the box of the group that sets it, for a member
- * that says `a:grpFill` (CT_GroupFillProperties, ECMA-376 Part 1, 20.1.8.35). Word paints one
- * gradient across the group, so two members show two parts of it (2026-11-24 render). Null
- * when the member paints another fill, or the group fill is not a gradient that reads.
+ * that says `a:grpFill` (CT_GroupFillProperties, ECMA-376 Part 1, 20.1.8.35). One gradient
+ * spans the group, so two members show two parts of it. The standard does not define the span.
+ * Null when the member paints another fill, or the group fill is not a gradient that reads.
  */
 function spanningGroupGradient(
   member: OoxmlElement,
@@ -255,8 +255,8 @@ export function projectGroupVectorMembers(
     components.push(...painted);
   }
   orderAmongPictures();
-  // Word does not cut a member at the group extent (2026-11-25 render): a member that reaches
-  // past the extent paints whole, as a turned member does.
+  // A member is not cut at the group extent: a member that reaches past the extent paints
+  // whole, as a turned member does.
   if (!overflowVisible && components.some((component) => reachesPastExtent(component, extent)))
     overflowVisible = true;
   if (frame.turn) components = turnGroupComponents(components, extent, frame.turn);

@@ -404,7 +404,8 @@ describe('group fills inside a drawing canvas', () => {
     expect(vector?.components.map((c) => c.fillHex)).toEqual(['C00000']);
   });
 
-  // Word spans a gradient across the group box. Here each member paints it across its own box.
+  // Outside a canvas, a group gradient spans the group box. Here each member paints it across
+  // its own box.
   test('a member paints a gradient group fill across its own box', () => {
     const vector = vectorOf(
       '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>' +

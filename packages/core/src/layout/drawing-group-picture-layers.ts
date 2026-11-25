@@ -247,8 +247,9 @@ export function groupPictureLayerDrawing<D extends InlineDrawingRecord | Anchore
 
 /**
  * Whether the picture of a group record paints past the drawing extent: it is turned or
- * mirrored, or a corner of its frame lies outside the extent. Word does not cut the members
- * of a group at the group extent (2026-11-25 render), so such a picture paints whole.
+ * mirrored, or a corner of its frame lies outside the extent. ECMA-376 does not define a cut
+ * at the group extent, and the members of a group are not cut there, so such a picture paints
+ * whole.
  *
  * @internal
  */

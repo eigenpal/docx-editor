@@ -18,7 +18,7 @@ describe('Word line-unit paragraph margins', () => {
       paragraphSpacing([p({ before: '900', after: '800', beforeLines: '0', afterLines: '50' })])
     ).toEqual({ before: 45, after: 6 });
   });
-  // Each row is a cascade Word for Mac rendered: [style, paragraph] → points after.
+  // Each row is a cascade: [style, paragraph] → points after.
   test.each([
     ['direct points with zero lines', [{}, { after: '360', afterLines: '0' }], 18],
     ['direct points with positive lines', [{}, { after: '360', afterLines: '50' }], 6],

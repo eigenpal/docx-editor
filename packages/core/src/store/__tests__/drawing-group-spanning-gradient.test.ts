@@ -5,7 +5,7 @@
 // own part of it. The root group (`wpg:wgp`) spans the whole drawing extent. A nested group
 // (`wpg:grpSp`, CT_WordprocessingGroup; Part 1, 20.4.2.32) with a gradient of its own spans its own
 // box. A member with a fill of its own is not changed. The standard does not state the span;
-// it follows the Word render that `spanningGroupGradient` records.
+// `spanningGroupGradient` records the rule.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '../index.ts';

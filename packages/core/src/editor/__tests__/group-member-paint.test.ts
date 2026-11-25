@@ -238,7 +238,7 @@ describe('the members of a drawing group', () => {
     }
   });
 
-  // A turned member paints whole, as Word paints it. A picture at the top edge of the group
+  // A turned member paints whole. A picture at the top edge of the group
   // reaches 25pt above the extent after a quarter turn, so the drawing does not clip there.
   test('a turned picture that reaches past the group extent is not cut', async () => {
     const turned = picture(150, 0, { xfrmAttributes: ' rot="5400000"' });
@@ -453,8 +453,8 @@ describe('the outline of a picture member', () => {
   });
 });
 
-// Word does not cut a member at the group extent (2026-11-25 render). A member that reaches
-// past the extent paints whole, in the editor as in PDF.
+// A member is not cut at the group extent. A member that reaches past the extent paints whole,
+// in the editor as in PDF.
 describe('a member that reaches past the group extent', () => {
   const insetsOf = (element: HTMLElement) =>
     /inset\((.+)\)/.exec(element.style.clipPath)![1]!.split(' ').map(parseFloat);
@@ -602,7 +602,7 @@ test('a press on a picture outside the group extent hits the group', async () =>
   });
 });
 
-// A table cell still cuts a member that paints past the group extent (2026-11-25 Word render).
+// A table cell still cuts a member that paints past the group extent.
 describe('a group that a table cell cuts', () => {
   /** An inline group, 400pt wide, in a fixed cell 200pt wide. */
   function inCell(members: string): Uint8Array {
