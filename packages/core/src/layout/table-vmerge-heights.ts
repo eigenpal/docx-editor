@@ -1,6 +1,6 @@
 // Row heights for a table whose cells merge vertically (17.4.84 `w:vMerge`).
 //
-// A merged cell covers several rows, so Word sizes the MERGE, not the row that starts it:
+// A merged cell covers several rows, so the MERGE is sized, not the row that starts it:
 // the span gets `max(sum of the spanned rows' own heights, the merged content's height)`.
 // Sizing the first row to the whole merged content instead pushes every later row of the
 // span down by the full content height — the rows fall off the page and the column beside
@@ -63,38 +63,43 @@
 // first place. `float-over-table-harness.ts` is where that claim gets tested.
 //
 // Declining one merge does not decline its neighbours. When a joint decision (below) does not
-// fit the page, its head sizes its own row and every merge headed under it is offered again
-// at its own head row, as a decision of its own.
+// fit the page, its head sizes its own row. Each shorter merge from that row is then offered
+// as a decision of its own, without the longer one, and every merge headed under it is
+// offered again at its own head row.
 //
 // Merges that start in the same row AND end in the same row are ONE decision. They cover the
 // same rows, so the plan detaches all of their heads together, measures those rows with none
 // of them, and reserves the tallest head. Deciding them one at a time kept every head after
 // the first sizing the head row, and the rows below then carried that height a second time.
 //
-// A span with other merge heads below its head row is decided JOINTLY with them. The
-// decision takes every merge headed in a row it covers, and a merge that ends after the span
-// (a staircase: it starts inside the span and ends below it) extends the decision to its own
-// end row, where more merges can join in turn. One walk goes top to bottom over every row of
-// the decision, with all of its heads detached. When the walk reaches a merge's last row,
-// that row grows to what the merge still needs below its rows above, so every merge sees the
-// surplus an earlier one put in its rows. Reference renderings of two- and three-step
-// staircases place each row exactly so: the first merge grows the row the two share, and the
-// second merge only adds what that grown row does not give it. The whole decision is one
-// admission (it fits the page from the first head, or none of it is taken), one commit, and
-// one withdrawal.
+// A span with other merges in its rows is decided JOINTLY with them. The decision takes every
+// shorter merge that starts in its head row and every merge headed in a row it covers, one
+// group per head row and end row. A merge that ends after the span (a staircase: it starts
+// inside the span and ends below it) extends the decision to its own end row, where more
+// merges can join in turn. One walk goes top to bottom over every row of the decision, with
+// all of its heads detached. When the walk reaches a merge's last row, that row grows to what
+// the merge still needs below its rows above, so every merge sees the surplus an earlier one
+// put in its rows. Reference renderings of two- and three-step staircases place each row
+// exactly so: the first merge grows the row the two share, and the second merge only adds
+// what that grown row does not give it. Merges of different lengths from one head row follow
+// the same rule: the head row keeps the height of its own cells, the shortest merge grows its
+// own last row, and each longer merge only adds what the rows above its last row do not give
+// it. Reference renderings of two and three lengths from one head row, over auto, `atLeast`,
+// and `exact` rows, and of two lengths from a head row inside a longer merge, place each row
+// exactly so. The whole decision is one admission (it fits the page from the first head, or
+// none of it is taken), one commit, and one withdrawal.
 //
-// Three shapes are declined outright, each from data that cannot change during placement:
+// Two shapes are declined outright, each from data that cannot change during placement:
 //
-// - a joint decision with a head row whose merges end in different rows, or with more than
-//   `MAX_JOINT_MERGE_GROUPS` head rows. Those heads size their own rows, and a row whose
-//   height the decision cannot predict is a row the paginator may move;
-// - a joint decision where a merge headed under the first one was already decided alone;
-// - a merge starting in a row that already has a plan for a span ending ELSEWHERE. Detaching
-//   it empties the head row of what the earlier plan measured there, so the row collapses and
-//   that span's rows stop adding up to the height it was sized at — its content then paints
-//   below the table. One span length per head row is planned; the rest size their own row.
-//   A merge over `hRule="exact"` rows only is the exception: no row of it can collapse or
-//   grow, so it joins the plan and its head flows through its own rows (`fixedSpanBeside`).
+// - a joint decision with more than `MAX_JOINT_MERGE_GROUPS` groups. Those heads size their
+//   own rows, and a row whose height the decision cannot predict is a row the paginator may
+//   move;
+// - a joint decision where a merge headed under the first one was already decided alone.
+//
+// When the longest merge at a row is declined, a shorter one from that row can still be
+// accepted. The declined head then sizes its own row and is not taken later: detaching it
+// would empty the head row of what the decision measured there, so the row would collapse and
+// the decision's rows would stop adding up to the height they were sized at.
 //
 // A span every row of which is `hRule="exact"` and too short for the merged content is
 // accepted like any other: its rows keep their fixed heights, and its head flows through
@@ -108,11 +113,7 @@
 // is placed, so a surplus that a later span adds to a shared row only makes it taller. The
 // decision's rows are all held to the fragment of its first head, so a span that runs past
 // the first head's own span still lands whole with it. Anything that lets two decisions share
-// a row has to add a guard for that. `fixedSpanBeside` is the one exception: it adds a second
-// decision inside the rows of the first, at the same head row. That is safe because all its rows
-// are `hRule="exact"`, so it adds no floor or surplus, and its rows lie inside the first span,
-// so `heldRows` already keeps them with the first head. They lie inside because `spansByRow`
-// visits the longest span of a head row first, so the plan that exists is never the shorter one.
+// a row has to add a guard for that.
 //
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
@@ -132,10 +133,10 @@ import { resolveVMergeSpans } from './table-vmerge.ts';
 const EPSILON_PT = 0.001;
 
 /**
- * Most merge groups one joint decision walks, the outer one included. Each group heads a
- * later row, so the rows already bound it; this keeps the probes one decision spends bounded
- * even for a long chain of overlapping merges. A larger decision is declined, which is the
- * older behavior.
+ * Most merge groups one joint decision walks, the outer one included. Each group is one head
+ * row and end row, so the rows already bound it; this keeps the probes one decision spends
+ * bounded even for a long chain of overlapping merges. A larger decision is declined, which
+ * is the older behavior.
  */
 const MAX_JOINT_MERGE_GROUPS = 64;
 
@@ -175,15 +176,16 @@ export interface VMergeRowHeights {
   spansAt(rowIndex: number): readonly VMergeSpan[];
   /**
    * Points the span needs below its head row's top, with accepted spans folded in. A span
-   * sharing its head row and end row with others answers for the whole group: the tallest
-   * of their heads, over rows measured with all of them detached.
+   * with other merges in its rows answers for the whole joint decision, which can end below
+   * its own last row: every head detached, and each merge's last row grown as it needs.
    * `atYPt` is where the head row is about to be placed; passing it measures the merged
    * content under whatever wrap bands really cross the row instead of position-free.
    */
   heightOf(span: VMergeSpan, atYPt?: number): number;
   /**
    * Take the span into the plan, unless its shape is one the module declines (see the top of
-   * this file). Spans sharing its head row and end row join with it, in the same decision.
+   * this file). Every shorter span from its head row and every span headed in a row it covers
+   * join with it, in the same decision.
    *
    * A span already in the plan is left alone — including its `atYPt`. That is not a claim
    * that offering it again somewhere else would be safe: the measurements it was admitted on
@@ -203,9 +205,8 @@ export interface VMergeRowHeights {
    *
    * Sound because overlapping accepted spans were decided together: the rows a decision
    * covers are covered by nothing else, so withdrawing it at its first head row takes back
-   * every span, floor and surplus in those rows. A `fixedSpanBeside` span shares its head row
-   * with the decision it sits inside, so the same call withdraws it, and its fixed rows hold no
-   * floor or surplus to take back.
+   * every span, floor and surplus in those rows, the shorter spans from the same head row
+   * included.
    *
    * A span headed BELOW a decision's first head row, withdrawn on its own, only stops
    * detaching its heads. Its rows keep every floor, because the heads above were already
@@ -326,14 +327,19 @@ export function planVMergeRowHeights(
   for (const at of spansByRow.values()) at.sort((a, b) => b.endRow - a.endRow);
   /** Spans that cover exactly the same rows, in head-cell order; see `groupOf`. */
   const coextensive = new Map<VMergeSpan, readonly VMergeSpan[]>();
-  for (const at of spansByRow.values()) {
+  /** Per head row, its groups of coextensive spans, longest first. */
+  const groupsByRow = new Map<number, readonly (readonly VMergeSpan[])[]>();
+  for (const [headRow, at] of spansByRow) {
+    const groups: (readonly VMergeSpan[])[] = [];
     for (let start = 0; start < at.length;) {
       let end = start + 1;
       while (end < at.length && at[end]!.endRow === at[start]!.endRow) end += 1;
       const group = at.slice(start, end);
       for (const span of group) coextensive.set(span, group);
+      groups.push(group);
       start = end;
     }
+    groupsByRow.set(headRow, groups);
   }
 
   const basePt = new Map<string, number>();
@@ -425,20 +431,6 @@ export function planVMergeRowHeights(
     rows[span.endRow]!.height.rule === 'exact' ? undefined : span.endRow;
 
   /**
-   * A shorter merge from a head row that already has a plan, over rows that are all
-   * `hRule="exact"` (17.18.37). No head can change the height of a fixed row, so taking its
-   * head out of the head row moves nothing that the earlier plan measured. Its head flows
-   * through its own rows like any accepted head and is clipped at their bottom.
-   */
-  const fixedSpanBeside = (span: VMergeSpan): boolean => {
-    if (!acceptedHeadRows.has(span.headRow)) return false;
-    for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
-      if (rows[rowIndex]!.height.rule !== 'exact') return false;
-    }
-    return true;
-  };
-
-  /**
    * The spans decided together with this one: every merge that starts in its head row AND
    * ends in its end row. They cover the same rows, so one plan detaches all their heads,
    * measures the rows without any of them and reserves the tallest head. Deciding them one
@@ -464,40 +456,43 @@ export function planVMergeRowHeights(
   const innerGroupsCache = new Map<VMergeSpan, readonly (readonly VMergeSpan[])[] | null>();
 
   /**
-   * The merges that start under this span's head row and are decided with it, one group per
-   * head row in row order, or `null` when the shape is declined.
+   * The other merges decided with this span, one group per head row and end row, or `null`
+   * when the decision has more groups than `MAX_JOINT_MERGE_GROUPS`.
    *
+   * First come the shorter merges from the span's own head row (17.4.84 `w:vMerge` lets merges
+   * from one row end in different rows), then every group headed in a later row, in row order.
    * The walk reads every row up to the furthest end row seen so far, so a merge that starts
    * inside the decision and ends after it (a staircase) extends the decision to its own end
-   * row. A head row whose merges end in different rows is declined: one span length per
-   * head row is planned. So is a decision with more groups than `MAX_JOINT_MERGE_GROUPS`.
+   * row. A longer merge from the same head row is not taken: it was offered first, and a
+   * shorter one is only offered alone when that longer one was declined.
    */
   const innerGroupsOf = (span: VMergeSpan): readonly (readonly VMergeSpan[])[] | null => {
     const known = innerGroupsCache.get(span);
     if (known !== undefined) return known;
     const groups: (readonly VMergeSpan[])[] = [];
-    let result: readonly (readonly VMergeSpan[])[] | null = groups;
     let lastRow = span.endRow;
-    for (let rowIndex = span.headRow + 1; rowIndex <= lastRow; rowIndex += 1) {
-      const group = spansByRow.get(rowIndex);
-      if (group === undefined) continue;
-      const endRow = group[0]!.endRow;
-      if (
-        group.some((member) => member.endRow !== endRow) ||
-        groups.length + 1 >= MAX_JOINT_MERGE_GROUPS
-      ) {
-        result = null;
-        break;
-      }
+    const join = (group: readonly VMergeSpan[]): boolean => {
+      if (groups.length + 1 >= MAX_JOINT_MERGE_GROUPS) return false;
       groups.push(group);
-      lastRow = Math.max(lastRow, endRow);
+      lastRow = Math.max(lastRow, group[0]!.endRow);
+      return true;
+    };
+    let fits = true;
+    for (const group of groupsByRow.get(span.headRow) ?? []) {
+      if (group[0]!.endRow < span.endRow && !join(group)) fits = false;
     }
+    for (let rowIndex = span.headRow + 1; fits && rowIndex <= lastRow; rowIndex += 1) {
+      for (const group of groupsByRow.get(rowIndex) ?? []) {
+        if (!join(group)) fits = false;
+      }
+    }
+    const result = fits ? groups : null;
     innerGroupsCache.set(span, result);
     return result;
   };
 
   /**
-   * Why a span with merges below its head cannot be decided jointly now, if it cannot: one
+   * Why a span with other merges in its rows cannot be decided jointly now, if it cannot: one
    * of those groups was already decided on its own, so its numbers belong to another walk.
    */
   const jointDeclined = (inner: readonly (readonly VMergeSpan[])[]): boolean =>
@@ -511,15 +506,15 @@ export function planVMergeRowHeights(
   }
 
   /**
-   * The joint decision for a span with other merges below its head, computed without
+   * The joint decision for a span with other merges in its rows, computed without
    * changing the plan.
    *
    * One walk goes top to bottom over every row of the decision. Each row is measured once,
    * at the y the rows above it leave it at, with every head of the decision detached. When
    * the walk reaches the end row of a group, that row grows to what the group's tallest head
    * still needs below the group's rows above it, unless `hRule="exact"` fixes the row. So a
-   * merge sees every surplus that an earlier merge put in its rows, and a staircase and a
-   * nest resolve by the same rule.
+   * merge sees every surplus that an earlier merge put in its rows, and a staircase, a nest,
+   * and merges of different lengths from one head row resolve by the same rule.
    */
   const jointPlanOf = (
     span: VMergeSpan,
@@ -646,7 +641,6 @@ export function planVMergeRowHeights(
     // Shapes this module declines read as "taller than any page", so the caller never
     // admits them and never probes for a height it will not use.
     if (!acceptedSpans.has(span)) {
-      if (fixedSpanBeside(span)) return coveredPtOf(span, atYPt);
       const inner = innerGroupsOf(span);
       if (inner === null || acceptedHeadRows.has(span.headRow)) return Number.POSITIVE_INFINITY;
       if (inner.length > 0) {
@@ -655,7 +649,7 @@ export function planVMergeRowHeights(
           : jointPlanOf(span, inner, atYPt).heightPt;
       }
     }
-    // Accepted, or with nothing below its head: the rows as the plan now has them.
+    // Accepted, or with no other merge in its rows: the rows as the plan now has them.
     const covered = coveredPtOf(span, atYPt);
     if (lastGrowableRow(span) === undefined) return covered;
     return Math.max(covered, groupContentOf(span, atYPt));
@@ -666,17 +660,6 @@ export function planVMergeRowHeights(
     heightOf: spanHeightOf,
     accept: (span, atYPt) => {
       if (acceptedSpans.has(span)) return;
-      if (fixedSpanBeside(span)) {
-        const covered = coveredPtOf(span, atYPt);
-        for (const member of groupOf(span)) {
-          if (acceptedSpans.has(member)) continue;
-          acceptedSpans.add(member);
-          acceptedHeadIds.add(member.headCellId);
-          admittedAtYPt.set(member, atYPt);
-          if (contentOf(member, atYPt) > covered + EPSILON_PT) clippedSpans.add(member);
-        }
-        return;
-      }
       const inner = innerGroupsOf(span);
       if (inner === null || acceptedHeadRows.has(span.headRow)) return;
       if (inner.length > 0) {
