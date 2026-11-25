@@ -8,12 +8,13 @@ import {
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
 
-import type { PositionalTab } from './field-projection.ts';
+import type { FieldAwarePiece, PositionalTab } from './field-projection.ts';
 import {
   measureFollowingTabSegment,
   positionalTabDestination,
   type Piece,
   type TabWordBreaks,
+  type WordAfterTab,
 } from './paragraph-piece-metrics.ts';
 import type { CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { wordBoundaries } from './cjk-line-break.ts';
@@ -227,22 +228,63 @@ export function tabWordBreaksFor(cjkBreaks: CjkParagraphBreaks | null): TabWordB
 }
 
 /**
+ * Whether the next custom stop past `stopX` is a left stop that keeps its tab on the line: in
+ * mode 15 a stop after the right indent and up to the margin, where the text after it runs to
+ * the margin; in a legacy document (`pastMargin`) a stop at or past the right indent, where it
+ * may run past the margin.
+ */
+function leftStopKeepsTab(context: TabContext, stopX: number): boolean {
+  const { stopRight, tabEdge } = context;
+  const stop = context.tabs.stops.find(
+    (candidate) => !candidate.numberingOnly && tabStopPastPen(candidate.positionPt, stopX)
+  );
+  if (stop?.alignment !== 'left') return false;
+  return context.pastMargin
+    ? stop.positionPt >= stopRight - TAB_PEN_TOLERANCE_PT
+    : tabStopPastPen(stop.positionPt, stopRight) && !tabStopPastPen(stop.positionPt, tabEdge);
+}
+
+/**
  * Whether a tab opens the next line with the word after it (`w:tab`, Tab Character, `CT_Empty`,
  * ECMA-376 Part 1, 17.3.3.32). The standard defines only where a tab advances to. A tab and the
- * unbreakable word after it stay together: when the word would overflow the line after the tab,
- * the tab moves down and reaches its stop on the next line. When the two would not fit on a
- * fresh line either, the word opens it alone.
+ * unbreakable word after it stay together: when the word would overflow the room after the tab
+ * placed at `pen`, the tab moves down and reaches its stop on the next line (`fresh`).
+ *
+ * At a left stop there, the word starts at the stop even when it is too wide for the rest of
+ * the line: it is chopped after the stop like a word after leading tabs, and opens the line after
+ * it only when no character fits. Where that chop is not available, the tab moves only when the
+ * two fit on the fresh line: when the paragraph or the tab turns the chop off (`fresh.chopsWord`),
+ * when a piece of the word cannot be chopped, at a left stop that keeps its tab on the line, and
+ * at an aligned stop, which aligns the whole word.
+ *
+ * A custom left stop (`tab`, Custom Tab Stop, `CT_TabStop`, 17.3.1.37) that keeps its tab on the
+ * line (see `leftStopKeepsTab`) never moves it. In mode 15 a stop past the margin does not keep it.
  */
 export function tabCarriesItsWord(
   context: TabContext,
-  word: number,
+  word: WordAfterTab,
   placed: { readonly width: number },
-  lineRoom: number,
-  fresh: { readonly x: number; readonly room: number }
+  pen: { readonly stopX: number; readonly room: number },
+  fresh: { readonly x: number; readonly room: number; readonly chopsWord: boolean }
 ): boolean {
-  if (word <= 0 || placed.width + word <= lineRoom + OVERFLOW_TOLERANCE_PT) return false;
-  const onFreshLine = tabPlacement(context, fresh.x, fresh.x, 0).width;
-  return onFreshLine + word <= fresh.room + OVERFLOW_TOLERANCE_PT;
+  const { width } = word;
+  if (width <= 0 || placed.width + width <= pen.room + OVERFLOW_TOLERANCE_PT) return false;
+  if (leftStopKeepsTab(context, pen.stopX)) return false;
+  const onFreshLine = tabPlacement(context, fresh.x, fresh.x, 0);
+  const chopsAfterStop =
+    fresh.chopsWord &&
+    word.choppable &&
+    onFreshLine.destination.alignment === 'left' &&
+    !leftStopKeepsTab(context, fresh.x);
+  return chopsAfterStop || onFreshLine.width + width <= fresh.room + OVERFLOW_TOLERANCE_PT;
+}
+
+/**
+ * Whether a tab lets the word after it be chopped after its stop on a fresh line, as a word after
+ * leading tabs is: an ordinary tab, not a field result or a note mark.
+ */
+export function tabAllowsWordChop(tab: FieldAwarePiece): boolean {
+  return !isLayoutOwnedPiece(tab) && !tab.noteNav && !tab.fieldAtom;
 }
 
 /**
