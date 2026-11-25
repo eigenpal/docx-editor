@@ -46,7 +46,7 @@ const editor = createDocxEditor({
 
 - Only fields with a `\@` date-time picture show the date. A field without a picture, or with `\l`, `\h`, `\s`, or a casing switch, shows its saved result.
 - Pictures support `d`, `dd`, `ddd`, `dddd`, `M`, `MM`, `MMM`, `MMMM`, `yy`, `yyyy`, `h`, `hh`, `H`, `HH`, `m`, `mm`, `AM/PM`, `am/pm`, and quoted text. Both `AM/PM` and `am/pm` show `AM` or `PM`. Any other letter keeps the saved result.
-- Month and day names are English. A picture with a name keeps its saved result when the text language of the field is not English. The date shows in the browser's time zone.
+- Month and day names are English. A picture with a name keeps its saved result when the text language of the field instruction is not English. A simple field (`w:fldSimple`) takes the language of its paragraph style. The date shows in the browser's time zone.
 - The date is display-only. Saved files and collaboration sessions keep the saved results.
 - `CREATEDATE`, `SAVEDATE`, and `PRINTDATE` always show their saved results.
 - PDF export shows saved results.

@@ -498,11 +498,16 @@ function projectSimpleFieldDisplay(
   }
 
   // DATE and TIME show the layout's field date over a saved result, like the complex shape.
+  // Names follow the language of the run that holds the instruction (17.16.4.1). A simple
+  // field holds its instruction in `w:instr` (17.16.19, `CT_SimpleField`), not in a run, so
+  // the language comes from the paragraph's run properties without direct formatting: the
+  // document defaults, table style, and paragraph style. The result run's own `w:rPr`, its
+  // character style, and the paragraph mark's `w:rPr` do not name it.
   const dateSpec = parseDateFieldInstruction(instr);
   const fieldDate = dateSpec ? currentFieldDate() : undefined;
   const dateText =
     dateSpec && fieldDate && (display.text.length > 0 || !display.sawResultContent)
-      ? formatDateField(dateSpec, fieldDate, props)
+      ? formatDateField(dateSpec, fieldDate, inheritedRunProperties)
       : null;
   if (dateText !== null) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);

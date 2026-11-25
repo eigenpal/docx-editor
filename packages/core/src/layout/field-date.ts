@@ -18,9 +18,10 @@
 // A field without a picture keeps its saved result, because 17.16.4.1 leaves the default format
 // to the implementation. So do `\l`, `\h`, `\s`, casing switches, and any picture letter outside
 // the codes below. Month and day names follow the language of the run that holds the field
-// instruction (`w:lang`, 17.3.2.20, `CT_Language`). Only English names are built in, so a
-// picture with a name keeps its saved result in a run of another language. Numeric codes and
-// `AM/PM` do not depend on the language.
+// instruction (`w:lang`, 17.3.2.20, `CT_Language`). A simple field (17.16.19) has no such run
+// and takes the paragraph's run properties without direct formatting. Only English names are
+// built in, so a picture with a name keeps its saved result in a run of another language.
+// Numeric codes and `AM/PM` do not depend on the language.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
@@ -102,13 +103,20 @@ const MONTHS = [
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const isAsciiLetter = (char: string): boolean => /^[A-Za-z]$/.test(char);
+/**
+ * A line break in a picture: CR LF, CR, or LF. A field result shows each one as one space,
+ * so a CR LF pair is one space, not two.
+ */
+const LINE_BREAK = /\r\n|[\r\n]/g;
 const isSpace = (char: string | undefined): boolean => char !== undefined && /^\s$/.test(char);
 
 /**
  * Split a `\@` picture into items, or null when it holds a letter outside the codes.
  *
- * A run of one code letter is one code (`dd`, `MMMM`). Text in single quotes is literal, and
- * every other character that is not a letter is literal too.
+ * A run of one code letter is one code (`dd`, `MMMM`). Text in single quotes is literal
+ * (17.16.4.1, `'text'`), and every other character that is not a letter is literal too. Empty
+ * quotes add no text, so a picture of only `''` shows an empty result. A line break shows as
+ * one space.
  */
 function parseDatePicture(picture: string): DatePictureItem[] | null {
   const items: DatePictureItem[] = [];
@@ -118,7 +126,7 @@ function parseDatePicture(picture: string): DatePictureItem[] | null {
     if (char === "'") {
       const close = picture.indexOf("'", index + 1);
       if (close < 0) return null;
-      items.push({ kind: 'text', text: picture.slice(index + 1, close).replace(/[\r\n]/g, ' ') });
+      items.push({ kind: 'text', text: picture.slice(index + 1, close).replace(LINE_BREAK, ' ') });
       index = close + 1;
       continue;
     }
@@ -128,9 +136,13 @@ function parseDatePicture(picture: string): DatePictureItem[] | null {
       index += 5;
       continue;
     }
+    if (char === '\r' || char === '\n') {
+      items.push({ kind: 'text', text: ' ' });
+      index += char === '\r' && picture[index + 1] === '\n' ? 2 : 1;
+      continue;
+    }
     if (!isAsciiLetter(char)) {
-      // A line break in a picture is not a character a field result shows on its line.
-      items.push({ kind: 'text', text: char === '\r' || char === '\n' ? ' ' : char });
+      items.push({ kind: 'text', text: char });
       index += 1;
       continue;
     }
@@ -280,7 +292,11 @@ export function currentFieldDate(): Date | undefined {
 
 /**
  * Run `run` with `date` installed for every field it lays out, then restore the outer value,
- * also when `run` throws. `undefined` and an invalid date keep the outer value.
+ * also when `run` throws. `undefined` and an invalid date keep the outer value, as
+ * `withFieldResultsMode` keeps the outer mode: the document view installs the date once and
+ * lays out its body through a nested semantic layout call whose options carry no date. Cache
+ * keys read the installed value ({@link currentFieldDate}), not the options, so a nested call
+ * never stores a dated layout under an undated key.
  */
 export function withFieldDate<T>(date: Date | undefined, run: () => T): T {
   if (date === undefined || Number.isNaN(date.getTime()) || date === current) return run();

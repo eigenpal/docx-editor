@@ -5,6 +5,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, createLayoutSession, layoutSemanticDocument } from '../index.ts';
 import { formatDateField, parseDateFieldInstruction } from '../field-date.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -38,6 +39,15 @@ function partOf(body: string): OoxmlPart {
   });
   if (!read.ok) throw new Error(read.reason);
   return read.part;
+}
+
+function readStyles(inner: string) {
+  const read = readOoxmlPart(`<w:styles xmlns:w="${W}">${inner}</w:styles>`, {
+    name: '/word/styles.xml',
+    contentType: 'application/xml',
+  });
+  if (!read.ok) throw new Error(read.reason);
+  return read.part.root;
 }
 
 function painted(
@@ -223,6 +233,39 @@ describe('DATE fields in layout', () => {
     expect(format('DATE \\@ "d  MMMM\tyyyy"')).toBe('5  March\t2026');
     expect(format('DATE\t\\@\t"yyyy"')).toBe('2026');
     expect(format('DATE \\@ "d\nMMMM"')).toBe('5 March');
+  });
+
+  test('show each line break in a picture as one space, a CR LF pair too', () => {
+    expect(format('DATE \\@ "d\r\nM"')).toBe('5 3');
+    expect(format('DATE \\@ "d\rM"')).toBe('5 3');
+    expect(format('DATE \\@ "d\r\n\r\nM"')).toBe('5  3');
+    expect(format(`DATE \\@ "d'\r\n'M"`)).toBe('5 3');
+  });
+
+  test('add no text for empty quotes', () => {
+    expect(format(`DATE \\@ "d''M"`)).toBe('53');
+    // 17.16.4.1: a picture item `'text'` includes its text, and empty quotes include none.
+    expect(format(`DATE \\@ "''"`)).toBe('');
+  });
+
+  test('take the language of a simple field from the paragraph style, not the result run', () => {
+    const styleCascade = buildStyleCascadeTable(
+      readStyles(
+        '<w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+          '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="English"><w:name w:val="English"/><w:rPr><w:lang w:val="en-US"/></w:rPr></w:style>'
+      )
+    );
+    const field = `<w:fldSimple w:instr=" DATE \\@ &quot;d MMMM&quot; "><w:r><w:rPr><w:lang w:val="en-US"/></w:rPr><w:t>saved</w:t></w:r></w:fldSimple>`;
+    const options = { measurer, fieldDate: MOMENT, styleCascade };
+    // The result run and the paragraph mark say en-US; the defaults say fr-FR.
+    expect(
+      painted(`<w:p><w:pPr><w:rPr><w:lang w:val="en-US"/></w:rPr></w:pPr>${field}</w:p>`, options)
+    ).toBe('saved');
+    // The paragraph style names the language.
+    expect(painted(`<w:p><w:pPr><w:pStyle w:val="English"/></w:pPr>${field}</w:p>`, options)).toBe(
+      '5 March'
+    );
   });
 
   test('keep the saved results while saved results are editable text', () => {
