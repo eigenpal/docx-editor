@@ -185,6 +185,17 @@ describe('DATE fields in layout', () => {
       text('saved') +
       '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
     expect(painted(tracked, { measurer, fieldDate: MOMENT })).toBe('saved');
+    // A fully deleted instruction takes the language of its deleted run.
+    const deleted =
+      `<w:p>${run('fr-FR', '<w:fldChar w:fldCharType="begin"/>')}` +
+      `<w:del w:id="1" w:author="A">${run('en-US', '<w:delInstrText xml:space="preserve"> DATE \\@ "d MMMM" </w:delInstrText>')}</w:del>` +
+      run('fr-FR', '<w:fldChar w:fldCharType="separate"/>') +
+      text('saved') +
+      // Stray instruction text in the result does not decide the language.
+      run('fr-FR', '<w:instrText>X</w:instrText>') +
+      run('fr-FR', '<w:fldChar w:fldCharType="end"/>') +
+      '</w:p>';
+    expect(painted(deleted, { measurer, fieldDate: MOMENT })).toBe('5 March');
     // A space-only first run does not decide the language.
     const spaced =
       '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +

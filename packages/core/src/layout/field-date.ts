@@ -22,7 +22,7 @@
 // picture with a name keeps its saved result in a run of another language. Numeric codes and
 // `AM/PM` do not depend on the language.
 
-import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { MAX_FIELD_INSTRUCTION_CHARS } from '../store/package/field-nodes.ts';
 import { runTextLanguage } from './run-proofing.ts';
@@ -291,10 +291,4 @@ export function withFieldDate<T>(date: Date | undefined, run: () => T): T {
   } finally {
     current = outer;
   }
-}
-
-/** True when an instruction element holds non-space text in its own text values. */
-export function instructionRunHasText(node: OoxmlNode): boolean {
-  if (node.kind === 'textValue') return false;
-  return node.children.some((child) => child.kind === 'textValue' && /\S/.test(child.value));
 }
