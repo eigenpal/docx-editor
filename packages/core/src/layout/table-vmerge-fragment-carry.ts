@@ -373,8 +373,14 @@ export function createVMergeFragmentCarry(
     };
   }
 
+  /**
+   * `row` with the merge's head cells emptied. Only the head row holds them, so every other
+   * row stays the same object: row deps such as the table's closing rule
+   * (`table-exact-terminal-border.ts`) find their row by identity.
+   */
   function emptied(group: Group, row: SemanticTableRow): SemanticTableRow {
     const headIds = new Set(group.heads.map((head) => head.cell.id));
+    if (!row.cells.some((cell) => headIds.has(cell.id))) return row;
     return {
       ...row,
       cells: row.cells.map((cell) =>

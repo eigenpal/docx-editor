@@ -168,6 +168,26 @@ test('three fixed merges from one head row each keep their lines across the brea
   }
 });
 
+test('the last row keeps the closing rule of the table below a carried merge', () => {
+  // A single 0.5pt bottom rule (`w:tblBorders`, 17.4.38) closes the table below its exact last
+  // row. The merge from the head row continues into that row, and the rule still adds below
+  // the row's 20pt, as it does in the same table without the merge.
+  const rule =
+    '<w:tblBorders><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders>';
+  const bordered = (longMerge: boolean) =>
+    tableXml({ longMerge }).replace(
+      '<w:tblLayout w:type="fixed"/>',
+      `<w:tblLayout w:type="fixed"/>${rule}`
+    );
+  const lastRow = (longMerge: boolean) => {
+    const layout = lay(load(para('P', 9) + bordered(longMerge) + para('After')));
+    return tablesOn(layout, 1)[0]!.rows.at(-1)!;
+  };
+  const merged = lastRow(true);
+  expect(merged.box.height).toBeCloseTo(20.5, 6);
+  expect(merged.box.height).toBeCloseTo(lastRow(false).box.height, 6);
+});
+
 const body = (part: OoxmlPart) => part.root.children.find((n) => n.kind === 'body')!;
 const apply = (part: OoxmlPart, op: TreeDocOp) => {
   const result = applyTreeOp(part, op);
@@ -189,9 +209,15 @@ for (const longMerge of [true, false])
         label,
         pages: JSON.stringify(fresh.pages),
       });
+      // Every line of the table paints once, and the merged lines keep their order.
       const texts = textsOfAll(fresh);
-      for (const text of [...HEAD_LINES, 'L1'])
-        expect({ label, text, found: texts.includes(text) }).toEqual({ label, text, found: true });
+      const plain = ['M01', 'M11', 'M21', 'K21', 'L1', ...(longMerge ? [] : ['N11', 'N21'])];
+      for (const text of [...HEAD_LINES, ...plain]) {
+        const count = texts.filter((t) => t === text).length;
+        expect({ label, text, count }).toEqual({ label, text, count: 1 });
+      }
+      const order = HEAD_LINES.map((text) => texts.indexOf(text));
+      expect({ label, order }).toEqual({ label, order: [...order].sort((a, b) => a - b) });
     };
     for (let i = 0; i < 9; i++) {
       part = apply(part, { op: 'insertText', paragraphId: leading(), offset: 0, text: 'Q' });
