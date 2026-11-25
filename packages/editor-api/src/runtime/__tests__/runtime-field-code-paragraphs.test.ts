@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // An `IF` field whose field codes hold paragraph marks (ECMA-376 Part 1, 17.16.18, CT_FldChar;
 // 17.16.23, instrText). A write that would add one more paragraph mark inside the field codes
-// is refused with `InvalidArgument`, and the document does not change. Writes beside the field
+// is refused with `NotSupported`, and the document does not change. Writes beside the field
 // still apply.
 import { describe, expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
@@ -66,7 +66,7 @@ describe('a write that would add a paragraph mark inside field codes', () => {
   ];
   for (const [label, write] of writes) {
     test(`${label} is refused`, async () => {
-      expect(await refusal(write)).toBe('InvalidArgument');
+      expect(await refusal(write)).toBe('NotSupported');
     });
   }
 
@@ -97,25 +97,35 @@ describe('a delete that would remove a paragraph mark inside field codes', () =>
       (c) => item(c, 1).getRange('Whole').expandTo(item(c, 3).getRange('Start')).delete(),
     ],
     [
+      'Range.delete from inside the field codes to the result start',
+      (c) => item(c, 2).getRange('Whole').expandTo(item(c, 3).getRange('Start')).delete(),
+    ],
+    [
+      'Range.insertText Replace from inside the field codes to the result start',
+      (c) =>
+        item(c, 2)
+          .getRange('Whole')
+          .expandTo(item(c, 3).getRange('Start'))
+          .insertText('Z', 'Replace'),
+    ],
+    [
       'Range.delete from the field codes past the field',
       (c) => item(c, 2).getRange('Whole').expandTo(item(c, 4).getRange('Whole')).delete(),
     ],
   ];
   for (const [label, remove] of deletes) {
     test(`${label} is refused`, async () => {
-      expect(await refusal(remove)).toBe('InvalidArgument');
+      expect(await refusal(remove)).toBe('NotSupported');
     });
-    // A tracked range delete across paragraphs that hold field characters already refuses
-    // with NotSupported; either way nothing commits.
     test(`${label} is refused while tracking`, async () => {
-      expect(['InvalidArgument', 'NotSupported']).toContain(String(await refusal(remove, true)));
+      expect(await refusal(remove, true)).toBe('NotSupported');
     });
   }
 
   test('Range.delete over the whole field is refused too', async () => {
     const remove = (c: RequestContext) =>
       item(c, 1).getRange('Whole').expandTo(item(c, 3).getRange('Whole')).delete();
-    expect(await refusal(remove)).toBe('InvalidArgument');
+    expect(await refusal(remove)).toBe('NotSupported');
   });
 
   test('a range delete that ends before the field still applies', async () => {

@@ -45,5 +45,10 @@ export function fieldCodeParagraphDeleteRefusal(
 }
 
 function refusal(message: string): PlannedOperation {
-  return { ok: false, error: { code: 'unsupported-content', message, detail: 'field-code-mark' } };
+  // The same code as other refused complex-field structure: the content is valid, and this
+  // host does not write that change to it.
+  return {
+    ok: false,
+    error: { code: 'unsupported-capability', message, detail: 'field-code-mark' },
+  };
 }
