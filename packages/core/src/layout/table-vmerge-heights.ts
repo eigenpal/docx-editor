@@ -93,6 +93,8 @@
 //   it empties the head row of what the earlier plan measured there, so the row collapses and
 //   that span's rows stop adding up to the height it was sized at — its content then paints
 //   below the table. One span length per head row is planned; the rest size their own row.
+//   A merge over `hRule="exact"` rows only is the exception: no row of it can collapse or
+//   grow, so it joins the plan and its head flows through its own rows (`fixedSpanBeside`).
 //
 // A span every row of which is `hRule="exact"` and too short for the merged content is
 // accepted like any other: its rows keep their fixed heights, and its head flows through
@@ -106,7 +108,11 @@
 // is placed, so a surplus that a later span adds to a shared row only makes it taller. The
 // decision's rows are all held to the fragment of its first head, so a span that runs past
 // the first head's own span still lands whole with it. Anything that lets two decisions share
-// a row has to add a guard for that.
+// a row has to add a guard for that. `fixedSpanBeside` is the one exception: it adds a second
+// decision inside the rows of the first, at the same head row. That is safe because all its rows
+// are `hRule="exact"`, so it adds no floor or surplus, and its rows lie inside the first span,
+// so `heldRows` already keeps them with the first head. They lie inside because `spansByRow`
+// visits the longest span of a head row first, so the plan that exists is never the shorter one.
 //
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
@@ -197,7 +203,9 @@ export interface VMergeRowHeights {
    *
    * Sound because overlapping accepted spans were decided together: the rows a decision
    * covers are covered by nothing else, so withdrawing it at its first head row takes back
-   * every span, floor and surplus in those rows.
+   * every span, floor and surplus in those rows. A `fixedSpanBeside` span shares its head row
+   * with the decision it sits inside, so the same call withdraws it, and its fixed rows hold no
+   * floor or surplus to take back.
    *
    * A span headed BELOW a decision's first head row, withdrawn on its own, only stops
    * detaching its heads. Its rows keep every floor, because the heads above were already
@@ -417,6 +425,20 @@ export function planVMergeRowHeights(
     rows[span.endRow]!.height.rule === 'exact' ? undefined : span.endRow;
 
   /**
+   * A shorter merge from a head row that already has a plan, over rows that are all
+   * `hRule="exact"` (17.18.37). No head can change the height of a fixed row, so taking its
+   * head out of the head row moves nothing that the earlier plan measured. Its head flows
+   * through its own rows like any accepted head and is clipped at their bottom.
+   */
+  const fixedSpanBeside = (span: VMergeSpan): boolean => {
+    if (!acceptedHeadRows.has(span.headRow)) return false;
+    for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
+      if (rows[rowIndex]!.height.rule !== 'exact') return false;
+    }
+    return true;
+  };
+
+  /**
    * The spans decided together with this one: every merge that starts in its head row AND
    * ends in its end row. They cover the same rows, so one plan detaches all their heads,
    * measures the rows without any of them and reserves the tallest head. Deciding them one
@@ -624,6 +646,7 @@ export function planVMergeRowHeights(
     // Shapes this module declines read as "taller than any page", so the caller never
     // admits them and never probes for a height it will not use.
     if (!acceptedSpans.has(span)) {
+      if (fixedSpanBeside(span)) return coveredPtOf(span, atYPt);
       const inner = innerGroupsOf(span);
       if (inner === null || acceptedHeadRows.has(span.headRow)) return Number.POSITIVE_INFINITY;
       if (inner.length > 0) {
@@ -643,6 +666,17 @@ export function planVMergeRowHeights(
     heightOf: spanHeightOf,
     accept: (span, atYPt) => {
       if (acceptedSpans.has(span)) return;
+      if (fixedSpanBeside(span)) {
+        const covered = coveredPtOf(span, atYPt);
+        for (const member of groupOf(span)) {
+          if (acceptedSpans.has(member)) continue;
+          acceptedSpans.add(member);
+          acceptedHeadIds.add(member.headCellId);
+          admittedAtYPt.set(member, atYPt);
+          if (contentOf(member, atYPt) > covered + EPSILON_PT) clippedSpans.add(member);
+        }
+        return;
+      }
       const inner = innerGroupsOf(span);
       if (inner === null || acceptedHeadRows.has(span.headRow)) return;
       if (inner.length > 0) {
