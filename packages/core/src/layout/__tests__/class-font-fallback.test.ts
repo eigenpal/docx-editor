@@ -428,3 +428,40 @@ test('a missing bold italic stands in through the italic, which paint picks firs
   );
   expect(boldItalic?.to).toEqual({ family: 'Stand In', weight: 400, style: 'italic' });
 });
+
+test('a family served only in bold stands in through the bold face for its regular text', () => {
+  const document = documentWith(
+    'Brand Light',
+    '<w:font w:name="Brand Light"><w:family w:val="swiss"/></w:font><w:font w:name="Times New Roman"><w:family w:val="roman"/></w:font>',
+    undefined,
+    'Times New Roman'
+  );
+  const plan = documentFontSubstitutionPlan(document, ['Brand Light'], [], 'Times New Roman');
+  const host = hostFonts();
+  const fonts = applyDocumentFontSubstitutions(
+    composeFontConfiguration({
+      sources: [source('Stand In', 700, 'normal'), ...host.sources],
+      substitutions: [
+        {
+          from: { family: 'Brand Light', weight: 700, style: 'normal' },
+          to: { family: 'Stand In', weight: 700, style: 'normal' },
+        },
+        ...host.substitutions!,
+      ],
+    }),
+    plan
+  );
+  const brand = fonts.substitutions?.filter(({ from }) => from.family === 'Brand Light');
+  expect(
+    brand
+      ?.map(
+        ({ from, to }) => `${from.weight} ${from.style} > ${to.family} ${to.weight} ${to.style}`
+      )
+      .sort()
+  ).toEqual([
+    '400 italic > Stand In 700 normal',
+    '400 normal > Stand In 700 normal',
+    '700 italic > Stand In 700 normal',
+    '700 normal > Stand In 700 normal',
+  ]);
+});
