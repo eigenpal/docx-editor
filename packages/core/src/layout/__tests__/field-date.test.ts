@@ -256,6 +256,16 @@ describe('DATE fields in layout', () => {
     expect(format('DATE \\@ "d\u2013M\u00b7d\u5e74M"')).toBe('5\u20133\u00b75\u5e743');
   });
 
+  test('read backslash escapes inside a quoted picture', () => {
+    // 17.16.1: `\\` is one backslash and `\"` a double quote.
+    expect(format('DATE \\@ "d\\\\M"')).toBe('5\\3');
+    expect(format('DATE \\@ "d\\"M"')).toBe('5"3');
+    expect(format('DATE \\@ "d\'\\\\\'M"')).toBe('5\\3');
+    // A backslash before another character is dropped.
+    expect(format('DATE \\@ "d\\M"')).toBe('53');
+    expect(format('DATE \\@ "d\\xM"')).toBeNull();
+  });
+
   test('add no text for empty quotes', () => {
     expect(format(`DATE \\@ "d''M"`)).toBe('53');
     // 17.16.4.1: a picture item `'text'` includes its text, and empty quotes include none.

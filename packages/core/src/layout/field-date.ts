@@ -178,9 +178,22 @@ function parseDatePicture(picture: string): DatePictureItem[] | null {
  */
 function readArgument(text: string, start: number): { value: string; end: number } | null {
   if (text[start] === '"') {
-    const close = text.indexOf('"', start + 1);
-    if (close < 0) return null;
-    return { value: text.slice(start + 1, close), end: close + 1 };
+    // 17.16.1: inside quotes, `\"` is a double quote and `\\` is one backslash. A backslash
+    // before any other character is dropped and the character is read as it is.
+    let value = '';
+    for (let index = start + 1; index < text.length; index += 1) {
+      const char = text[index]!;
+      if (char === '"') return { value, end: index + 1 };
+      if (char === '\\') {
+        const next = text[index + 1];
+        if (next === undefined) return null;
+        value += next;
+        index += 1;
+        continue;
+      }
+      value += char;
+    }
+    return null;
   }
   let end = start;
   while (end < text.length && !isSpace(text[end]) && text[end] !== '\\') {
