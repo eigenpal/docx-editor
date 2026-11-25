@@ -4,13 +4,13 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
-import { paragraphsInsideFieldInstructions } from './field-instruction-paragraphs.ts';
+import { fieldCodeMarkParagraphs } from './field-instruction-paragraphs.ts';
 import { readGridSkip, readGridSpan, readVMerge } from './table-row-properties.ts';
 
-/** `blocks` without the paragraphs inside a field instruction, or `blocks` when it has none. */
+/** `blocks` without the paragraphs whose mark is field code, or `blocks` when it has none. */
 function withoutFieldCodeParagraphs(blocks: readonly OoxmlElement[]): readonly OoxmlElement[] {
-  const inside = paragraphsInsideFieldInstructions(blocks);
-  return inside.size === 0 ? blocks : blocks.filter((_block, index) => !inside.has(index));
+  const fieldCode = fieldCodeMarkParagraphs(blocks);
+  return fieldCode.size === 0 ? blocks : blocks.filter((_block, index) => !fieldCode.has(index));
 }
 
 /** One cached row walk: its depth budget, the mode and skipped columns, and its paragraphs. */
@@ -31,9 +31,9 @@ const NO_COLUMNS: ReadonlySet<number> = new Set();
  * `skipMergedCells` leaves out the paragraphs of a cell that continues a vertical merge from
  * the cell above it in the same grid column (`w:vMerge` without `restart`). Such a cell shows
  * nothing, so list numbering skips it; a continuation with no merged cell above it starts its
- * own merge and keeps its paragraphs. List numbering also skips a cell paragraph inside a field
- * instruction (see `field-instruction-paragraphs.ts`): it is field code, not content. The story's
- * own top-level blocks come from `listCountingBlocks`, which already leaves those out. A cell
+ * own merge and keeps its paragraphs. List numbering also skips a cell paragraph whose mark is
+ * field code (see `fieldCodeMarkParagraphs`), also inside a content control. The story's own
+ * top-level blocks come from `listCountingBlocks`, which leaves out the same paragraphs. A cell
  * is scanned in its stored form, while the top level is scanned in the revision view, so a
  * field character inside a tracked insertion or deletion can count differently in a cell.
  */
