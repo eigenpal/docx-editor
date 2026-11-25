@@ -1518,6 +1518,67 @@ A body `LISTNUM` field SHALL display the next number of its list, computed from 
 - **WHEN** a `LISTNUM` field that names the list at level 1 follows it, and then another numbered paragraph of the list
 - **THEN** the field displays `S2.` and the paragraph shows `S3.`
 
+### Requirement: Paragraphs inside a field instruction take no line
+
+A paragraph that starts and ends inside the field codes of one closed complex field SHALL take no line box, spacing, or list marker. The field codes run from `begin` to `separate`, or to `end` without one (ECMA-376 §17.16.18, `CT_FldChar`; §17.18.29, `ST_FldCharType`). The paragraph SHALL stay in the tree. It SHALL NOT advance list counters, in a table cell or a content control too. A join SHALL NOT absorb it.
+
+#### Scenario: An IF field's text spans paragraphs
+
+- **GIVEN** an `IF` field whose quoted text holds empty paragraphs and list paragraphs, with or without a `separate` and a saved result
+- **WHEN** the story lays out
+- **THEN** the lines are the text before the field, then the saved result with the text after the field
+- **AND** a nested field's saved result inside those paragraphs adds no line
+- **AND** Backspace before the result and Delete before the field keep the paragraphs of the field codes
+
+#### Scenario: A content control wraps a field-code paragraph
+
+- **GIVEN** a list paragraph inside the field codes, wrapped in a block content control, at the top level of a story or in a table cell
+- **WHEN** the story lays out
+- **THEN** the paragraph takes no line and the list after the field continues as if it were absent, in both places
+
+#### Scenario: A field nested past the nesting cap
+
+- **GIVEN** a story with a field nested more than four levels deep, and an ordinary `IF` field whose field codes span paragraphs
+- **WHEN** the story lays out
+- **THEN** only the field past the cap is left out
+- **AND** the fields around it and the ordinary `IF` field still hide their field-code paragraphs
+
+#### Scenario: The mergeParagraphs command meets a field-code mark
+
+- **GIVEN** a selection whose `mergeParagraphs` join would remove a paragraph mark inside a field instruction, or the mark of the paragraph that holds `begin`
+- **WHEN** `can` or `exec` answers the command
+- **THEN** it refuses with the `unsupported` code and a reason that starts with `field-code-mark`
+- **AND** the document does not change
+
+#### Scenario: A structural insert inside the field codes
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** the user presses Enter, runs `splitParagraph`, or inserts a section break, in a paragraph inside them or at the start of the paragraph where they end
+- **THEN** the write is refused with a reason that starts with `field-code-mark`
+- **AND** the document does not change
+- **AND** a table or a table of contents inserted with the caret in the paragraph where they end goes before the paragraph that holds `begin`
+- **AND** a rich paste there is refused, and its plain text lands after the field's `separate`
+
+#### Scenario: An automation write splits inside the field codes
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** an automation write would add a paragraph mark or a table in a paragraph inside them, or at the start of the paragraph where they end
+- **THEN** the planner refuses with `unsupported-capability` and the detail `field-code-mark`, which the editor API reports as `NotSupported`
+- **AND** the document does not change
+
+#### Scenario: An automation delete removes a field-code mark
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** an automation delete of a paragraph or a range, tracked or not, would remove one of those marks, or the mark of the paragraph that holds `begin`, also when it covers the whole field
+- **THEN** the planner refuses with `unsupported-capability` and the detail `field-code-mark`, which the editor API reports as `NotSupported`
+- **AND** the document does not change
+
+#### Scenario: A malformed field keeps its paragraphs
+
+- **GIVEN** a field without an `end`, or a field whose field codes hold `w:t` text outside a nested field's result
+- **WHEN** the story lays out
+- **THEN** every paragraph between its characters keeps its line
+
 ### Requirement: Header and footer lists share one count
 
 Header and footer stories SHALL count list items on one shared count that the body and notes do not join. The count SHALL run over the sections in order and, within a section, over the parts that section references itself: even header, default header, even footer, default footer, first-page header, first-page footer. An inherited part SHALL keep the numbers of its referencing section.

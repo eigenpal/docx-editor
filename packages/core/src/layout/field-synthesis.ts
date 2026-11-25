@@ -14,15 +14,18 @@ import { characterStyleFieldValue } from './field-character-style.ts';
 //      that document finalize substitutes. A stale cached result never wins.
 //   4. REF — the value resolved from the bookmark target wins over the stale cache; an
 //      unresolvable reference falls through to it instead.
-//   5. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
-//   6. empty cache only (and no hidden-but-present result): a document-property value, else a
+//   5. DATE / TIME — the layout's field date, when it has one, wins over the cache.
+//   6. cached result — a non-empty cache is the last saved result; it wins over synthesis.
+//   7. empty cache only (and no hidden-but-present result): a document-property value, else a
 //      MACROBUTTON / GOTOBUTTON display.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
+import { currentFieldDate, formatDateField } from './field-date.ts';
 import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
 import {
+  formulaOperandIsNumber,
   pageFieldMarker,
   pageFieldMeasuredText,
   PAGE_FIELD_PLACEHOLDER,
@@ -30,7 +33,8 @@ import {
   type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
-import type { AllowlistedPageFieldMatch } from './field-instruction.ts';
+import type { AllowlistedPageFieldMatch, ComplexFieldParseState } from './field-instruction.ts';
+import { instrTextValue, isDeletedInstrText } from '../store/package/field-nodes.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
 import {
   listNumFieldValue,
@@ -104,9 +108,18 @@ export function synthesizeAtomicField(
   const form = formFieldResult(pending, ctx.themeFonts);
   if (form) return { text: form.text, props: form.props, style: form.style };
 
-  if (pending.kind && ctx.pageContext) {
+  // A formula over a PAGE operand that is not a number (a roman section) keeps the cache.
+  const sectionFormat = ctx.pageContext
+    ? ctx.pageContext.format
+    : ctx.bodyPageFields
+      ? ctx.bodyPageFields.format
+      : undefined;
+  const pageKind = formulaOperandIsNumber(pending.pageSwitches, sectionFormat)
+    ? pending.kind
+    : null;
+  if (pageKind && ctx.pageContext) {
     return {
-      text: projectPageFieldValue(pending.kind, ctx.pageContext, pending.pageSwitches),
+      text: projectPageFieldValue(pageKind, ctx.pageContext, pending.pageSwitches),
       props: pending.props,
       style: pending.style,
     };
@@ -118,7 +131,7 @@ export function synthesizeAtomicField(
   // because headers/footers took the live branch above, and notes / text boxes have no
   // substitute pass.
   if (
-    pending.kind &&
+    pageKind &&
     ctx.bodyPageFields &&
     (pending.cachedText.length > 0 || !pending.sawResultContent)
   ) {
@@ -129,11 +142,11 @@ export function synthesizeAtomicField(
       text: pageFieldMeasuredText(
         pending.pageSwitches,
         pending.cachedText,
-        pending.kind === 'PAGE' ? ctx.bodyPageFields.format : undefined
+        pageKind === 'PAGE' ? ctx.bodyPageFields.format : undefined
       ),
       props: pending.props,
       style: pending.style,
-      pageField: pageFieldMarker(pending.kind, pending.pageSwitches),
+      pageField: pageFieldMarker(pageKind, pending.pageSwitches),
     };
   }
   // A REF resolves live from its bookmark target and the resolved numbering — the cached
@@ -188,6 +201,20 @@ export function synthesizeAtomicField(
     const value = listNumFieldValue(ctx.refFields, pending.beginId);
     if (value !== null) return { text: value, props: pending.props, style: pending.style };
   }
+  // DATE and TIME show the layout's field date, because their value is the current moment. A
+  // result that existed but was hidden stays hidden. A name in an unsupported language keeps
+  // the cache, and so does a field with any nested field: a nested field in the instruction
+  // leaves the picture only partly buffered.
+  const fieldDate = pending.dateSpec && !pending.hasNestedField ? currentFieldDate() : undefined;
+  const dateText =
+    pending.dateSpec && fieldDate && (pending.cachedText.length > 0 || !pending.sawResultContent)
+      ? formatDateField(
+          pending.dateSpec,
+          fieldDate,
+          pending.instructionProps ?? pending.deletedInstructionProps ?? pending.props
+        )
+      : null;
+  if (dateText !== null) return { text: dateText, props: pending.props, style: pending.style };
   // A non-empty cached result is what Word last painted; it wins over synthesis.
   if (pending.cachedText.length > 0) {
     return { text: pending.cachedText, props: pending.props, style: pending.style };
@@ -204,4 +231,22 @@ export function synthesizeAtomicField(
     }
   }
   return null;
+}
+
+/**
+ * Record the run properties of an instruction run of `pending`, before the walk ingests it.
+ * DATE and TIME names follow the language of the run that holds the instruction (ECMA-376
+ * Part 1, 17.16.4.1): the first run with text of the buffer the field evaluates, live, else
+ * deleted. Runs of nested fields and runs after the separator do not count.
+ */
+export function noteInstructionLanguage(
+  pending: PendingFieldProjection,
+  field: ComplexFieldParseState,
+  instrText: OoxmlNode,
+  props: readonly OoxmlProperty[]
+): void {
+  if (field.nesting !== 1 || field.phase !== 'instruction') return;
+  if (!/\S/.test(instrTextValue(instrText))) return;
+  if (!isDeletedInstrText(instrText)) pending.instructionProps ??= props;
+  else pending.deletedInstructionProps ??= props;
 }

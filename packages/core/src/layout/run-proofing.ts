@@ -40,6 +40,28 @@ function isOn(property: OoxmlProperty): boolean {
   return value === undefined || !OFF.has(String(value).toLowerCase());
 }
 
+/**
+ * The language of a run's text from its cascaded properties: `w:lang/@w:bidi` in a
+ * complex-script run (`w:rtl` or `w:cs`), else `w:lang/@w:val` (ECMA-376 Part 1, 17.3.2.20).
+ * Later levels of the cascade come later in `props`, so the last value wins. Null when no level
+ * sets one.
+ */
+export function runTextLanguage(props: readonly OoxmlProperty[]): string | null {
+  let rtl = false;
+  let cs = false;
+  let latin: string | null = null;
+  let bidi: string | null = null;
+  for (const property of props) {
+    if (property.localName === 'rtl') rtl = isOn(property);
+    else if (property.localName === 'cs') cs = isOn(property);
+    else if (property.localName === 'lang') {
+      latin = languageTag(property.attributes?.val) ?? latin;
+      bidi = languageTag(property.attributes?.bidi) ?? bidi;
+    }
+  }
+  return rtl || cs ? (bidi ?? latin) : latin;
+}
+
 function languageTag(value: unknown): string | null {
   // A tag is short ASCII; anything else from the file is not a language tag.
   return typeof value === 'string' && /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8}){0,4}$/.test(value)

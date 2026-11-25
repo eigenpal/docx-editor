@@ -638,7 +638,7 @@ const MARK_REVISIONS = ['ins', 'del', 'moveFrom', 'moveTo'];
  * keeps it too: deciding that revision joins the anchor with whatever follows its mark, and
  * that must be the empty paragraph a split leaves, not the table's first cell.
  */
-function nextParagraphSibling(part: OoxmlPart, paragraphId: string): string | undefined {
+export function nextParagraphSibling(part: OoxmlPart, paragraphId: string): string | undefined {
   const parent = parentNodeOf(part, paragraphId);
   if (!parent) return undefined;
   const index = parent.children.findIndex((child) => child.id === paragraphId);

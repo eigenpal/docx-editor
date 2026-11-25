@@ -190,7 +190,7 @@ export function runFormatRefusal(reason: string): Refusal {
  * The paragraphs `mergeParagraphs` joins: the ones the selection spans, or the selection's
  * paragraph and the next one in its story.
  */
-function mergeTargets(
+export function mergeTargets(
   surface: PaginatedSurface,
   selection: SemanticSelection
 ): { ids: readonly string[]; scope: StoryScope } | string {

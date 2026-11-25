@@ -1,5 +1,6 @@
 // Shared header/footer assembly for every semantic-layout host.
 
+import { withFieldResultsProducer } from './field-results-producer.ts';
 import {
   resolveRelationship,
   resolveHeaderFooterResolutionBySection,
@@ -206,6 +207,9 @@ export function createDocumentFurnitureSource(
     listCounterSeed: ListCounterSnapshot | undefined
   ): ReturnType<typeof layoutHeaderFooterStory> => {
     const projectionEpoch = linkProjectors.epochForPart(part.name);
+    // The field-results mode and the field date of the layout call in progress change the
+    // story's text, so they key the memo with the producer.
+    const memoProducer = withFieldResultsProducer(producer);
     const revisionAuthorFilterKey = revisionAuthorFilter?.cacheKey ?? '';
     const currentDefaultTabStopPt = defaultTabStopPt?.();
     const currentCompatibilityMode = compatibilityMode?.();
@@ -230,7 +234,7 @@ export function createDocumentFurnitureSource(
     );
     if (
       cached &&
-      cached.producer === producer &&
+      cached.producer === memoProducer &&
       cached.projectionEpoch === projectionEpoch &&
       cached.revisionAuthorFilterKey === revisionAuthorFilterKey &&
       cached.defaultTabStopPt === currentDefaultTabStopPt &&
@@ -293,7 +297,7 @@ export function createDocumentFurnitureSource(
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
       storyDistance: storyDistanceOf(part, geometry),
-      producer,
+      producer: memoProducer,
       projectionEpoch,
       revisionAuthorFilterKey,
       defaultTabStopPt: currentDefaultTabStopPt,

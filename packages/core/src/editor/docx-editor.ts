@@ -579,6 +579,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const fieldScope = surfaceFieldResultsScope({
     fieldResults: config.fieldResults,
     collaborationModel: modules.collaboration ?? undefined,
+    fieldDate: config.fieldDate,
   });
   // Closures only: every dependency is read when a command runs, not at construction.
   const protection = createDocumentProtectionCommands({

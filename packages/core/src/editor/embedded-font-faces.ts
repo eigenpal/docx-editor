@@ -106,6 +106,9 @@ function aliasForFamily(hashes: readonly string[]): string {
 /** Match the family normalization used by measurement's fontRequestKey. */
 const familyKey = (family: string): string => family.trim().toLowerCase();
 
+const isRegular = (face: FontSourceSubstitution['from']): boolean =>
+  face.weight === 400 && face.style === 'normal';
+
 /**
  * The font machinery of `doc`, or of the script's own document when none is given.
  *
@@ -220,9 +223,18 @@ export async function registerEmbeddedFontFaces(
   // A substituted-from name only borrows an alias that its target actually earned, and
   // never displaces a face registered under that name directly — a real Calibri beats a
   // stand-in for Calibri, the same precedence composition already applies to bytes.
+  // One alias holds every face of a family, so a family whose faces stand in through
+  // different families paints through the one its regular face measures with. When that
+  // face's target earned no alias, the family borrows none: its regular text would otherwise
+  // paint in a bold or italic face.
+  const withRegular = new Set(
+    substitutions
+      .filter((substitution) => isRegular(substitution.from))
+      .map((s) => familyKey(s.from.family))
+  );
   for (const substitution of substitutions) {
     const from = familyKey(substitution.from.family);
-    if (aliases.has(from)) continue;
+    if (aliases.has(from) || (withRegular.has(from) && !isRegular(substitution.from))) continue;
     const alias = aliases.get(familyKey(substitution.to.family));
     if (alias !== undefined) aliases.set(from, alias);
   }

@@ -1515,7 +1515,7 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context && !context.live ? false : showFieldCodes,
-      fieldResults: fieldScope.mode,
+      ...fieldScope.layout, // `fieldResults`, and a copy of `fieldDate` the host cannot mutate
       revisionAuthorFilter: activeAuthorFilter,
       bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
@@ -4050,7 +4050,7 @@ export function mountPaginatedSurface(
    */
   function insertTableOp(rows: number, cols: number) {
     if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
-    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    const beforeParagraphId = tocBlockAnchor(session.part(), hiddenMarks.lineFirst(selection.head));
     if (beforeParagraphId === null) return null;
     const section = structure.sectionPropertiesAt(selection.head.paragraphId);
     const contentWidth =
@@ -4129,7 +4129,7 @@ export function mountPaginatedSurface(
 
   function insertTocOp() {
     const instruction = parseTocInstruction(INSERT_TOC_INSTRUCTION);
-    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    const beforeParagraphId = tocBlockAnchor(session.part(), hiddenMarks.lineFirst(selection.head));
     if (!instruction || beforeParagraphId === null) return null;
     const outline = session.documentOutline();
     const plan = planTocEntries(
@@ -4921,12 +4921,12 @@ export function mountPaginatedSurface(
         );
         return;
       }
+      const forward = hiddenMarks.forwardJoinOps(position.paragraphId, next); // 'step': field codes
+      if (forward === 'step') return setSelection(collapsedAt({ paragraphId: next, offset: 0 }));
       commit(
         () =>
           applyOps(
-            hiddenMarks.forwardJoinOps(position.paragraphId, next) ?? [
-              { op: 'joinParagraphs', firstId: position.paragraphId, secondId: next },
-            ],
+            forward ?? [{ op: 'joinParagraphs', firstId: position.paragraphId, secondId: next }],
             selectionMark()
           ),
         () => collapsedAt(position),

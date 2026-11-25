@@ -5604,6 +5604,7 @@ export interface DocxEditorProps {
     contextMenu?: boolean | DocxEditorContextMenuProps;
     // (undocumented)
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
@@ -5794,6 +5795,11 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<DocumentSource>;
     };
+    fieldDate: {
+        default: undefined;
+        type: PropType<Date>;
+        validator: (value: unknown) => value is Date | undefined;
+    };
     fieldResults: {
         default: undefined;
         type: PropType<FieldResultsMode>;
@@ -5869,6 +5875,11 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<DocumentSource>;
     };
+    fieldDate: {
+        default: undefined;
+        type: PropType<Date>;
+        validator: (value: unknown) => value is Date | undefined;
+    };
     fieldResults: {
         default: undefined;
         type: PropType<FieldResultsMode>;
@@ -5930,6 +5941,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     colorMode: "dark" | "light" | "system";
     contentLockPolicy: ContentLockPolicy;
     document: DocumentSource;
+    fieldDate: Date;
     fieldResults: FieldResultsMode;
     fontShaping: _docx_editor_dev_core.FontShapingOptions | undefined;
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
@@ -5965,6 +5977,7 @@ export interface DocxEditorRootProps {
     contentLockPolicy?: ContentLockPolicy;
     // (undocumented)
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;

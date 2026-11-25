@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A table row that held only vertical merge heads and continuations took one default text line, or no height when its marks were hidden, whatever its smaller minimum row height.",
+  "after": "That row takes the height of its first cell's end-of-cell paragraph, or its minimum row height when that is taller. Beside a btLr cell, a minimum row height alone sizes it.",
+  "reason": "The change is in table row layout only. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-head-row-height.test.ts",
+    "packages/core/src/editor/__tests__/table-vmerge-head-row-live.test.ts"
+  ],
+  "changeset": "merged-row-minimum-height",
+  "migration": null
+}

@@ -200,6 +200,47 @@ describe('registerEmbeddedFontFaces', () => {
     expect(registration.alias('DIRECT FACE')).toBeUndefined();
   });
 
+  test('a family whose faces stand in through two families paints through its regular face', async () => {
+    const env = fakeEnvironment();
+    const registration = await registerEmbeddedFontFaces(
+      [source('Narrow Sans'), source('Wide Sans', 400, 'italic')],
+      env.environment,
+      [
+        // An italic that arrived later comes first, as late answers do.
+        {
+          from: { family: 'Brand Light', weight: 400, style: 'italic' },
+          to: { family: 'Wide Sans', weight: 400, style: 'italic' },
+        },
+        {
+          from: { family: 'Brand Light', weight: 400, style: 'normal' },
+          to: { family: 'Narrow Sans', weight: 400, style: 'normal' },
+        },
+      ]
+    );
+    expect(registration.alias('Brand Light')).toBe(registration.alias('Narrow Sans'));
+    expect(registration.alias('Brand Light')).not.toBe(registration.alias('Wide Sans'));
+  });
+
+  test('a family whose regular target earned no alias borrows no other alias', async () => {
+    const env = fakeEnvironment();
+    const registration = await registerEmbeddedFontFaces(
+      [source('Wide Sans', 400, 'italic')],
+      env.environment,
+      [
+        {
+          from: { family: 'Brand Light', weight: 400, style: 'italic' },
+          to: { family: 'Wide Sans', weight: 400, style: 'italic' },
+        },
+        {
+          from: { family: 'Brand Light', weight: 400, style: 'normal' },
+          to: { family: 'Unloaded Sans', weight: 400, style: 'normal' },
+        },
+      ]
+    );
+    expect(registration.alias('Wide Sans')).toBeDefined();
+    expect(registration.alias('Brand Light')).toBeUndefined();
+  });
+
   test('a family whose every face fails to load advertises no alias', async () => {
     const env = fakeEnvironment({ failWhenFamilyMatches: 'docx-embedded-' });
     const registration = await registerEmbeddedFontFaces([source('Broken')], env.environment);
