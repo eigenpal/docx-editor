@@ -66,7 +66,8 @@ export function createHeadRowEdits(
       if (at >= 0) edits[at] = edit;
       else edits.push(edit);
       carried.set(index, edits);
-      // A carried row takes the cell insets of the row it continues.
+      // A carried row takes the cell insets of the row it continues. A placed row takes the
+      // insets of the authored record it replaces, which `assemble` still holds by key.
       const rowInsets = insets.get(previous?.record ?? records[index]!);
       if (rowInsets) insets.set(edit.record, rowInsets);
     },
