@@ -300,6 +300,29 @@ test('a repeated header with a row of continuations keeps width reuse', () => {
   expect(result.moved.slice(1).every((count) => count < 30)).toBe(true);
 });
 
+// A lone merge restart floors its row above a shorter line (`unsizedRowFloorPt`). A row moved
+// to a new top is not rebuilt from its old lines then: the floor is placed again.
+test('rows of lone merge restarts keep their floor when an edit moves them', () => {
+  const restart = '<w:vMerge w:val="restart"/>';
+  const hidden = '<w:vMerge w:val="restart"/><w:hideMark/>';
+  const merged = [
+    tr([tc(p('Head'), restart), tc(p('A')), tc(p('B'))]),
+    tr([tc(p(''), '<w:vMerge/>'), tc(p('C')), tc(p('D'))]),
+  ];
+  const rows = Array.from({ length: 24 }, (_, index) =>
+    tr([0, 1, 2].map((cell) => tc(p(`L${index}C${cell}`), hidden)))
+  );
+  const part = load(autofit([...merged, ...rows]));
+  const shifted = shiftedRowsTestRecorder();
+  try {
+    // Every step equals a cold layout; typing wraps the edited cell and moves the rows below.
+    burst(part, paragraphAt(part, 4, 0), ' wider and wider text that wraps');
+    expect(shifted.refused.floor).toBeGreaterThan(0);
+  } finally {
+    shifted.dispose();
+  }
+});
+
 test('undo moves rows back to the original widths', () => {
   const part = load(autofit(Array.from({ length: 30 }, (_, i) => tokenRow(i))));
   const result = burst(part, paragraphAt(part, 13, 1), 'WIDE');

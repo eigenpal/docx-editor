@@ -23,18 +23,17 @@ import { withTableContentBorders } from './table-content-borders.ts';
 
 /**
  * Whether the row asks for row-local clearance: it has an `atLeast` minimum, or only merge
- * heads, continuations, and `btLr` cells (which `waitsForRowHeight` covers) hold it, so its first cell's end paragraph can set a
- * floor (`unsizedRowFloorPt`). This reads the authored merge; layout decides later
+ * heads (lone `restart` cells too), continuations, and `btLr` cells (which `waitsForRowHeight`
+ * covers) hold it, so its first cell's end paragraph can set a floor (`unsizedRowFloorPt`). This reads the authored merge; layout decides later
  * whether each head is detached. A stamp that layout does not use changes nothing.
  */
 function takesRowMinimum(row: SemanticTableRow): boolean {
   if (row.height.rule === 'atLeast') return true;
+  const heads = (cell: SemanticTableCell) =>
+    cell.headsVerticalMerge === true || cell.restartsVerticalMerge === true;
   return (
-    row.cells.some((cell) => cell.headsVerticalMerge === true) &&
-    row.cells.every(
-      (cell) =>
-        cell.vMergeContinue || cell.headsVerticalMerge === true || cell.textDirection === 'btLr'
-    )
+    row.cells.some(heads) &&
+    row.cells.every((cell) => cell.vMergeContinue || heads(cell) || cell.textDirection === 'btLr')
   );
 }
 

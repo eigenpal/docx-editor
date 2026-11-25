@@ -51,6 +51,7 @@ import { MIN_CELL_BOX_PT, sumCols, type TableFlowDeps } from './semantic-table-l
 import type { ParagraphLayoutInputs } from './style-cascade.ts';
 import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import { cellFlowBox } from './table-cell-text-direction.ts';
+import { isLoneMergeRestart } from './table-unsized-row-floor.ts';
 import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
 import { authoredRowMinimumFloorPt } from './table-row-minimum-insets.ts';
 import { shiftBlocks } from './table-fragment-finalize.ts';
@@ -866,6 +867,8 @@ export function moveRowToTop(
     return noteShiftedRowRefusal('row');
   // An exact row clips to its authored box, a branch this does not repeat.
   if (row.height.rule === 'exact') return noteShiftedRowRefusal('height');
+  // A lone merge restart can floor its row above the content (`unsizedRowFloorPt`).
+  if (row.cells.some(isLoneMergeRestart)) return noteShiftedRowRefusal('floor');
   const geometry = columnGeometryOf(cols);
   const context: MoveContext = {
     deps,
