@@ -114,11 +114,14 @@ Your endpoint calls `exportPdf` and returns `result.bytes` as `application/pdf`.
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
 import type { ChromeExportView } from '@docx-editor.dev/core/editor';
 
+/** The view as JSON: `fieldDate` arrives as local wall-clock text without an offset. */
+type ExportViewJson = Omit<Partial<ChromeExportView>, 'fieldDate'> & { fieldDate?: string };
+
 export async function POST(request: Request): Promise<Response> {
   const source = new Uint8Array(await request.arrayBuffer());
   const view = JSON.parse(
     decodeURIComponent(request.headers.get('X-Revision-Markup') ?? '{}')
-  ) as Partial<ChromeExportView>;
+  ) as ExportViewJson;
   const result = await exportPdf(source, {
     displayMode: view.displayMode ?? 'proposed',
     revisionMarkup: view.revisionMarkup,
@@ -148,7 +151,7 @@ The handler's second argument is a `ChromeExportView`. Forward all five fields t
 | `comments`            | Whether comments print. When absent, the converter shows comments. |
 | `fieldDate`           | The editor's `fieldDate`. When absent, fields show saved results.  |
 
-Fields show `fieldDate` in the local time of the process that lays out the PDF. A server in another time zone would show other dates and times. So the handler sends the browser's wall-clock time without an offset, and the server rebuilds the same wall-clock time. Run the server with `TZ=UTC`, so that every wall-clock time exists there.
+Fields show `fieldDate` in the local time of the process that lays out the PDF. A server in another time zone would show other dates and times. So the handler sends the browser's wall-clock time without an offset, and the server rebuilds the same wall-clock time. Run the server with `TZ=UTC`, so that every wall-clock time exists there. `TZ` sets the local time of the whole Node.js process.
 
 A one-argument handler still works but uses its own export defaults. The converter validates the display mode and markup preferences.
 

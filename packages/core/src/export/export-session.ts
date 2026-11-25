@@ -107,12 +107,14 @@ export interface OpenDocumentForExportOptions {
   /** Retain incremental state for a live view. Defaults to true for views and false for bytes. */
   readonly reuseAcrossRevisions?: boolean;
   /**
-   * Show DATE and TIME fields that have a `\@` date-time picture at this moment (ECMA-376 Part 1,
-   * 17.16.5.13, 17.16.5.65, 17.16.4.1), as the editor's `fieldDate` option does. Pass
-   * `ChromeExportView.fieldDate` here to export the dates the editor shows. Fields show it in the
-   * local time of this process, so a server in another time zone shows other wall-clock values.
-   * Absent (the default), fields show their saved results. Export only: the source is not
-   * changed. Refused with a `TypeError` when it is not a valid `Date`.
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, as the editor's
+   * `fieldDate` option does. The instruction is in `w:fldChar` (`CT_FldChar`, ECMA-376 Part 1,
+   * 17.16.18) or `w:fldSimple` (`CT_SimpleField`, 17.16.19) fields: DATE (17.16.5.13), TIME
+   * (17.16.5.65), and the picture (17.16.4.1). Pass `ChromeExportView.fieldDate` here to export
+   * the dates the editor shows. Fields show it in the local time of this process, so a server in
+   * another time zone shows other wall-clock values. Absent (the default), fields show their
+   * saved results. Export only: the source is not changed. Refused with a `TypeError` when it is
+   * not a valid `Date`.
    */
   readonly fieldDate?: Date;
 }
