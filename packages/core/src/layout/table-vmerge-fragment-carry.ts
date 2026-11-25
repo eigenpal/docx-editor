@@ -313,7 +313,7 @@ export function createVMergeFragmentCarry(
 
   /**
    * Merges that start in the same row and end in different rows, over rows that are all
-   * `hRule="exact"` (`w:trHeight`, `CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37). No merged
+   * `hRule="exact"` (`w:trHeight`, `CT_Height`, §17.4.80; `ST_HeightRule`, §17.18.37). No merged
    * text can change the height of a fixed row, so the merges cannot affect each other's rows,
    * and each one carries its own text through its own rows. They start in one row, so they
    * take this path together or not at all: a head left in that row would size it, and the
@@ -428,11 +428,9 @@ export function createVMergeFragmentCarry(
       if (needed > total + EPSILON) {
         let grow = group.last;
         while (grow >= group.first && rows[grow]!.height.rule === 'exact') grow--;
-        // No row can grow: the fixed rows carry what they hold and the last one clips.
-        if (grow < group.first) {
-          group.clipsTail = true;
-          continue;
-        }
+        // No row can grow: the fixed rows carry what they hold, and `clipsTail` (set above,
+        // because every row is fixed) clips the rest in the last fragment.
+        if (grow < group.first) continue;
         heights[grow - group.first]! += needed - total;
         total = needed;
       }

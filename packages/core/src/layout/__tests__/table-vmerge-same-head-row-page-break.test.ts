@@ -145,20 +145,23 @@ test('a fixed head row over a growable row places every merged line once', () =>
   }
 });
 
+// Rows are 6pt, 30pt, 30pt and 30pt. The merges cover two, three and four rows. The four-row
+// merge holds eight lines, more than its rows show, so it is clipped at the end.
+const threeMergeRows = [
+  `<w:tr>${exact(120)}${cell(lines('A', 2), RESTART)}${cell(lines('B', 4), RESTART)}${cell(lines('C', 8), RESTART)}</w:tr>`,
+  `<w:tr>${exact(600)}${cell('<w:p/>', CONTINUE)}${cell('<w:p/>', CONTINUE)}${cell('<w:p/>', CONTINUE)}</w:tr>`,
+  `<w:tr>${exact(600)}${cell(para('K2'))}${cell('<w:p/>', CONTINUE)}${cell('<w:p/>', CONTINUE)}</w:tr>`,
+  `<w:tr>${exact(600)}${cell(para('K3'))}${cell(para('J3'))}${cell('<w:p/>', CONTINUE)}</w:tr>`,
+];
+const THREE_MERGE_LINES = ['A01', 'A11', 'B01', 'B11', 'B21', 'B31', 'C01'];
+
 test('three fixed merges from one head row each keep their lines across the break', () => {
-  // Rows are 6pt, 30pt, 30pt and 30pt. The merges cover two, three and four rows. The
-  // four-row merge holds eight lines, more than its rows show, so it is clipped at the end.
-  const tableRows = [
-    `<w:tr>${exact(120)}${cell(lines('A', 2), RESTART)}${cell(lines('B', 4), RESTART)}${cell(lines('C', 8), RESTART)}</w:tr>`,
-    `<w:tr>${exact(600)}${cell('<w:p/>', CONTINUE)}${cell('<w:p/>', CONTINUE)}${cell('<w:p/>', CONTINUE)}</w:tr>`,
-    `<w:tr>${exact(600)}${cell(para('K2'))}${cell('<w:p/>', CONTINUE)}${cell('<w:p/>', CONTINUE)}</w:tr>`,
-    `<w:tr>${exact(600)}${cell(para('K3'))}${cell(para('J3'))}${cell('<w:p/>', CONTINUE)}</w:tr>`,
-  ];
+  const tableRows = threeMergeRows;
   for (let preamble = 1; preamble <= 12; preamble++) {
     const texts = textsOfAll(
       lay(load(para('P', preamble) + customTable(tableRows) + para('After')))
     );
-    for (const text of ['A01', 'A11', 'B01', 'B11', 'B21', 'B31', 'C01']) {
+    for (const text of THREE_MERGE_LINES) {
       expect({ preamble, text, count: texts.filter((t) => t === text).length }).toEqual({
         preamble,
         text,
@@ -188,6 +191,25 @@ test('the last row keeps the closing rule of the table below a carried merge', (
   expect(merged.box.height).toBeCloseTo(lastRow(false).box.height, 6);
 });
 
+test('a family with a line break in one head keeps the head row path', () => {
+  // A break (`w:br`, 17.3.3.1) is not plain text, so neither merge carries its text. The two
+  // merges stay together on the head row path, where the 6pt head row clips them at a break
+  // (a documented limit). Layout completes at every break position and paints no line twice.
+  const broken = para('H0').replace('<w:t>', '<w:br/><w:t>');
+  const xml = tableXml().replace(shortHead, broken + para('H1') + para('H2'));
+  for (let preamble = 1; preamble <= 12; preamble++) {
+    const layout = lay(load(para('P', preamble) + xml + para('After')));
+    const texts = textsOfAll(layout);
+    for (const text of [...HEAD_LINES, 'L1', 'M01', 'M11', 'M21', 'K21']) {
+      const count = texts.filter((t) => t === text).length;
+      expect({ preamble, text, once: count <= 1 }).toEqual({ preamble, text, once: true });
+    }
+    // Below the head row, neither merge carries its text to the next page.
+    if (preamble >= 9 && preamble <= 11)
+      expect(textsOn(layout, 1)).not.toEqual(expect.arrayContaining(['H11']));
+  }
+});
+
 const body = (part: OoxmlPart) => part.root.children.find((n) => n.kind === 'body')!;
 const apply = (part: OoxmlPart, op: TreeDocOp) => {
   const result = applyTreeOp(part, op);
@@ -195,9 +217,32 @@ const apply = (part: OoxmlPart, op: TreeDocOp) => {
   return result.part;
 };
 
-for (const longMerge of [true, false])
-  test(`incremental relayout across the break matches a fresh layout (${longMerge ? 'two merges' : 'one merge'})`, () => {
-    let part = load(para('P', 4) + tableXml({ longMerge }) + para('After'));
+// Each shape lists the lines that must paint exactly once. Merged lines (the first `ordered`)
+// must also keep their order.
+const incrementalShapes = [
+  {
+    name: 'two merges',
+    table: tableXml(),
+    once: [...HEAD_LINES, 'L1', 'M01', 'M11', 'M21', 'K21'],
+    ordered: HEAD_LINES,
+  },
+  {
+    name: 'one merge',
+    table: tableXml({ longMerge: false }),
+    once: [...HEAD_LINES, 'L1', 'N11', 'N21', 'M01', 'M11', 'M21', 'K21'],
+    ordered: HEAD_LINES,
+  },
+  {
+    name: 'three merges',
+    table: customTable(threeMergeRows),
+    once: [...THREE_MERGE_LINES, 'K21', 'K31', 'J31'],
+    ordered: ['B01', 'B11', 'B21', 'B31'],
+  },
+];
+
+for (const shape of incrementalShapes)
+  test(`incremental relayout across the break matches a fresh layout (${shape.name})`, () => {
+    let part = load(para('P', 4) + shape.table + para('After'));
     const session = createLayoutSession();
     const cache = createParagraphLayoutCache();
     lay(part, 15, { session, cache });
@@ -209,14 +254,12 @@ for (const longMerge of [true, false])
         label,
         pages: JSON.stringify(fresh.pages),
       });
-      // Every line of the table paints once, and the merged lines keep their order.
       const texts = textsOfAll(fresh);
-      const plain = ['M01', 'M11', 'M21', 'K21', 'L1', ...(longMerge ? [] : ['N11', 'N21'])];
-      for (const text of [...HEAD_LINES, ...plain]) {
+      for (const text of shape.once) {
         const count = texts.filter((t) => t === text).length;
         expect({ label, text, count }).toEqual({ label, text, count: 1 });
       }
-      const order = HEAD_LINES.map((text) => texts.indexOf(text));
+      const order = shape.ordered.map((text) => texts.indexOf(text));
       expect({ label, order }).toEqual({ label, order: [...order].sort((a, b) => a - b) });
     };
     for (let i = 0; i < 9; i++) {

@@ -26,7 +26,11 @@ export interface HeadRowEdit {
 export type HeadRowKind = 'placed' | 'carried';
 
 export interface HeadRowEdits {
-  /** What earlier merges published into this head row, or `undefined` for the first merge. */
+  /**
+   * What earlier merges published into this head row, or `undefined` for the first merge.
+   * A `placed` head row is the authored row at `index`, so `sourceId` only selects among the
+   * `carried` rows inserted before `index`.
+   */
   current(kind: HeadRowKind, index: number, sourceId: string): HeadRowEdit | undefined;
   /** Publish `edit` as this head row, in place of `previous` when an earlier merge made one. */
   publish(kind: HeadRowKind, index: number, edit: HeadRowEdit, previous?: HeadRowEdit): void;
