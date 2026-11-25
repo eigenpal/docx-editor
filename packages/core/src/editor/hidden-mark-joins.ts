@@ -40,6 +40,7 @@ import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks } from '../layout/story-roots.ts';
+import { splitInsideFieldCodes } from '../layout/field-code-marks.ts';
 
 /** The revision view the page is laid out in. */
 export interface RevisionView {
@@ -48,6 +49,15 @@ export interface RevisionView {
 }
 
 const NONE: ReadonlySet<string> = new Set();
+
+/**
+ * The reason Enter gives at a split point inside field codes that hold paragraph marks: inside
+ * a paragraph wholly in the field codes, or at the start of the paragraph where they end. A new
+ * mark there would change the field instruction (`w:fldChar`, ECMA-376 Part 1, 17.16.18) and
+ * show no change, so the split is refused.
+ */
+export const FIELD_CODE_SPLIT_REFUSAL =
+  'field-code-mark: a paragraph break here would add a paragraph mark inside a field instruction';
 
 /**
  * Ids of the paragraphs among `children` that layout removes under a hidden mark in `view`.
@@ -264,9 +274,8 @@ export function createHiddenMarkEditing(deps: {
 }): {
   /** Ops joining two neighbours in paragraph order; see {@link joinAcrossHiddenMarks}. */
   joinOps(firstId: string, secondId: string): TreeDocOp[] | null;
-  /** Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. */
   /**
-   * The ops Delete applies at the end of `firstId`, or `'step'` when only field-code paragraphs
+   * Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. The ops Delete applies at the end of `firstId`, or `'step'` when only field-code paragraphs
    * stand between: the caret then steps over them, the mirror of Backspace at the field result.
    */
   forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | 'step' | null;
@@ -279,6 +288,11 @@ export function createHiddenMarkEditing(deps: {
     from: SemanticPosition;
     to: SemanticPosition;
   };
+  /**
+   * Whether Enter at `position` would add a paragraph mark inside field codes (see
+   * `splitInsideFieldCodes`). When it would, `refuse` gets {@link FIELD_CODE_SPLIT_REFUSAL}.
+   */
+  refusesSplit(position: SemanticPosition, refuse: (reason: string) => unknown): boolean;
   /** See {@link removedCaretParagraphEdit}. */
   removedCaretEdit(
     position: SemanticPosition,
@@ -295,6 +309,11 @@ export function createHiddenMarkEditing(deps: {
       absorbRemovedAfter(deps.part(), firstId, deps.view()) ??
       (onlyFieldCodeBetween(deps.part(), firstId, nextId, deps.view()) ? 'step' : null),
     shown,
+    refusesSplit: (position, refuse) => {
+      if (!splitInsideFieldCodes(deps.part(), position.paragraphId, position.offset)) return false;
+      refuse(FIELD_CODE_SPLIT_REFUSAL);
+      return true;
+    },
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),
     shownRange: (range) => {

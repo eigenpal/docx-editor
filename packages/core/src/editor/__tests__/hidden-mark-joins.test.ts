@@ -562,6 +562,32 @@ describe('paragraphs inside a field instruction', () => {
     });
   }
 
+  // Enter inside the field codes, or at the start of the result where they end, would add a
+  // paragraph mark to the field instruction and show no change, so it is refused.
+  for (const [label, at, offset] of [
+    ['at the start of the field result', 3, 0],
+    ['in a paragraph inside the field codes', 1, 0],
+  ] as const) {
+    test(`Enter ${label} is refused and keeps the field code paragraphs`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      caret(surface, ids[at]!, offset);
+      surface.splitParagraph();
+      expect(surface.session.paragraphIds()).toEqual(ids);
+      expect(await instructionParagraphs(surface)).toHaveLength(3);
+      expect(surface.state().lastRejection).toStartWith('field-code-mark');
+    });
+  }
+
+  test('Enter inside the field result still splits', () => {
+    const surface = mount(field);
+    const ids = surface.session.paragraphIds();
+    caret(surface, ids[3]!, 1);
+    surface.splitParagraph();
+    expect(surface.session.paragraphIds()).toHaveLength(5);
+    expect(surface.state().lastRejection).toBeNull();
+  });
+
   test('a text edit that makes the field codes well formed lays them out again', () => {
     const stray =
       '<w:p><w:r><w:t>before </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
