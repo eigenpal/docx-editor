@@ -1,6 +1,6 @@
 // The effect extent of an inline drawing on its line (`wp:effectExtent`, CT_EffectExtent,
-// ECMA-376 Part 1, 20.4.2.6). The expected heights follow Word's output: the extent adds to
-// the drawing at the top and at the bottom, and the bottom side sits on the baseline with it.
+// ECMA-376 Part 1, 20.4.2.6): the extent adds to the drawing at the top and at the bottom,
+// and the bottom side sits on the baseline with it.
 
 import { describe, expect, test } from 'bun:test';
 import { inlineDrawingVerticalLayout, type InlineDrawingMeasure } from '../drawing-layout.ts';

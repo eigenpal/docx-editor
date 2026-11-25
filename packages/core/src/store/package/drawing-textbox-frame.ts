@@ -154,7 +154,7 @@ export function drawingTextboxFrame(
 
 /**
  * Whether `wps:bodyPr/@vert` (ST_TextVerticalType, ECMA-376 Part 1, 20.1.10.83) is a mode that
- * Word shows as text turned a quarter clockwise with its lines stacked from left to right:
+ * lays out as text turned a quarter clockwise with its lines stacked from left to right:
  * `wordArtVert`, `wordArtVertRtl` and `mongolianVert`.
  */
 export function stacksLinesLeftToRight(vert: string | undefined): boolean {

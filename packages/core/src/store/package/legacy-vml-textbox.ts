@@ -363,9 +363,9 @@ export function legacyTextboxStory(
 /**
  * The room the outline of an inline VML text box takes on its line, past its box.
  *
- * Word reserves the outline (`v:stroke`, `strokeweight`; ECMA-376 Part 4, 19.1.2.21) in whole
- * points: the weight rounds to a point count, the left and top sides take the smaller half and
- * the right and bottom sides take the rest. A 1pt outline reserves a point at the right and
+ * ECMA-376 does not define this room (`v:stroke`, `strokeweight`; Part 4, 19.1.2.21). The
+ * editor reserves it in whole points: the weight rounds to a point count, the left and top
+ * sides take the smaller half and the right and bottom sides take the rest. A 1pt outline reserves a point at the right and
  * the bottom only; a 6pt outline reserves 3pt on each side.
  */
 export function legacyInlineOutlineRoom(

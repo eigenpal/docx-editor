@@ -166,7 +166,7 @@ export function inlineDrawingVerticalLayout(
   // A quarter-turned shape sits on the line as its turned box, with its extent centred in it.
   const height = measure.height + 2 * measure.turnedInset;
   // The bottom effect extent sits on the baseline with the drawing: a short drawing keeps it
-  // inside the text ascent, as Word places it.
+  // inside the text ascent.
   const boxTopY = Math.max(
     measure.distT + measure.effectT,
     textBaseline - height - measure.effectB - runPositionPt

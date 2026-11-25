@@ -1,7 +1,7 @@
 // The room a character border takes on its line.
 //
 // A run border (`w:bdr`, CT_Border, ECMA-376 Part 1, 17.3.2.4) is drawn around its text, the
-// border's `w:space` away from it. Word gives the border room in the line: each side of a
+// border's `w:space` away from it. The border takes room in the line: each side of a
 // bordered passage advances the pen by the space plus the line width, so the border never
 // covers the text beside it and never leaves the line. Adjacent runs with the same border
 // share one passage and one outline; every line a passage wraps onto closes its own outline.

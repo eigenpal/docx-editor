@@ -114,7 +114,7 @@ function groupArrowhead(
 
 /**
  * Whether a clockwise turn lies nearer a quarter turn than upright or upside down: in
- * [45, 135) or [225, 315) degrees. Word then lays the shape's box across its axes.
+ * [45, 135) or [225, 315) degrees. The shape's box then lies across its axes.
  */
 export function quarterTurned(degrees: number): boolean {
   const turn = ((degrees % 360) + 360) % 360;

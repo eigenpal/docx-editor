@@ -337,7 +337,7 @@ describe('inline boxes', () => {
     const drawing = linesOf(layout)
       .flatMap((line) => line.drawings ?? [])
       .find((record): record is InlineDrawingRecord => !!record.textboxStory)!;
-    // The box reserves a whole point under it for its 0.75pt outline, as Word does; the shadow
+    // The box reserves a whole point under it for its 0.75pt outline; the shadow
     // reaches 6pt past that room.
     expect(drawing.paintBounds.y + drawing.paintBounds.height).toBeCloseTo(
       drawing.y + 40 + 1 + 6,

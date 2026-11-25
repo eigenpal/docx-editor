@@ -1,8 +1,8 @@
 // The room a character border takes on its line (`w:bdr`, ECMA-376 Part 1, 17.3.2.4).
 //
-// Word advances the pen by the border's space plus its line width on each side of a bordered
-// passage, on every line the passage reaches. The expected positions follow Word's output for
-// the same runs: text beside a border moves by that room, and the border stays in the line.
+// The pen advances by the border's space plus its line width on each side of a bordered
+// passage, on every line the passage reaches: text beside a border moves by that room, and the
+// border stays in the line.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
@@ -183,7 +183,7 @@ describe('the room of a character border', () => {
 describe('a bordered line that wraps', () => {
   const words = 'aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj';
   const oneRun = run(words, border());
-  // Each word and each space in a run of its own, as Word writes text after edits.
+  // Each word and each space in a run of its own, as an edited document can store the text.
   const splitRuns = words
     .split(/(?<= )|(?= )/)
     .map((text) => run(text, border()))

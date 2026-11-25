@@ -62,7 +62,7 @@ describe('legacy VML groups as vector members', () => {
     const texts = projection!.groupTextboxes!;
     expect(texts.map((member) => member.frameEmu.x / EMU)).toEqual([0, 165.6]);
     // The vector member paints the fill and the outline. The story keeps the stroke, since
-    // the text starts half the line width inside the shape, as Word places it.
+    // the text starts half the line width inside the shape.
     expect(texts[0]!.story).toMatchObject({
       verticalAnchor: 'center',
       fillHex: null,

@@ -1,6 +1,6 @@
 // The text of a shape in a canvas (`wpc:wpc`) or a group (`wpg:wgp`) lays out in the text
 // rectangle of the shape's geometry (`a:rect`, ECMA-376 Part 1, 20.1.9.22), as the text of a
-// top-level shape does. The expected frames follow Word's output for the same shapes.
+// top-level shape does.
 
 import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer, layoutSemanticDocument, type SemanticLayout } from '../index.ts';
@@ -261,7 +261,7 @@ for (const [name, host] of [
       expect(record.rotationDegrees).toBe(90);
     });
 
-    // Word shows these modes as text turned a quarter clockwise, the first line at the left
+    // These modes turn the text a quarter clockwise, with the first line at the left
     // (ST_TextVerticalType, ECMA-376 Part 1, 20.1.10.83).
     for (const mode of ['wordArtVert', 'wordArtVertRtl', 'mongolianVert']) {
       test(`${mode} text turns a quarter and starts at the left of the rectangle`, () => {

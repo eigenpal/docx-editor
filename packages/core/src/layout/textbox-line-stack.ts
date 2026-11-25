@@ -1,10 +1,13 @@
 // Vertical shape text whose lines stack from left to right.
 //
 // `wps:bodyPr/@vert` (ST_TextVerticalType, ECMA-376 Part 1, 20.1.10.83) values `wordArtVert`,
-// `wordArtVertRtl` and `mongolianVert` show in Word as text turned a quarter clockwise, like
+// `wordArtVertRtl` and `mongolianVert` lay out as text turned a quarter clockwise, like
 // `vert`, with the first line at the left of the text area instead of the right. A story turned
 // a quarter clockwise puts its top at the right, so the lines stack from the bottom of the
 // unturned story: each line keeps its own geometry and takes the mirrored place in the flow.
+// `mongolianVert` lines flow top down, then left to right, as the standard defines. The
+// standard describes `wordArtVert` as letters stacked one on top of another; this layout does
+// not stack letters.
 
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
 import type { BlockFragmentRecord, LayoutBox } from './semantic-records.ts';

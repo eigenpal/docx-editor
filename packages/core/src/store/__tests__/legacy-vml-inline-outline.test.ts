@@ -1,6 +1,6 @@
 // The room the outline of an inline VML text box takes on its line (`v:stroke`, ECMA-376
-// Part 4, 19.1.2.21). Word reserves it in whole points; the expected sides follow Word's
-// output for outlines from 0.75pt to 8pt.
+// Part 4, 19.1.2.21). The standard does not define this room; the editor reserves it in whole
+// points.
 
 import { describe, expect, test } from 'bun:test';
 import { projectDrawingsInPart } from '../package/drawing-projection.ts';

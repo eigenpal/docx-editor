@@ -1,6 +1,6 @@
-// A top-level shape that turns or flips. Word gives an inline shape that turns nearer a quarter
-// turn the room of its turned box on the line, and turns the text of a vertically flipped shape
-// upside down (`a:xfrm`, ECMA-376 Part 1, 20.1.7.6). The expected values follow Word's output.
+// A top-level shape that turns or flips (`a:xfrm`, ECMA-376 Part 1, 20.1.7.6). An inline shape
+// that turns nearer a quarter turn takes the room of its turned box on the line, and the text of
+// a vertically flipped shape turns upside down.
 
 import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer, layoutSemanticDocument } from '../index.ts';
@@ -147,7 +147,7 @@ describe('a top-level shape that flips', () => {
     expect(story.contentHeight).toBeCloseTo(CY / 3, 6);
     expect(story.contentOffset.x).toBeCloseTo(CX - CX / 12 - CX / 2, 6);
     expect(story.contentOffset.y).toBeCloseTo(CY - CY / 12 - CY / 3, 6);
-    // The frame turns about its own centre and stays there, as Word places the text.
+    // The frame turns about its own centre and stays there.
     expect(story.contentRotation).toEqual({
       degrees: 180,
       pivot: { x: CX - CX / 12 - CX / 4, y: CY - CY / 12 - CY / 6 },

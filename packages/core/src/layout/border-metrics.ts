@@ -236,7 +236,7 @@ export function sameBorderEdge(
 
 // Text the paragraph does not show, such as hidden text, leaves a hole in the model offsets
 // of the placed text. A character border (`w:bdr`, ECMA-376 Part 1, 17.3.2.4) goes on across
-// it, as in Word: the text after the hole carries the offset where the hole starts.
+// it: the text after the hole carries the offset where the hole starts.
 const joinsFrom = Symbol('runBorderJoin');
 type Joined = { readonly [joinsFrom]?: { readonly from: number; readonly start: number } };
 type Ranged = { readonly range: { readonly start: number } };

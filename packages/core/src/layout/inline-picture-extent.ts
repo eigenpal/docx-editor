@@ -32,13 +32,12 @@ export function turnedLineInsetPt(
  *
  * An inline shape or group that turns nearer a quarter turn (`a:xfrm/@rot`, 20.1.7.6) takes
  * the room of its turned box on the line: its width and height swap about the centre of its
- * extent, as Word places it. The extent itself keeps its size, since the shape lays out and
+ * extent. The extent itself keeps its size, since the shape lays out and
  * paints in it before it turns. `turned` is how far the turned box reaches past the extent at
  * the top and the bottom; the left and right insets already hold the same length, taken off.
  * It is negative where the turned box is the shorter one.
  *
- * The turned room adds to the effect extent. Word writes an effect extent of zero for a
- * turned inline shape, so a file from Word counts the room one time.
+ * The turned room adds to the effect extent.
  */
 export function inlineEffectInsetsPt(projection: DrawingProjection): {
   readonly left: number;
