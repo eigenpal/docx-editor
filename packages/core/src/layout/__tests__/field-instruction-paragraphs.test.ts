@@ -49,6 +49,7 @@ function laidOut(body: string) {
     { measurer, geometry: PAGE, numberingIndex }
   );
   return {
+    layout: result,
     lines: linesOf(result).map((line) => line.spans.map((span) => span.text).join('')),
     markers: result.pages.flatMap((page) =>
       page.fragments.flatMap((fragment) =>
@@ -108,6 +109,24 @@ describe('paragraphs inside a field instruction', () => {
       para(`${text('end')}${fldChar('end')}`);
 
     expect(lineTexts(body)).toEqual(['outer', 'before ', 'shown after', 'end']);
+  });
+});
+
+describe('paragraphs inside a field instruction in a table cell', () => {
+  test('advance no list counter', () => {
+    const inside = [item(instr('Item')), item('')];
+    const cell = `${item(text('first'))}${ifField(inside, 'Result')}${item(text('last'))}`;
+    const result = laidOut(`<w:tbl><w:tr><w:tc>${cell}</w:tc></w:tr></w:tbl><w:p/>`);
+    expect(result.lines.map((line) => line.trim())).toEqual([
+      'first',
+      'before',
+      'Result after',
+      'last',
+      '',
+    ]);
+    // Cell paragraphs sit inside the table fragment.
+    const markers = [...JSON.stringify(result.layout).matchAll(/"marker":\{"text":"([^"]*)"/g)];
+    expect(markers.map((match) => match[1])).toEqual(['1.', '2.']);
   });
 });
 

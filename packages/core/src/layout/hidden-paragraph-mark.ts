@@ -37,7 +37,7 @@
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { readOnOffChild } from '../store/package/ooxml-shared.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
-import { paragraphsInsideFieldInstructions } from './field-instruction-paragraphs.ts';
+import { scanFieldInstructionParagraphs } from './field-instruction-paragraphs.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { paragraphRendersNothingVisible } from './revision-visibility.ts';
 
@@ -106,6 +106,18 @@ export interface HiddenMarkNeighbours {
 
 /** Laid-out block list → the same list with the removed paragraphs back in document order. */
 const numberingFlows = new WeakMap<readonly OoxmlElement[], readonly OoxmlElement[]>();
+/** Ids of the paragraphs between a field's `begin` and the end of its field codes. */
+const fieldCodeSpans = new WeakMap<readonly OoxmlElement[], ReadonlySet<string>>();
+
+/**
+ * True when the paragraph `id` sits inside the field codes of a field that spans paragraphs in
+ * `blocks`, a list {@link withoutHiddenMarkParagraphs} returned. Its text decides whether the
+ * field's other paragraphs leave the flow, so an edit to it needs a full pass.
+ */
+export function insideFieldCodeSpan(blocks: readonly OoxmlElement[], id: string): boolean {
+  return fieldCodeSpans.get(blocks)?.has(id) ?? false;
+}
+
 /** The numbering flow without the removed field-code paragraphs, when there are any. */
 const listCountingFlows = new WeakMap<readonly OoxmlElement[], readonly OoxmlElement[]>();
 
@@ -167,7 +179,8 @@ export function withoutHiddenMarkParagraphs(
 ): OoxmlElement[] {
   let removed: Set<number> | null = null;
   let next: HiddenMarkFlowEntry | undefined;
-  const insideInstructions = paragraphsInsideFieldInstructions(entries.map((entry) => entry.block));
+  const fieldCodes = scanFieldInstructionParagraphs(entries.map((entry) => entry.block));
+  const insideInstructions = fieldCodes.inside;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     const { block } = entry;
@@ -187,7 +200,13 @@ export function withoutHiddenMarkParagraphs(
     }
     next = entry;
   }
-  if (removed === null) return entries.map((entry) => entry.block);
+  const spannedIds = (): ReadonlySet<string> =>
+    new Set([...fieldCodes.spanned].map((index) => entries[index]!.block.id));
+  if (removed === null) {
+    const blocks = entries.map((entry) => entry.block);
+    if (fieldCodes.spanned.size > 0) fieldCodeSpans.set(blocks, spannedIds());
+    return blocks;
+  }
   const removedIndexes = removed;
   // A removed paragraph is a neighbour only inside its own container, the same rule that
   // decided the removal.
@@ -209,6 +228,7 @@ export function withoutHiddenMarkParagraphs(
   });
   const kept = all.filter((_block, index) => !removedIndexes.has(index));
   numberingFlows.set(kept, all);
+  if (fieldCodes.spanned.size > 0) fieldCodeSpans.set(kept, spannedIds());
   const fieldCode = (index: number) => removedIndexes.has(index) && insideInstructions.has(index);
   if (all.some((_block, index) => fieldCode(index))) {
     listCountingFlows.set(
@@ -256,6 +276,8 @@ export function carryNumberingFlow(
       to,
       flow.map((block) => replaced.get(block) ?? block)
     );
+  const spans = fieldCodeSpans.get(from);
+  if (spans) fieldCodeSpans.set(to, spans);
   const counting = listCountingFlows.get(from);
   if (counting)
     listCountingFlows.set(

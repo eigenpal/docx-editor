@@ -40,7 +40,11 @@ import {
 } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
 import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
-import { carryNumberingFlow, withoutHiddenMarkParagraphs } from './hidden-paragraph-mark.ts';
+import {
+  carryNumberingFlow,
+  insideFieldCodeSpan,
+  withoutHiddenMarkParagraphs,
+} from './hidden-paragraph-mark.ts';
 import { projectRevisionFormatting } from './revision-formatting-projection.ts';
 import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
@@ -566,7 +570,8 @@ function carriedBlocks(
           after.kind === 'paragraph' &&
           paragraphProperties(before) === paragraphProperties(after) &&
           !markReachesNeighbours(paragraphProperties(after)) &&
-          !reachesFields(before, after))
+          !reachesFields(before, after) &&
+          !insideFieldCodeSpan(lastList, before.id))
       )
     )
       return undefined;

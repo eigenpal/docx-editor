@@ -120,6 +120,32 @@ export function hiddenParagraphsBetween(
 }
 
 /**
+ * True when `firstId` and `secondId` are siblings and only paragraphs inside a field instruction
+ * stand between them. Those marks are field code (ECMA-376 Part 1, 17.16.18), so no join
+ * crosses them; Delete moves the caret over them instead, as Backspace does.
+ */
+export function onlyFieldCodeBetween(
+  part: OoxmlPart,
+  firstId: string,
+  secondId: string,
+  view: RevisionView
+): boolean {
+  const parent = parentNodeOf(part, firstId);
+  if (parent === null || parentNodeOf(part, secondId)?.id !== parent.id) return false;
+  const all = numberingFlowBlocks(
+    mergedFlowBlocks(parent.children, view.displayMode, view.authorFilter)
+  );
+  const first = all.findIndex((block) => block.id === firstId);
+  const second = all.findIndex((block) => block.id === secondId);
+  if (first === -1 || second <= first + 1) return false;
+  const fieldCode = paragraphsInsideFieldInstructions(all);
+  for (let index = first + 1; index < second; index += 1) {
+    if (!fieldCode.has(index)) return false;
+  }
+  return true;
+}
+
+/**
  * The ops that join `secondId` onto `firstId`, absorbing any removed paragraphs between them
  * first, or `null` when the two are not siblings that such a join can reach.
  */
@@ -239,7 +265,11 @@ export function createHiddenMarkEditing(deps: {
   /** Ops joining two neighbours in paragraph order; see {@link joinAcrossHiddenMarks}. */
   joinOps(firstId: string, secondId: string): TreeDocOp[] | null;
   /** Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. */
-  forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | null;
+  /**
+   * The ops Delete applies at the end of `firstId`, or `'step'` when only field-code paragraphs
+   * stand between: the caret then steps over them, the mirror of Backspace at the field result.
+   */
+  forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | 'step' | null;
   /** See {@link shownPosition}. */
   shown(position: SemanticPosition): SemanticPosition;
   /** A collapsed selection moved to where it shows; a range is left alone. */
@@ -262,7 +292,8 @@ export function createHiddenMarkEditing(deps: {
       joinAcrossHiddenMarks(deps.part(), firstId, secondId, deps.view()),
     forwardJoinOps: (firstId, nextId) =>
       joinAcrossHiddenMarks(deps.part(), firstId, nextId, deps.view()) ??
-      absorbRemovedAfter(deps.part(), firstId, deps.view()),
+      absorbRemovedAfter(deps.part(), firstId, deps.view()) ??
+      (onlyFieldCodeBetween(deps.part(), firstId, nextId, deps.view()) ? 'step' : null),
     shown,
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),

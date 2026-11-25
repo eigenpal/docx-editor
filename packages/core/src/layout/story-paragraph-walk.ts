@@ -4,7 +4,14 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
+import { paragraphsInsideFieldInstructions } from './field-instruction-paragraphs.ts';
 import { readGridSkip, readGridSpan, readVMerge } from './table-row-properties.ts';
+
+/** `blocks` without the paragraphs inside a field instruction, or `blocks` when it has none. */
+function withoutFieldCodeParagraphs(blocks: readonly OoxmlElement[]): readonly OoxmlElement[] {
+  const inside = paragraphsInsideFieldInstructions(blocks);
+  return inside.size === 0 ? blocks : blocks.filter((_block, index) => !inside.has(index));
+}
 
 /** One cached row walk: its depth budget, the mode and skipped columns, and its paragraphs. */
 interface RowParagraphs {
@@ -24,7 +31,9 @@ const NO_COLUMNS: ReadonlySet<number> = new Set();
  * `skipMergedCells` leaves out the paragraphs of a cell that continues a vertical merge from
  * the cell above it in the same grid column (`w:vMerge` without `restart`). Such a cell shows
  * nothing, so list numbering skips it; a continuation with no merged cell above it starts its
- * own merge and keeps its paragraphs.
+ * own merge and keeps its paragraphs. List numbering also skips a cell paragraph inside a field
+ * instruction (see `field-instruction-paragraphs.ts`): it is field code, not content. The story's
+ * own top-level blocks come from `listCountingBlocks`, which already leaves those out.
  */
 export function walkStoryParagraphs(
   blocks: readonly OoxmlElement[],
@@ -132,8 +141,9 @@ function pushRowParagraphs(
     if (entry.continues && mergedAbove.has(entry.column)) continue;
     // Flatten cell SDTs under the shared content-control budget; table nesting still
     // uses the remaining depth for the table walk itself.
+    const cellBlocks = collectFlowBlocks(entry.cell.children);
     pushStoryParagraphs(
-      collectFlowBlocks(entry.cell.children),
+      skipMergedCells ? withoutFieldCodeParagraphs(cellBlocks) : cellBlocks,
       remaining - 1,
       out,
       skipMergedCells

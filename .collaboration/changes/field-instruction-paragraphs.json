@@ -2,11 +2,12 @@
   "impact": "no-impact",
   "fields": [],
   "before": "A paragraph inside a field instruction showed as a blank line with its list marker, and Backspace or Delete at the break around it joined it away.",
-  "after": "Layout removes such a paragraph from the flow, and joins do not absorb it.",
+  "after": "Layout removes such a paragraph from the flow, it advances no list counter, joins do not absorb it, and Delete before the field moves the caret over it.",
   "reason": "Only derived layout and the local choice of which existing join operations to emit change. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
   "tests": [
     "packages/core/src/layout/__tests__/field-instruction-paragraphs.test.ts",
-    "packages/core/src/editor/__tests__/hidden-mark-joins.test.ts"
+    "packages/core/src/editor/__tests__/hidden-mark-joins.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-field-instruction-paragraphs.test.ts"
   ],
   "changeset": "field-instruction-paragraphs",
   "migration": null

@@ -4920,12 +4920,12 @@ export function mountPaginatedSurface(
         );
         return;
       }
+      const forward = hiddenMarks.forwardJoinOps(position.paragraphId, next); // 'step': field codes
+      if (forward === 'step') return setSelection(collapsedAt({ paragraphId: next, offset: 0 }));
       commit(
         () =>
           applyOps(
-            hiddenMarks.forwardJoinOps(position.paragraphId, next) ?? [
-              { op: 'joinParagraphs', firstId: position.paragraphId, secondId: next },
-            ],
+            forward ?? [{ op: 'joinParagraphs', firstId: position.paragraphId, secondId: next }],
             selectionMark()
           ),
         () => collapsedAt(position),

@@ -554,8 +554,42 @@ describe('paragraphs inside a field instruction', () => {
       surface[key]();
       expect(surface.session.paragraphIds()).toEqual(ids);
       expect(await instructionParagraphs(surface)).toHaveLength(3);
+      // The caret steps over the field codes; nothing is refused.
+      expect(surface.state().lastRejection).toBeNull();
+      expect(surface.state().selection.head).toEqual(
+        at === 0 ? { paragraphId: ids[3], offset: 0 } : { paragraphId: ids[0], offset: 5 }
+      );
     });
   }
+
+  test('a text edit that makes the field codes well formed lays them out again', () => {
+    const stray =
+      '<w:p><w:r><w:t>before </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve">IF 1 = 1 "</w:instrText></w:r></w:p>' +
+      '<w:p><w:r><w:t>Z</w:t></w:r></w:p><w:p/>' +
+      '<w:p><w:r><w:instrText xml:space="preserve">" ""</w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Yes</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    const surface = mount(stray);
+    const lines = () =>
+      surface
+        .layout()
+        .pages.flatMap((page) => page.fragments)
+        .flatMap((fragment) =>
+          fragment.kind === 'paragraph'
+            ? [
+                fragment.lines
+                  .map((line) => line.spans.map((span) => span.text).join(''))
+                  .join('')
+                  .trim(),
+              ]
+            : []
+        );
+    expect(lines()).toEqual(['before', 'Z', '', 'Yes']);
+    caret(surface, idOf(surface, 'Z'), 1);
+    surface.deleteBackward();
+    expect(lines()).toEqual(['before', 'Yes']);
+  });
 });
 
 describe('hiddenParagraphsBetween', () => {

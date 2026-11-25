@@ -43,7 +43,21 @@ function markersOf(block: OoxmlNode): Marker[] {
 export function paragraphsInsideFieldInstructions(
   blocks: readonly OoxmlElement[]
 ): ReadonlySet<number> {
+  return scanFieldInstructionParagraphs(blocks).inside;
+}
+
+/**
+ * The paragraphs inside a field instruction (`inside`), and every paragraph that sits between a
+ * closed field's `begin` and the end of its field codes, also when stray text keeps them in the
+ * flow (`spanned`). A text edit in a spanned paragraph can change which paragraphs leave the
+ * flow, so incremental layout must not carry the old block list over it.
+ */
+export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]): {
+  readonly inside: ReadonlySet<number>;
+  readonly spanned: ReadonlySet<number>;
+} {
   const inside = new Set<number>();
+  const spanned = new Set<number>();
   const open: { begin: number; instructionEnd: number | null; holdsText: boolean }[] = [];
   blocks.forEach((block, index) => {
     if (block.kind !== 'paragraph') return;
@@ -58,13 +72,15 @@ export function paragraphsInsideFieldInstructions(
         if (field && field.instructionEnd === null) field.instructionEnd = index;
       } else {
         const field = open.pop();
-        if (!field || field.holdsText) continue;
+        if (!field) continue;
         const instructionEnd = field.instructionEnd ?? index;
         for (let between = field.begin + 1; between < instructionEnd; between += 1) {
-          if (blocks[between]?.kind === 'paragraph') inside.add(between);
+          if (blocks[between]?.kind !== 'paragraph') continue;
+          spanned.add(between);
+          if (!field.holdsText) inside.add(between);
         }
       }
     }
   });
-  return inside;
+  return { inside, spanned };
 }
