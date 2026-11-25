@@ -13,6 +13,7 @@ import { createFixedMeasurer } from '../../layout/index.ts';
 import { layoutHeaderFooterStory } from '../../layout/hf-layout.ts';
 import { caretAt, caretStops } from '../../layout/semantic-interaction.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
+import { FIELD_CODE_PASTE_NOTICE } from '../hidden-mark-joins.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -218,7 +219,9 @@ describe('a composition at the start of the result side', () => {
 });
 
 // The first paragraph ends a section, so the two sides keep their own lines. Nothing redirects
-// an insert at the start of the result there; the editor's one field-code check refuses it.
+// an insert at the start of the result there; the editor's one field-code check refuses it. A
+// table goes before the paragraph that holds the field's begin, and a rich paste keeps only its
+// text and says so.
 describe('a field whose first paragraph ends a section', () => {
   const sectioned = field(run('Alpha'), run('Yes')).replace(
     '<w:p>',
@@ -227,7 +230,6 @@ describe('a field whose first paragraph ends a section', () => {
   const inserts: [string, (surface: PaginatedSurface) => unknown][] = [
     ['Enter', (surface) => surface.splitParagraph()],
     ['a section break', (surface) => surface.insertSectionBreak()],
-    ['a table', (surface) => surface.insertTable(1, 1)],
   ];
   for (const [label, insert] of inserts) {
     test(`${label} at the start of the result is refused`, async () => {
@@ -246,4 +248,21 @@ describe('a field whose first paragraph ends a section', () => {
       expect(surface.state().lastRejection).toStartWith('field-code-mark');
     });
   }
+
+  test('a table at the start of the result goes before the field', async () => {
+    const { surface, ids } = mount(sectioned);
+    const before = await fieldCodes(surface);
+    caret(surface, ids[2]!, 0);
+    expect(surface.insertTable(1, 1)).toBe(true);
+    expect(await fieldCodes(surface)).toBe(before);
+  });
+
+  test('a rich paste at the start of the result keeps only its text and says so', async () => {
+    const { surface, ids } = mount(sectioned);
+    const before = await fieldCodes(surface);
+    caret(surface, ids[2]!, 0);
+    surface.pasteRich('P\nQ', '<p>P</p><p>Q</p>');
+    expect(await fieldCodes(surface)).toBe(before);
+    expect(surface.state().lastRejection).toBe(FIELD_CODE_PASTE_NOTICE);
+  });
 });

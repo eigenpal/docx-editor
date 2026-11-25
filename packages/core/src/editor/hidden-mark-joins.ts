@@ -425,19 +425,6 @@ export function insertPointOf(
   return positionPastDeletion(layout, fieldCodeInsertLanding(layout, part, position) ?? position);
 }
 
-/**
- * The paragraph a block goes before when the caret is in `paragraphId`: the paragraph that
- * opens the field when `paragraphId` is the result side of a field's shared line, so a table
- * lands before that line and not inside the field codes. `paragraphId` anywhere else.
- */
-export function fieldCodeLineFirst(
-  layout: SemanticLayout,
-  part: OoxmlPart,
-  paragraphId: string
-): string {
-  return fieldCodeLineOpener(layout, part, paragraphId) ?? paragraphId;
-}
-
 /** The editing surface's view of the rules above, over its live layout, story, and view. */
 export function createHiddenMarkEditing(deps: {
   readonly layout: () => SemanticLayout;
