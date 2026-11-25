@@ -32,10 +32,12 @@ import {
   pageFieldText,
   type BodyPageFieldContext,
   type FieldPageContext,
+  type PageFieldMarker,
 } from './field-page-furniture.ts';
-import type { AllowlistedPageFieldMatch, ComplexFieldParseState } from './field-instruction.ts';
+import type { ComplexFieldParseState } from './field-instruction.ts';
 import { instrTextValue, isDeletedInstrText } from '../store/package/field-nodes.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
+import { deferredSegmentsMarker } from './field-nested-page.ts';
 import {
   listNumFieldValue,
   type PageRefFieldProjection,
@@ -54,7 +56,7 @@ export interface AtomicFieldSynthesis {
    * document finalize substitutes the real value for this kind. The caller carries the marker onto
    * the span. Absent for the live header/footer value and every other synthesis.
    */
-  readonly pageField?: AllowlistedPageFieldMatch;
+  readonly pageField?: PageFieldMarker;
   /**
    * Present when this is a BODY `PAGEREF`: {@link text} is the cached result (or the
    * placeholder digit for an empty cache) and document finalize substitutes the number of
@@ -214,9 +216,21 @@ export function synthesizeAtomicField(
         )
       : null;
   if (dateText !== null) return { text: dateText, props: pending.props, style: pending.style };
-  // A non-empty cached result is what Word last painted; it wins over synthesis.
+  // A non-empty cached result is what the producer last painted; it wins over synthesis. In
+  // the body, page fields nested in it get a marker, so document finalize fills each page's
+  // value in place.
   if (pending.cachedText.length > 0) {
-    return { text: pending.cachedText, props: pending.props, style: pending.style };
+    const segments = pending.nestedPageSegments;
+    const pageField =
+      ctx.bodyPageFields && segments && segments.length > 0
+        ? deferredSegmentsMarker(pending.cachedText, segments)
+        : null;
+    return {
+      text: pending.cachedText,
+      props: pending.props,
+      style: pending.style,
+      ...(pageField ? { pageField } : {}),
+    };
   }
   // Empty cache: synthesize. A result that existed but was hidden stays hidden.
   if (!pending.sawResultContent) {

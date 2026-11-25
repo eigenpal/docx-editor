@@ -17,7 +17,7 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 
 | Field | Behavior |
 | --- | --- |
-| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers, footers, and the body. A hidden saved result stays hidden. An `=` formula over these fields, such as `{ = { PAGE } }` or `{ = { NUMPAGES } - { PAGE } }`, updates the same way. See [Page number formulas](#page-number-formulas). In headers and footers, these fields and formulas also update inside another field's result. A deleted `PAGE` field shows the live value. |
+| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers, footers, and the body. A hidden saved result stays hidden. An `=` formula over these fields, such as `{ = { PAGE } }` or `{ = { NUMPAGES } - { PAGE } }`, updates the same way. See [Page number formulas](#page-number-formulas). These fields and formulas also update inside another field's result, such as `{ QUOTE "x" { PAGE } }`. In the body, that result keeps its saved text when it holds a space or more than 32 characters. A deleted `PAGE` field shows the live value. |
 | `STYLEREF` | Updates supported character-style and paragraph-style references in headers. A paragraph without a paragraph style matches the default paragraph style. A paragraph style outranks a character style with the same name. Supports `\l` and `\* MERGEFORMAT`. With `\n` or `\w`, shows the list number of a paragraph-style match: `\n` shows only the number text of the paragraph's own level, and `\w` adds the higher levels. A match without a number shows `0`. |
 | `REF` | Resolves bookmark text or numbering in the body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |

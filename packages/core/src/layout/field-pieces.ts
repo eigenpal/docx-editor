@@ -25,8 +25,9 @@ import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField, AllowlistedPageFieldMatch } from './field-instruction.ts';
-import type { PageFieldNumberFormat, PageFieldSwitches } from './field-page-switches.ts';
-import type { PageFormula } from './field-formula.ts';
+import type { PageFieldSwitches } from './field-page-switches.ts';
+import type { PageFieldMarker } from './field-page-furniture.ts';
+import type { DeferredPageSegment } from './field-nested-page.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { ListNumFieldSpec } from './field-listnum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
@@ -109,17 +110,7 @@ export interface FieldAtomMarker {
    * (`substituteBodyPageFields`) reads this marker and substitutes the real value per page.
    * Absent in headers/footers, which evaluate live through their own per-page projector.
    */
-  readonly pageField?: {
-    readonly kind: AllowlistedPageField;
-    /** The field's `\#` numeric picture, applied when finalize substitutes the value. */
-    readonly picture?: string;
-    /** The field's `\*` number format, applied when finalize substitutes the value. */
-    readonly numberFormat?: PageFieldNumberFormat;
-    /** A formula field's compiled expression, which finalize evaluates per page. */
-    readonly formula?: PageFormula;
-    /** A formula field's saved result, painted where the formula has no value. */
-    readonly savedResult?: string;
-  };
+  readonly pageField?: PageFieldMarker;
   /**
    * A BODY `PAGEREF` atom whose value is the page number its bookmark target lands on.
    *
@@ -468,6 +459,8 @@ export interface PendingFieldProjection {
   characterStyleSpec?: import('./field-character-style.ts').CharacterStyleField | null;
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
+  /** Body page fields nested in this field's saved result, which document finalize fills. */
+  nestedPageSegments?: DeferredPageSegment[];
   /**
    * The `\#` picture and `\*` number format of {@link kind}; empty when the field states none.
    *

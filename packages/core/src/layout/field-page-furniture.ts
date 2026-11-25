@@ -143,6 +143,12 @@ export interface PageFieldMarker extends AllowlistedPageFieldMatch {
    * lands on (a division by zero, say).
    */
   readonly savedResult?: string;
+  /**
+   * Set on another field's result that holds body page fields (`{ QUOTE "x" { PAGE } }`): its
+   * saved text around each nested field's marker. Finalize paints the text with each nested
+   * field's value in place. Nested markers never carry segments.
+   */
+  readonly segments?: readonly (string | PageFieldMarker)[];
 }
 
 /**
@@ -615,14 +621,24 @@ function substituteBodyPageFieldLine(
     }
     const marker = span.fieldAtom?.pageField;
     if (!marker) continue;
-    const text = samePageFieldAtom(before, span)
-      ? ''
-      : (pageFieldText(marker, context) ?? marker.savedResult ?? '');
+    const text = samePageFieldAtom(before, span) ? '' : pageFieldMarkerText(marker, context);
     if (text === span.text) continue;
     if (!spans) spans = line.spans.slice();
     spans[index] = { ...span, text };
   }
   return spans ? { ...line, spans } : line;
+}
+
+/** What a body page-field marker paints on a page: its value, or its segments with values. */
+function pageFieldMarkerText(marker: PageFieldMarker, context: FieldPageContext): string {
+  const valueOf = (field: PageFieldMarker): string =>
+    pageFieldText(field, context) ?? field.savedResult ?? '';
+  if (marker.segments === undefined) return valueOf(marker);
+  let text = '';
+  for (const segment of marker.segments) {
+    text += typeof segment === 'string' ? segment : valueOf(segment);
+  }
+  return text;
 }
 
 /** True when `before` is an earlier piece of the same body page-field atom as `span`. */

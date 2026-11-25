@@ -42,8 +42,11 @@ import {
 } from './field-instruction.ts';
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { projectSimpleFieldResult } from './field-simple-result.ts';
-import { createNestedPageTracker } from './field-nested-page.ts';
-import { formulaOperandIsNumber } from './field-page-furniture.ts';
+import {
+  appendNestedPageResult,
+  createNestedPageTracker,
+  nestedPageArming,
+} from './field-nested-page.ts';
 import { modelTextOfRunChild, hyphenDisplayOf, runPropertiesOf } from './field-run-text.ts';
 import { captureInstructionSpecs, formControlMarkerOf } from './field-form.ts';
 import { noteInstructionLanguage, synthesizeAtomicField } from './field-synthesis.ts';
@@ -570,11 +573,11 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
           // duplicates at the tracked level. Overflowed nesting never arms — projection would
           // be replacing content the atom parser already demoted. A field inside an enclosing
           // instruction never arms: its value feeds that instruction and is not displayed.
-          // A formula over a PAGE operand that is not a number (a roman section) keeps its
-          // cached result, as it does at level 1.
-          const displayed = pageContext && !isInsideOpenFieldInstruction(field);
-          const live = displayed && match && formulaOperandIsNumber(match, pageContext.format);
-          nestedPage.onSeparate(live ? match : null, separateLevel);
+          // A formula over a PAGE operand that is not a number keeps its cached result. In the
+          // body the tracker arms deferred, for document finalize.
+          const shown = !isInsideOpenFieldInstruction(field);
+          const arming = nestedPageArming(match, shown, pageContext, bodyPageFields);
+          nestedPage.onSeparate(arming, separateLevel);
         }
         continue;
       }
@@ -595,7 +598,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
         // pair nested in a tracked result cannot clear tracking mid-field.
         const appendedLive = nestedPage.onEnd(field.nesting, pageContext);
         if (appendedLive !== null && pending?.atomic) {
-          pending.cachedText += appendedLive;
+          appendNestedPageResult(pending, nestedPage, appendedLive);
         }
         onFldCharEnd(field);
         if (outermostEnd) {

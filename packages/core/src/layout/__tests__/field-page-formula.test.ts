@@ -488,3 +488,67 @@ describe('a formula with arithmetic', () => {
     expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[77]');
   });
 });
+
+describe('page fields in another field result in the body', () => {
+  const outer = (inner: string) => BEGIN + instr(' QUOTE "x" ') + SEPARATE + inner + END;
+  const simple = (inner: string, instruction = ' QUOTE x ') =>
+    `<w:fldSimple w:instr="${instruction}">${inner}</w:fldSimple>`;
+  const filler = Array.from({ length: 60 }, () => `<w:p>${text('Line')}</w:p>`).join('');
+
+  /** The text of the second page, where each item's paragraph lands. */
+  function secondPage(items: readonly string[], sectPr = ''): string {
+    const body = filler + items.map((item) => `<w:p>${item}</w:p>`).join('');
+    const layout = layoutOf(packageOf(body, sectPr));
+    expect(layout.pages.length).toBe(2);
+    return spansOf(layout.pages[1]!.fragments).join('|');
+  }
+
+  test('shows the value of the page each field lands on', () => {
+    const page = secondPage([
+      text('a=') + outer(pageOperand()),
+      text('b=') + outer(text('[') + pageOperand() + text(']')),
+      text('c=') + outer(formula([pageOperand()], '7', ' = ', ' + 10 ')),
+      text('d=') + simple(formula([pageOperand()], '7', ' = ', ' * 3 ')),
+      text('e=') + simple(simple(text('5'), ' NUMPAGES ')),
+      text('f=') + outer(outer(formula([pageOperand()], '7'))),
+    ]);
+    expect(page).toContain('a=|2');
+    expect(page).toContain('b=|[2]');
+    expect(page).toContain('c=|12');
+    expect(page).toContain('d=|6');
+    expect(page).toContain('e=|2');
+    expect(page).toContain('f=|2');
+  });
+
+  test('keeps the saved result where it cannot be measured as one word', () => {
+    const page = secondPage([text('a=') + outer(text('Page ') + pageOperand() + text(' of 9'))]);
+    expect(page.replaceAll('|', '')).toContain('a=Page 5 of 9');
+  });
+
+  test('keeps the saved result of a field inside a nested instruction', () => {
+    const nestedIf =
+      BEGIN +
+      instr(' IF ') +
+      pageOperand() +
+      instr(' = 1 "one" "two" ') +
+      SEPARATE +
+      text('two') +
+      END;
+    expect(secondPage([text('a=') + outer(nestedIf)])).toContain('a=|two');
+  });
+
+  test('follows the section format, and keeps a formula over PAGE in a roman section', () => {
+    const page = secondPage(
+      [text('a=') + outer(pageOperand()), text('b=') + outer(formula([pageOperand()], '7'))],
+      '<w:pgNumType w:fmt="lowerRoman"/>'
+    );
+    expect(page).toContain('a=|ii');
+    expect(page).toContain('b=|7');
+  });
+
+  test('keeps the saved result of a formula on a page where it has no value', () => {
+    const divided =
+      BEGIN + instr(' = 1 / ( ') + pageOperand() + instr(' - 2 ) ') + SEPARATE + text('77') + END;
+    expect(secondPage([text('a=') + outer(text('[') + divided + text(']'))])).toContain('a=|[77]');
+  });
+});
