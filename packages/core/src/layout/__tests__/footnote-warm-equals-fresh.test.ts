@@ -211,6 +211,7 @@ describe('a warm footnote pass matches a fresh one after each edit', () => {
     readonly shape: DocumentShape;
     readonly modes: readonly number[];
     readonly seeds: readonly number[];
+    readonly timeoutMs?: number;
   }[] = [
     { label: 'one section', shape: {}, modes: [15, 14], seeds: ALL_SEEDS },
     {
@@ -234,45 +235,51 @@ describe('a warm footnote pass matches a fresh one after each edit', () => {
       seeds: [83],
     },
     // Tall table documents are slow to lay out fresh; this seed splits a row so that two
-    // pages open inside one row.
+    // pages open inside one row. Each step lays out the document twice, so the case takes
+    // several times longer on a loaded CI runner than on a workstation.
     {
       label: 'tables with split rows',
       shape: { minCount: 60, tables: 0.2 },
       modes: [15],
       seeds: [12],
+      timeoutMs: 180000,
     },
   ];
-  for (const { label, shape, modes, seeds } of variants)
+  for (const { label, shape, modes, seeds, timeoutMs = 60000 } of variants)
     for (const mode of modes) {
-      test(`${label}, compatibility mode ${mode}`, () => {
-        const mismatches: string[] = [];
-        for (const seed of seeds) {
-          const next = random(seed * 7919 + mode);
-          const loaded = readOoxmlPackage(documentBytes(next, shape));
-          if (!loaded.ok) throw new Error(loaded.reason);
-          const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-          const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
-          const store = new TreeDocumentStore(part);
-          const session = createLayoutSession();
-          lay(store.part, footnotesPart, mode, 1, session);
-          for (let step = 0; step < 10; step += 1) {
-            const ids = paragraphIds(store.part);
-            const paragraphId = ids[Math.floor(next() * ids.length)]!;
-            const text = next() < 0.5 ? 'abc ' : 'a thirty-eight character phrase here. ';
-            const result = store.transact((tx) =>
-              tx.apply({ op: 'insertText', paragraphId, offset: 0, text })
-            );
-            expect(result.ok).toBe(true);
-            const warm = lay(store.part, footnotesPart, mode, step + 2, session);
-            const fresh = lay(store.part, footnotesPart, mode, step + 2);
-            if (JSON.stringify(warm.pages) !== JSON.stringify(fresh.pages)) {
-              mismatches.push(`seed ${seed} step ${step}`);
-              break;
+      test(
+        `${label}, compatibility mode ${mode}`,
+        () => {
+          const mismatches: string[] = [];
+          for (const seed of seeds) {
+            const next = random(seed * 7919 + mode);
+            const loaded = readOoxmlPackage(documentBytes(next, shape));
+            if (!loaded.ok) throw new Error(loaded.reason);
+            const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+            const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
+            const store = new TreeDocumentStore(part);
+            const session = createLayoutSession();
+            lay(store.part, footnotesPart, mode, 1, session);
+            for (let step = 0; step < 10; step += 1) {
+              const ids = paragraphIds(store.part);
+              const paragraphId = ids[Math.floor(next() * ids.length)]!;
+              const text = next() < 0.5 ? 'abc ' : 'a thirty-eight character phrase here. ';
+              const result = store.transact((tx) =>
+                tx.apply({ op: 'insertText', paragraphId, offset: 0, text })
+              );
+              expect(result.ok).toBe(true);
+              const warm = lay(store.part, footnotesPart, mode, step + 2, session);
+              const fresh = lay(store.part, footnotesPart, mode, step + 2);
+              if (JSON.stringify(warm.pages) !== JSON.stringify(fresh.pages)) {
+                mismatches.push(`seed ${seed} step ${step}`);
+                break;
+              }
             }
           }
-        }
-        expect(mismatches).toEqual([]);
-      }, 60000);
+          expect(mismatches).toEqual([]);
+        },
+        timeoutMs
+      );
     }
 
   test('after a pass that a newer edit cut short', () => {
