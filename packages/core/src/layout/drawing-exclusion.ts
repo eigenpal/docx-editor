@@ -29,7 +29,7 @@ import {
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingGeometry } from './drawing-geometry.ts';
 import {
-  availableTextIntervalsOnScanline,
+  availableTextIntervalsOverBand,
   squareExclusionBounds,
   type ScanlineInterval,
   type WrapExclusionInput,
@@ -342,7 +342,7 @@ export function mergeAvailableIntervalsAtY(
   let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
-    // Square wrap excludes the glyph band; polygon wrap probes its contour, from its top edge.
+    // Square wrap excludes the glyph band; polygon wrap clears its contour across the band.
     const banded = zone.input.mode !== 'topAndBottom' && lineHeight > 0;
     if (
       y > band.y + band.height - WRAP_EDGE_TOUCH_PT ||
@@ -350,7 +350,7 @@ export function mergeAvailableIntervalsAtY(
     )
       continue;
     const probeY = banded ? Math.max(y, band.y) : y;
-    const atY = availableTextIntervalsOnScanline(probeY, zone.input);
+    const atY = availableTextIntervalsOverBand(probeY, banded ? y + lineHeight : y, zone.input);
     if (
       zone.sourceKind === 'table' &&
       !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)
