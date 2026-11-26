@@ -9,8 +9,9 @@
 // - In each later fragment, a zero-height continuation of the head row (`isCarriedHeadRow`),
 //   inserted before the first row of the merge in that fragment.
 //
-// Merges that start in the same row share these head rows. Each merge publishes on top of what
-// the merges before it published, so a head row appears once and holds every merged cell.
+// Merges that start in the same row share these head rows, keyed by that row. Each merge
+// publishes on top of what the merges before it published, so a head row appears once and holds
+// every merged cell. A merge that starts in a later row publishes its own head rows.
 
 import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableCellFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';

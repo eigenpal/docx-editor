@@ -62,25 +62,23 @@ function paragraph(peer: Peer, label: string): OoxmlNode {
 
 type Layout = ReturnType<typeof layoutSemanticDocument>;
 
+type Block = Layout['pages'][number]['fragments'][number];
+
+/** The merged lines of a block, with the lines of nested tables in it. */
+function mergedLines(block: Block): string[] {
+  if (block.kind === 'paragraph')
+    return block.lines
+      .map((line) => line.spans.map((span) => span.text).join(''))
+      .filter((text) => /^(SHORT|LONG|STAIR|NESTED)/.test(text));
+  if (block.kind !== 'table') return [];
+  return block.rows.flatMap((row) =>
+    row.cells.flatMap((cell) => cell.blocks.flatMap((child) => mergedLines(child)))
+  );
+}
+
 /** Each merged line's text on each page, as the layout paints it. */
 function mergedTextOf(layout: Layout): string[][] {
-  return layout.pages.map((page) =>
-    page.fragments.flatMap((fragment) =>
-      fragment.kind === 'table'
-        ? fragment.rows.flatMap((row) =>
-            row.cells.flatMap((cell) =>
-              cell.blocks.flatMap((block) =>
-                block.kind === 'paragraph'
-                  ? block.lines
-                      .map((line) => line.spans.map((span) => span.text).join(''))
-                      .filter((text) => /^(SHORT|LONG)/.test(text))
-                  : []
-              )
-            )
-          )
-        : []
-    )
-  );
+  return layout.pages.map((page) => page.fragments.flatMap(mergedLines));
 }
 
 /** The live layout's merged text, which a save and reopen keeps. */
@@ -210,4 +208,47 @@ test('live replicas keep the alignment of merged text that moves to the next pag
   expect(alice.room.session.redo()).toBe(true);
   harness.expectConverged(alice, bob);
   expectBottom(bob);
+});
+
+test('live replicas carry a line break and a merge that starts in a covered row', async () => {
+  // SHORT-1 starts after a line break (`w:br`, 17.3.3.1), a nested table (`w:tbl`, 17.4.37)
+  // follows SHORT-2, and the column 1 merge starts in row 1, which the column 0 merge covers.
+  // All of them carry their text to the next page.
+  const staircase = body
+    .replace('<w:r><w:t>SHORT-1</w:t></w:r>', '<w:r><w:br/><w:t>SHORT-1</w:t></w:r>')
+    .replace(
+      p('SHORT-2'),
+      p('SHORT-2') +
+        '<w:tbl><w:tblPr><w:tblW w:w="2000" w:type="dxa"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+        `<w:tr>${tc(p('NESTED'))}</w:tr></w:tbl>`
+    )
+    .replace(tc(p('M1')), tc(p('STAIR'), RESTART))
+    .replace(tc(p('M2')), tc('<w:p/>', CONTINUE));
+  const { alice, bob, pause, resume } = await harness.pair(zipDocument(staircase));
+  const initial = ['SHORT-1', 'SHORT-2', 'NESTED', 'SHORT-3', 'LONG', 'STAIR'];
+  expectCarried(alice, initial);
+  expectCarried(bob, initial);
+
+  pause();
+  harness.apply(alice, [
+    { op: 'insertText', paragraphId: paragraph(alice, 'STAIR').id, offset: 5, text: 'a' },
+  ]);
+  harness.apply(bob, [{ op: 'deleteBlock', blockId: paragraph(bob, 'SHORT-2').id }]);
+  resume();
+  harness.expectConverged(alice, bob);
+  const edited = ['SHORT-1', 'NESTED', 'SHORT-3', 'LONG', 'STAIRa'];
+  expectCarried(alice, edited);
+  expectCarried(bob, edited);
+
+  expect(alice.room.session.undo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expectCarried(bob, ['SHORT-1', 'NESTED', 'SHORT-3', 'LONG', 'STAIR']);
+  expect(alice.room.session.redo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expectCarried(bob, edited);
+
+  const cold = await harness.remount(bob);
+  harness.expectConverged(alice, cold);
+  expectCarried(cold, edited);
 });
