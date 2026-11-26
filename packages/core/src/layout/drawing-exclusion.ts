@@ -342,14 +342,14 @@ export function mergeAvailableIntervalsAtY(
   let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
-    // Square wrap excludes the whole glyph band; polygon wrap keeps its contour probe.
-    const rectangular = zone.input.mode === 'square' && lineHeight > 0;
+    // Square wrap excludes the glyph band; polygon wrap probes its contour, from its top edge.
+    const banded = zone.input.mode !== 'topAndBottom' && lineHeight > 0;
     if (
       y > band.y + band.height - WRAP_EDGE_TOUCH_PT ||
-      (rectangular ? y + lineHeight <= band.y + WRAP_EDGE_TOUCH_PT : y < band.y)
+      (banded ? y + lineHeight <= band.y + WRAP_EDGE_TOUCH_PT : y < band.y)
     )
       continue;
-    const probeY = rectangular ? Math.max(y, band.y) : y;
+    const probeY = banded ? Math.max(y, band.y) : y;
     const atY = availableTextIntervalsOnScanline(probeY, zone.input);
     if (
       zone.sourceKind === 'table' &&
