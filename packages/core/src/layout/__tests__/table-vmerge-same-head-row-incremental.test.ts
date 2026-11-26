@@ -1,7 +1,8 @@
 // Incremental relayout of a shorter vertical merge beside a longer one (`w:vMerge`, `CT_VMerge`,
-// ECMA-376 Part 1, 17.4.84) over `hRule="exact"` rows (`w:trHeight`, `CT_Height`, 17.4.80). The
-// shorter merge joins the plan of the longer one, so pushing the table across a page break and
-// editing inside the shorter head must lay out the same as a fresh layout.
+// ECMA-376 Part 1, 17.4.84) over `hRule="exact"` rows and over rows that can grow (`w:trHeight`,
+// `CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37). The shorter merge joins the decision of the
+// longer one, so pushing the table across a page break and editing inside the shorter head
+// must lay out the same as a fresh layout.
 
 import { expect, test } from 'bun:test';
 import { applyTreeOp } from '../../store/store/tree-ops.ts';
@@ -23,6 +24,14 @@ const tableXml =
   `<w:tr>${exactRow(560)}${cell('<w:p/>', CONTINUE)}${cell(para('M1'))}${cell('<w:p/>', CONTINUE)}</w:tr>` +
   `<w:tr>${exactRow(560)}${cell(para('K2'))}${cell(para('M2'))}${cell('<w:p/>', CONTINUE)}</w:tr>` +
   '</w:tbl>';
+// The same merges over a 6pt exact head row, a 14pt atLeast row, and a row without a height.
+// The shorter head needs more than rows 0-1 give, so row 1 grows, and an edit changes how much.
+const growableXml =
+  '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+  `<w:tr>${exactRow(120)}${cell(shortHead, RESTART)}${cell(para('M0'))}${cell(para('L'), RESTART)}</w:tr>` +
+  `<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>${cell('<w:p/>', CONTINUE)}${cell(para('M1'))}${cell('<w:p/>', CONTINUE)}</w:tr>` +
+  `<w:tr>${cell(para('K2'))}${cell(para('M2'))}${cell('<w:p/>', CONTINUE)}</w:tr>` +
+  '</w:tbl>';
 
 const body = (part: OoxmlPart) => part.root.children.find((n) => n.kind === 'body')!;
 const apply = (part: OoxmlPart, op: TreeDocOp) => {
@@ -39,8 +48,11 @@ const firstParagraphIn = (node: OoxmlNode): OoxmlNode | undefined => {
   return undefined;
 };
 
-test('incremental relayout of a shorter merge beside a longer one matches a fresh layout', () => {
-  let part = load(para('P', 4, {}) + tableXml + para('After'));
+test.each([
+  ['exact', tableXml],
+  ['growable', growableXml],
+])('incremental relayout of a shorter merge beside a longer one over %s rows', (_rows, xml) => {
+  let part = load(para('P', 4, {}) + xml + para('After'));
   const session = createLayoutSession();
   const cache = createParagraphLayoutCache();
   lay(part, 15, { session, cache });

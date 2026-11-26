@@ -1,11 +1,11 @@
 // Two vertical merges that start in the same row and end in different rows (`w:vMerge`,
-// `CT_VMerge`, ECMA-376 Part 1, 17.4.84). The plan takes one span length per head row, so the
-// shorter merge used to size its own head row. Over `hRule="exact"` rows (`w:trHeight`,
-// `CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37) that row cannot grow, and the head was
-// clipped at it. Court forms put a label in such a merge, under a head row 2 to 6pt tall.
+// `CT_VMerge`, ECMA-376 Part 1, 17.4.84). The shorter merge used to size its own head row.
+// Over `hRule="exact"` rows (`w:trHeight`, `CT_Height`, 17.4.80; `ST_HeightRule`, 17.18.37)
+// that row cannot grow, and the head was clipped at it. Court forms put a label in such a
+// merge, under a head row 2 to 6pt tall.
 //
-// Each row of these tables is exact. Column 0 merges rows 0-1, column 1 is plain, and column
-// 2 merges rows 0-2. Text is 8pt with the fixed measurer.
+// Each row of these tables is exact unless a test says otherwise. Column 0 merges rows 0-1,
+// column 1 is plain, and column 2 merges rows 0-2. Text is 8pt with the fixed measurer.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
@@ -95,13 +95,15 @@ test('text taller than the fixed rows is clipped at their bottom', () => {
   for (const line of lines) expect(line.box.y).toBeLessThan(head.box.y + head.box.height);
 });
 
-// A merge over a row that can grow is not taken, because that row's height would depend on
-// the head. Its head still sizes its own fixed head row and shows only the line that starts
-// there. `docx-fidelity.mdx` lists this as a known difference.
-test('a shorter merge over a row without a fixed height keeps its head row', () => {
+// A middle row with an `atLeast` height taller than the head's lines does not grow, and the
+// head still flows through it. `table-vmerge-same-head-row-growable.test.ts` covers growth.
+test('a shorter merge over an atLeast row places every line in its rows', () => {
   const result = table(threeLines, { middle: '<w:trHeight w:val="1000"/>' });
-  expect(result.rows[0]!.box.height).toBeCloseTo(5.65, 6);
-  expect(linesOf(result)).toHaveLength(1);
+  const heights = result.rows.map((row) => row.box.height);
+  expect(heights[0]).toBeCloseTo(5.65, 6);
+  expect(heights[1]).toBeCloseTo(50, 6);
+  expect(heights[2]).toBeCloseTo(20, 6);
+  expect(linesOf(result)).toHaveLength(3);
 });
 
 // A footer places every row of its table in one pass, through a different path.

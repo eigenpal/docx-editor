@@ -64,22 +64,23 @@ test('source run boundaries do not add a tab-only line', () => {
   }
 });
 
-test('multiple leading tabs retain their advances and source ranges', () => {
-  expect(texts(layout(`<w:r><w:tab/><w:tab/></w:r>${run(word)}`))).toEqual([
-    '\t\tABCDEF',
-    'GHIJKLMN',
-  ]);
+test('the last of several leading tabs moves down with an oversized word', () => {
+  // The word overflows after the second tab, so that tab opens the next line with it and the
+  // first tab keeps a line of its own. The word breaks after the 12pt stop there.
+  const result = layout(`<w:r><w:tab/><w:tab/></w:r>${run(word)}`);
+  expect(texts(result)).toEqual(['\t', '\tABCDEFGH', 'IJKLMN']);
+  expect(linesOf(result)[1]!.range).toMatchObject({ start: 1, end: 10 });
 });
 
 test('the leading tab also narrows a word that fits a fresh full line', () => {
   expect(texts(layout(`<w:r><w:tab/></w:r>${run('ABCDEFGHI')}`))).toEqual(['\tABCDEFGH', 'I']);
 });
 
-test('visible text before the tab retains ordinary overflow behavior', () => {
+test('a tab after visible text moves down with an oversized word', () => {
   expect(texts(layout(`${run('A')}<w:r><w:tab/></w:r>${run(word)}`))).toEqual([
-    'A\t',
-    'ABCDEFGHIJ',
-    'KLMN',
+    'A',
+    '\tABCDEFGH',
+    'IJKLMN',
   ]);
 });
 

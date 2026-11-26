@@ -10,6 +10,7 @@ import { pathToFileURL, URL as NodeURL } from 'node:url';
 import type { FontSource, FontSourceSubstitution } from '@docx-editor.dev/core';
 import { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontRequest } from '@docx-editor.dev/core/export';
+import { nearestFaceOrder } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
 import { buildSystemFontIndex, indexedFace, type SystemFontIndex } from './system-font-index.ts';
 import { derivedOnce, fontFiles } from './font-file-cache.ts';
@@ -163,6 +164,14 @@ export const localizedFamilies: Record<string, string> = {
   굴림: 'Gulim',
   돋움: 'Dotum',
 };
+/** The localized names of each English family in {@link localizedFamilies}. */
+const localizedNamesOf = new Map<string, string[]>();
+for (const [localized, english] of Object.entries(localizedFamilies)) {
+  const names = localizedNamesOf.get(english);
+  if (names) names.push(localized);
+  else localizedNamesOf.set(english, [localized]);
+}
+
 /**
  * The family a document names, read as Word reads it.
  *
@@ -347,23 +356,6 @@ export async function importCjkFace(): Promise<NodeURL | null> {
 const CJK_TEXT =
   /[\u1100-\u11ff\u2e80-\u2fdf\u3000-\u9fff\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]|[\u{20000}-\u{3ffff}]/u;
 
-/**
- * The faces of a family that stand in for a face it lacks, nearest first. This is CSS font
- * matching over the four static faces, as the editor paints them: the requested style decides
- * first, then the nearest weight, and the other style comes last. Core resolution keeps the
- * same order (`served-font-families.ts`), so the editor and this export pick the same face.
- */
-const nearestFaceOrder = (weight: number, style: FaceStyle): readonly [number, FaceStyle][] => {
-  const otherWeight = weight >= 600 ? 400 : 700;
-  const otherStyle: FaceStyle = style === 'italic' ? 'normal' : 'italic';
-  return [
-    [weight, style],
-    [otherWeight, style],
-    [weight, otherStyle],
-    [otherWeight, otherStyle],
-  ];
-};
-
 /** Whether an earlier origin paints a face, by family (ignoring case), weight, and style. */
 const paintedFaces = (resolvedFaces: readonly FontRequest[] | undefined) => {
   const covered = new Set(
@@ -375,34 +367,55 @@ const paintedFaces = (resolvedFaces: readonly FontRequest[] | undefined) => {
 
 /**
  * Substitutions that point every face of `family` at `target`: at the one packaged face when
- * the target is a single-face Noto family, at the matching weight and style otherwise. With
- * `painted`, a matching face that is not painted falls back to the target's regular face.
+ * the target is a single-face Noto family, at the matching weight and style otherwise.
  */
-const substitutionsTo = (
-  family: string,
-  target: string,
-  painted?: (family: string, weight: number, style: FaceStyle) => boolean
-) => {
+const substitutionsTo = (family: string, target: string) => {
   const { bold, italic } = canonicalFamily(family);
   return [400, 700].flatMap((weight) =>
-    (['normal', 'italic'] as const).map((style) => {
-      const matching = face(
-        target,
+    (['normal', 'italic'] as const).map((style) => ({
+      from: face(family, weight, style),
+      // The packaged CJK, symbol and mathematics faces come in one weight and one style.
+      to: target.startsWith('Noto')
+        ? face(target)
+        : face(
+            target,
+            bold || weight === 700 ? 700 : 400,
+            italic || style === 'italic' ? 'italic' : 'normal'
+          ),
+    }))
+  );
+};
+
+/**
+ * Substitutions that point every face of `family` at the nearest painted face of `target`,
+ * another name of the same font, in the editor's order (`nearestFaceOrder`). A face that
+ * `target` lacks then draws as a synthesized style of that face, as it does in the editor.
+ */
+const sameFontSubstitutions = (
+  family: string,
+  target: string,
+  painted: (family: string, weight: number, style: FaceStyle) => boolean
+): FontSourceSubstitution[] => {
+  // A face name (`Meiryo Bold`) asks for its own weight and style in every face.
+  const { bold, italic } = canonicalFamily(family);
+  return [400, 700].flatMap((weight) =>
+    (['normal', 'italic'] as const).flatMap((style) => {
+      const nearest = nearestFaceOrder(
         bold || weight === 700 ? 700 : 400,
         italic || style === 'italic' ? 'italic' : 'normal'
-      );
-      return {
-        from: face(family, weight, style),
-        // The packaged CJK, symbol and mathematics faces come in one weight and one style.
-        to:
-          target.startsWith('Noto') ||
-          (painted && !painted(target, matching.weight, matching.style))
-            ? face(target)
-            : matching,
-      };
+      ).find(([w, s]) => painted(target, w, s));
+      return nearest ? [{ from: face(family, weight, style), to: face(target, ...nearest) }] : [];
     })
   );
 };
+
+/** The four static faces of a family. */
+const STATIC_FACES = [
+  [400, 'normal'],
+  [700, 'normal'],
+  [400, 'italic'],
+  [700, 'italic'],
+] as const;
 
 /**
  * The packaged resolvers, over one way to locate the CJK face.
@@ -477,10 +490,11 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * The CJK face from `@docx-editor.dev/fonts-cjk`, with the substitutions that point the
    * Word CJK families at it.
    *
-   * Only a family no earlier origin paints goes to the CJK face. A family whose regular face is
-   * painted keeps it: its missing bold or italic resolves to that face through the stand-in,
-   * as a synthesized style. A localized name whose English family is painted resolves to that
-   * family, which is the same font.
+   * Only a family no earlier origin paints goes to the CJK face. A family with a painted face
+   * keeps it: its missing faces resolve to its nearest face through the stand-in, as a
+   * synthesized style. A localized name whose English family is painted resolves to that
+   * family, which is the same font, and so does an English name whose localized name is
+   * painted (`Meiryo` supplied as `メイリオ`).
    *
    * Its own origin, so a package that is installed but cannot supply its face (a broken
    * install, a deployment without its `assets/`, a failed read) fails here alone and is
@@ -489,12 +503,18 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    */
   const cjkFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
     const painted = paintedFaces(resolvedFaces);
-    const aliases: { from: FontRequest; to: FontRequest }[] = [];
+    const paintsAny = (family: string): boolean =>
+      STATIC_FACES.some(([weight, style]) => painted(family, weight, style));
+    const aliases: FontSourceSubstitution[] = [];
     const planned = families.filter((family) => {
-      if (substituteFor(family) !== CJK_FAMILY || painted(family, 400, 'normal')) return false;
+      if (substituteFor(family) !== CJK_FAMILY || paintsAny(family)) return false;
       const english = canonicalFamily(family).family;
-      if (english === family || !painted(english, 400, 'normal')) return true;
-      aliases.push(...substitutionsTo(family, english, painted));
+      const sameFont = [
+        ...(english === family ? [] : [english]),
+        ...(localizedNamesOf.get(english) ?? []),
+      ].find(paintsAny);
+      if (sameFont === undefined) return true;
+      aliases.push(...sameFontSubstitutions(family, sameFont, painted));
       return false;
     });
     if (!families.includes(CJK_FAMILY) && planned.length === 0)
@@ -524,20 +544,16 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    *
    * Two answers. A family with no face at all renders in a packaged face of its class
    * ({@link genericSubstituteFor}); the export reports it. A family with some faces covered
-   * points each other face at its nearest covered face ({@link nearestFaceOrder}), which the
-   * renderer emboldens or slants: every symbol face, most CJK faces, and a family that ships
+   * points each other face at its nearest covered face, in the editor's order
+   * (`nearestFaceOrder` in `@docx-editor.dev/core/layout`), which the renderer emboldens or
+   * slants: every symbol face, most CJK faces, and a family that ships
    * in bold only.
    * Legacy symbol families never get a text stand-in; their private-use bullets belong to the
    * glyph fallback path.
    */
   const standInFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
     const has = paintedFaces(resolvedFaces);
-    const faces = [
-      [400, 'normal'],
-      [700, 'normal'],
-      [400, 'italic'],
-      [700, 'italic'],
-    ] as const;
+    const faces = STATIC_FACES;
     const substitutions: FontSourceSubstitution[] = [];
     const wanted = new Set<string>();
     for (const family of families) {

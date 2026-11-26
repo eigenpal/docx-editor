@@ -751,7 +751,7 @@ export interface TableRowFragmentRecord {
   readonly changeSites?: readonly RevisionAttribution[];
   /** Authored row ordinal within the table; repeats share the original row's index. */
   readonly rowIndex: number;
-  /** True when the authored row resolves `w:tblHeader`, including its first occurrence. */
+  /** The row is in the header group (`w:tblHeader` or covered by its merge), at each occurrence. */
   readonly isHeaderRow: boolean;
   /** True for a `w:tblHeader` row repeated atop a continuation page; not an interaction stop. */
   readonly isHeaderRepeat: boolean;
