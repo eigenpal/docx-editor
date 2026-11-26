@@ -550,19 +550,22 @@ export function paragraphTextIntervalsOnScanline(
   const reachesLeft = paragraphLeft < input.contentLeft;
   const reachesRight = paragraphRight > input.contentRight;
   if (!reachesLeft && !reachesRight) return available;
-  return available.map((interval) => {
-    const start =
-      reachesLeft && interval.start <= input.contentLeft + 0.000_001
-        ? paragraphLeft
-        : interval.start;
-    const end =
-      reachesRight && interval.end >= input.contentRight - 0.000_001
-        ? paragraphRight
-        : interval.end;
-    return start === interval.start && end === interval.end
-      ? interval
-      : Object.freeze({ start, end });
-  });
+  const leftEdge = input.contentLeft + 0.000_001;
+  const rightEdge = input.contentRight - 0.000_001;
+  let reached: ScanlineInterval[] | undefined;
+  for (let index = 0; index < available.length; index += 1) {
+    const interval = available[index]!;
+    const start = reachesLeft && interval.start <= leftEdge ? paragraphLeft : interval.start;
+    const end = reachesRight && interval.end >= rightEdge ? paragraphRight : interval.end;
+    if (start === interval.start && end === interval.end) {
+      reached?.push(interval);
+      continue;
+    }
+    // A fresh copy: the passages are short-lived scanline values, so it stays unfrozen.
+    reached ??= available.slice(0, index);
+    reached.push({ start, end });
+  }
+  return reached ?? available;
 }
 
 /** Point-in effect-expanded clipped shape via exact scanline Minkowski region at `y`. */
