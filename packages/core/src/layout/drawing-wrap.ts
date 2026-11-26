@@ -666,6 +666,17 @@ export function expandPolygonAnisotropic(
   return boundedRectanglePolygon(bounds);
 }
 
+/**
+ * How far, in points, a polygon wrap (20.4.2.19 wrapTight, 20.4.2.18 wrapThrough) reaches below
+ * the object when its contour meets the object's bottom edge, as the default rectangle does.
+ *
+ * A line whose top meets that bottom edge wraps beside the object, unlike a line that touches a
+ * square wrap or any other edge of a contour (`WRAP_EDGE_TOUCH_PT`, 0.01 pt). The reach is past
+ * that margin plus the 0.001 pt line probe offset, and short of 0.02 pt, so a line that clears
+ * the bottom edge by 0.01 pt stays full width.
+ */
+export const CONTOUR_FOOT_REACH_PT = 0.015;
+
 export function wrapExclusionFromProjection(options: {
   readonly mode: 'square' | 'tight' | 'through' | 'topAndBottom';
   readonly contentBounds: LayoutBox;
@@ -680,12 +691,6 @@ export function wrapExclusionFromProjection(options: {
   readonly contentLeft: number;
   readonly contentRight: number;
 }): WrapExclusionInput {
-  const wrapDistances: DrawingInsets = Object.freeze({
-    top: finite(options.wrapDistancesEmu.top / EMU_PER_POINT),
-    right: finite(options.wrapDistancesEmu.right / EMU_PER_POINT),
-    bottom: finite(options.wrapDistancesEmu.bottom / EMU_PER_POINT),
-    left: finite(options.wrapDistancesEmu.left / EMU_PER_POINT),
-  });
   const polygon =
     options.mode === 'tight' || options.mode === 'through'
       ? normalizeWrapPolygonToPage({
@@ -698,6 +703,19 @@ export function wrapExclusionFromProjection(options: {
           transform: options.transform,
         })
       : null;
+  const bounds = options.contentBounds;
+  const reachesFoot =
+    polygon !== null &&
+    (polygon.length < 3 ||
+      Math.max(...polygon.map((point) => point.y)) >= bounds.y + bounds.height - 0.000_1);
+  const wrapDistances: DrawingInsets = Object.freeze({
+    top: finite(options.wrapDistancesEmu.top / EMU_PER_POINT),
+    right: finite(options.wrapDistancesEmu.right / EMU_PER_POINT),
+    bottom:
+      finite(options.wrapDistancesEmu.bottom / EMU_PER_POINT) +
+      (reachesFoot ? CONTOUR_FOOT_REACH_PT : 0),
+    left: finite(options.wrapDistancesEmu.left / EMU_PER_POINT),
+  });
   return Object.freeze({
     mode: options.mode,
     contentBounds: options.contentBounds,

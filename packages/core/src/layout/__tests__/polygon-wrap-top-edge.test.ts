@@ -141,3 +141,54 @@ describe('a line band clears the contour across its whole height', () => {
     expect(line.spans[0]!.box.x).toBeGreaterThanOrEqual(picture.x + picture.width);
   });
 });
+
+describe('a line whose top meets the foot of a polygon wrap', () => {
+  /** The first-line spans of the line that starts at `bottom`, with the contour ending there. */
+  function lineAtFoot(wrap: string, footFraction: number) {
+    const tops = paragraphFragmentsOf(
+      layoutSemanticDocument(load(squareAnchorAtLeft({ text: 'word '.repeat(40) })), 1, {
+        measurer: createFixedMeasurer(6, 14),
+      }).pages[0]!
+    )[0]!.lines.map((line) => line.box.y);
+    // The contour ends `footFraction` down the 72pt picture, exactly at the third line's top.
+    const offset = tops[2]! - 72 * footFraction;
+    const xml = squareAnchorAtLeft({ text: 'word '.repeat(40) })
+      .replace(/<wp:wrapSquare[^>]*\/>/, wrap)
+      .replace(
+        '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset>',
+        `<wp:positionV relativeFrom="paragraph"><wp:posOffset>${Math.round(offset * PT)}</wp:posOffset>`
+      );
+    const part = load(xml);
+    const page = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    }).pages[0]!;
+    const line = paragraphFragmentsOf(page)[0]!.lines.find(
+      (candidate) => Math.abs(candidate.box.y - tops[2]!) < 0.5
+    )!;
+    return { picture: page.anchoredDrawings![0]!, line };
+  }
+
+  test('wraps beside the object when the contour reaches its bottom edge', () => {
+    for (const wrap of [TIGHT, TIGHT.replaceAll('wrapTight', 'wrapThrough')]) {
+      const { picture, line } = lineAtFoot(wrap, 1);
+      expect(line.spans[0]!.box.x).toBeGreaterThanOrEqual(picture.x + picture.width);
+    }
+  });
+
+  test('stays full width when the contour ends above the bottom edge', () => {
+    const inset = tightContour([
+      [0, 0],
+      [0, 16200],
+      [21600, 16200],
+      [21600, 0],
+      [0, 0],
+    ]);
+    expect(lineAtFoot(inset, 0.75).line.spans[0]!.box.x).toBe(0);
+  });
+
+  test('stays full width beside a square wrap', () => {
+    const { line } = lineAtFoot('<wp:wrapSquare wrapText="bothSides"/>', 1);
+    expect(line.spans[0]!.box.x).toBe(0);
+  });
+});
