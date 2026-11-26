@@ -180,6 +180,8 @@ import {
   sectionLineGridPt,
 } from './section-properties.ts';
 import { pageBreakBeforeRules } from './page-break-before.ts';
+import { geometryOnPage } from './page-geometry.ts';
+import { sectionMarginSettings } from './page-margin-settings.ts';
 import { previousBodyLayout } from './previous-body-pages.ts';
 import { columnBoxAt, columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
@@ -361,9 +363,14 @@ function* layoutInModeSteps(
     }
 
     const section = roundSections[0];
-    const geometry =
-      opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
     const furniture = furnitureForSection(opts, 0, roundSections.length) ?? opts.furniture;
+    const sides = sectionMarginSettings(
+      opts.pageMarginSettings,
+      opts.evenAndOddHeaders ?? furniture?.evenAndOddHeaders
+    );
+    const geometry =
+      opts.geometry ??
+      (section ? geometryOfSection(section.properties, sides) : DEFAULT_PAGE_GEOMETRY);
     const sectionNumbering = section?.properties.pageNumbering;
     const interim = {
       revision,
@@ -524,7 +531,11 @@ function* layoutBlocksPass(
     options.furniturePageNumberStart ?? (options.pageIndexStart ?? 0) + 1;
   const furnitureContext =
     furnitureLayoutContext(furniture, headerDistance, footerDistance) +
-    (furniture?.evenAndOddHeaders ? `|fp:${furniturePageNumberStart & 1}` : '');
+    (furniture?.evenAndOddHeaders || geometry.evenPageMargin
+      ? `|fp:${furniturePageNumberStart & 1}`
+      : '');
+  // A page's side margins follow its displayed number (`PageGeometry.evenPageMargin`).
+  const geometryAt = (index: number) => geometryOnPage(geometry, furniturePageNumberStart + index);
   const flowStartY = options.flowStartY ?? 0;
   const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
   // Physical sheet position remains separate from displayed header/footer numbering.
@@ -561,7 +572,7 @@ function* layoutBlocksPass(
       ? continuedPageZones(
           options.continuedPageFurniture,
           continuedInsets,
-          geometry.margin.left,
+          geometryAt(0).margin.left,
           contentWidthForReflow,
           {
             omitHiddenFurniture: options.yieldHiddenFurnitureZones,
@@ -592,8 +603,8 @@ function* layoutBlocksPass(
   );
   const context = reserveResume.context;
   const startPageParity = pageIndexStart & 1;
-  /** Set when this pass places an anchored drawing whose geometry reads page parity. */
-  let usedPageParity = false;
+  /** Set when this pass reads page parity: an inside or outside anchor, or mirrored sides. */
+  let usedPageParity = geometry.evenPageMargin !== undefined;
   const collectingCellBreakKeys = createTableCellBreakKeyCollector();
   const markPageParityRead = (): void => {
     usedPageParity = true;
@@ -1100,7 +1111,7 @@ function* layoutBlocksPass(
   const anchorFrames = (): TableAnchorFrames => ({
     text: { left: columnLeft(), width: columnWidth() },
     margin: { left: 0, width: contentWidthForReflow },
-    page: { left: -geometry.margin.left, width: geometry.width },
+    page: { left: -geometryAt(pages.length).margin.left, width: geometry.width },
   });
   const regionHasFragments = (): boolean =>
     tableFloat.hasFlowFragments(pageFragments, regionFragmentStart);
@@ -1214,7 +1225,7 @@ function* layoutBlocksPass(
   ): void => {
     const inset = insetsFor(pages.length).top;
     for (const fragment of paragraphFrames.publish(
-      frameOrigins(pageIndexStart + pages.length + 1, geometry, inset, {
+      frameOrigins(pageIndexStart + pages.length + 1, geometryAt(pages.length), inset, {
         x: columnLeft(),
         y: anchorY,
         width: columnWidth(),
@@ -1237,7 +1248,10 @@ function* layoutBlocksPass(
       pageNumber: pageIndexStart + pages.length + 1,
       onPageParityRead: markPageParityRead,
       // A continued section's first sheet keeps the host's bottom margin (17.6.11, 17.6.22).
-      geometry: hostSheetGeometry(geometry, pages.length === 0 ? continuedInsets : undefined),
+      geometry: hostSheetGeometry(
+        geometryAt(pages.length),
+        pages.length === 0 ? continuedInsets : undefined
+      ),
       insets: insetsFor(pages.length),
       contentWidth,
       contentHeight: contentHeight(),
@@ -1554,7 +1568,7 @@ function* layoutBlocksPass(
             regionBottomY: contentHeight(),
             columnIndex: flowColumnIndex,
             startOffset,
-            frameMarginLeft: geometry.margin.left,
+            frameMarginLeft: geometryAt(pages.length).margin.left,
             pageNumber: pageIndexStart + pages.length + 1,
           })
         : null;

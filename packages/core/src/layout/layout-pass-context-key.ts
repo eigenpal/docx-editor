@@ -63,7 +63,9 @@ export function layoutPassContextKey(
   const pageBordersContext = inputs.sectionPageBorders
     ? `|pgb:${pageBordersFingerprint(inputs.sectionPageBorders)}`
     : '';
-  const head = `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${inputs.flowStartY},${inputs.spaceBeforeCarry}${continuedContext}${inputs.furnitureContext}`;
+  // The even page's side margins are geometry too (`PageGeometry.evenPageMargin`).
+  const even = geometry.evenPageMargin ? `|ev:${geometry.evenPageMargin.left}` : '';
+  const head = `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}${even}|fs:${inputs.flowStartY},${inputs.spaceBeforeCarry}${continuedContext}${inputs.furnitureContext}`;
   // `markJoinsBreakSheet` is not here: only a section's last two blocks read it, so it folds
   // into their flow keys (`markJoinFlowKeys`) and a section that gains a successor keeps its
   // checkpoints.

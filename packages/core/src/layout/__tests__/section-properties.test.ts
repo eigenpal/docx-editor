@@ -152,6 +152,87 @@ describe('section properties become the geometry layout paginates against', () =
     expect(geometry.margin.left).toBe(108);
   });
 
+  // `w:pgMar` (CT_PageMar, ECMA-376 Part 1 §17.6.11) with left 2in, right 0.5in, gutter 0.5in.
+  const bound = {
+    ...DEFAULT_SECTION_PROPERTIES,
+    margins: {
+      ...DEFAULT_SECTION_PROPERTIES.margins,
+      leftTwips: 2880,
+      rightTwips: 720,
+      gutterTwips: 720,
+    },
+  };
+  const sidesOf = (geometry: ReturnType<typeof geometryOfSection>) => ({
+    odd: [geometry.margin.left, geometry.margin.right],
+    even: geometry.evenPageMargin
+      ? [geometry.evenPageMargin.left, geometry.evenPageMargin.right]
+      : undefined,
+  });
+
+  test('no setting gives every page the same sides', () => {
+    expect(sidesOf(geometryOfSection(bound))).toEqual({ odd: [180, 36], even: undefined });
+    expect(sidesOf(geometryOfSection(bound, {}))).toEqual({ odd: [180, 36], even: undefined });
+  });
+
+  test('w:mirrorMargins swaps the sides of an even page and keeps the gutter inside', () => {
+    // §17.15.1.57: the left and right margins swap on every second page.
+    expect(sidesOf(geometryOfSection(bound, { mirrorMargins: true }))).toEqual({
+      odd: [180, 36],
+      even: [36, 180],
+    });
+  });
+
+  test('w:evenAndOddHeaders moves only the gutter of an even page', () => {
+    expect(sidesOf(geometryOfSection(bound, { evenAndOddHeaders: true }))).toEqual({
+      odd: [180, 36],
+      even: [144, 72],
+    });
+    const noGutter = { ...bound, margins: { ...bound.margins, gutterTwips: 0 } };
+    expect(sidesOf(geometryOfSection(noGutter, { evenAndOddHeaders: true }))).toEqual({
+      odd: [144, 36],
+      even: undefined,
+    });
+  });
+
+  test('w:rtlGutter puts the gutter on the right, and on the left of an even facing page', () => {
+    // §17.6.16.
+    const rtl = { ...bound, rtlGutter: true as const };
+    expect(sidesOf(geometryOfSection(rtl))).toEqual({ odd: [144, 72], even: undefined });
+    expect(sidesOf(geometryOfSection(rtl, { evenAndOddHeaders: true }))).toEqual({
+      odd: [144, 72],
+      even: [180, 36],
+    });
+    expect(sidesOf(geometryOfSection(rtl, { mirrorMargins: true }))).toEqual({
+      odd: [144, 72],
+      even: [72, 144],
+    });
+  });
+
+  test('w:gutterAtTop adds the gutter to the top margin and leaves the sides alone', () => {
+    // §17.15.1.50: not used together with mirrored margins; the sides then do not swap.
+    for (const settings of [
+      { gutterAtTop: true },
+      { gutterAtTop: true, mirrorMargins: true, evenAndOddHeaders: true },
+    ]) {
+      const geometry = geometryOfSection({ ...bound, rtlGutter: true }, settings);
+      expect(sidesOf(geometry)).toEqual({ odd: [144, 36], even: undefined });
+      expect(geometry.margin.top).toBe(108);
+    }
+    // A negative top margin is an exact inset: the gutter adds to its size.
+    const exact = { ...bound, margins: { ...bound.margins, topTwips: -1440 } };
+    expect(geometryOfSection(exact, { gutterAtTop: true }).margin.top).toBe(-108);
+  });
+
+  test('w:rtlGutter is read as an on/off element', () => {
+    const read = (extra: string) =>
+      readSectionProperties(
+        load(`<w:p/><w:sectPr><w:pgSz w:w="12240" w:h="15840"/>${extra}</w:sectPr>`)
+      );
+    expect(read('<w:rtlGutter/>').rtlGutter).toBe(true);
+    expect(read('<w:rtlGutter w:val="0"/>').rtlGutter).toBeUndefined();
+    expect(read('').rtlGutter).toBeUndefined();
+  });
+
   test('margins that swallow the page fall back rather than producing a zero content area', () => {
     // Paginating into a column of zero height never terminates.
     const geometry = geometryOfSection({

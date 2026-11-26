@@ -50,6 +50,7 @@ import {
   type PageContentInsets,
 } from './page-furniture-insets.ts';
 import { SHEET_GUTTER_PT } from './section-page-furniture.ts';
+import { documentHasFacingPages, sectionMarginSettings } from './page-margin-settings.ts';
 import {
   paritySheetAt,
   registerParityPlan,
@@ -191,7 +192,10 @@ function multiSectionKeys(
   options: SemanticLayoutOptions
 ): string[] {
   return sections.map((section, index) => {
-    const geometry = geometryOfSection(section.properties);
+    const geometry = geometryOfSection(
+      section.properties,
+      sectionMarginSettings(options.pageMarginSettings, options.evenAndOddHeaders)
+    );
     const furniture = furnitureForSection(options, index, sections.length);
     const pn = section.properties.pageNumbering;
     // A bare `<w:pgNumType/>` keys its empty attributes while an ABSENT element keys
@@ -216,6 +220,7 @@ function multiSectionKeys(
         geometry.margin.right,
         geometry.margin.bottom,
         geometry.margin.left,
+        geometry.evenPageMargin?.left ?? '',
         geometry.headerDistance ?? 36,
         geometry.footerDistance ?? 36,
         furnitureGeometryFingerprint(furniture),
@@ -511,7 +516,9 @@ export function* layoutMultiSectionDocumentSteps(
       (_, index) => furnitureForSection(options, index, sections.length)?.evenAndOddHeaders === true
     );
 
-  const geometries = sections.map((section) => geometryOfSection(section.properties));
+  const sides = sectionMarginSettings(options.pageMarginSettings, evenAndOddHeaders);
+  const facingPages = documentHasFacingPages(options.pageMarginSettings, evenAndOddHeaders);
+  const geometries = sections.map((section) => geometryOfSection(section.properties, sides));
   const marksJoinBreakSheet = sectionMarksJoiningBreakSheet(
     sections,
     blocks,
@@ -535,7 +542,7 @@ export function* layoutMultiSectionDocumentSteps(
       nextDisplayed,
       nextParity,
       sheetIndex: pages.length,
-      evenAndOddHeaders,
+      evenAndOddHeaders: facingPages,
     })
       ? paritySheetAt(pages.length, sheetY, geometry, prevSpan?.paritySheet)
       : undefined;
@@ -842,7 +849,10 @@ export function* layoutMultiSectionDocumentSteps(
   }
 
   if (pages.length === 0) {
-    const geometry = geometryOfSection(sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES);
+    const geometry = geometryOfSection(
+      sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES,
+      sides
+    );
     const laid: SectionLayoutResult = yield* layoutSectionSteps([], revision, {
       ...rest,
       retainKeys,
@@ -930,7 +940,7 @@ export function* layoutMultiSectionDocumentSteps(
     const owner = chosen ?? sectionShells[sectionShells.length - 1];
     return owner?.at(documentPageIndex, box, shift);
   });
-  registerParityPlan(finalized, evenAndOddHeaders, sheetStarts, runningAfter);
+  registerParityPlan(finalized, facingPages, sheetStarts, runningAfter);
   if (movedSeed && session) recordMovedSeedReserves(session, movedSeed);
   sectionReads.report(session, movedSeed ?? options.pageBottomReserves);
 

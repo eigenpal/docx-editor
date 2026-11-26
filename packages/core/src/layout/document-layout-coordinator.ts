@@ -1,5 +1,6 @@
 // Canonical document-view composition root shared by browser and exporter hosts.
 
+import { pageMarginSettingsFrom } from './page-margin-settings.ts';
 import type { HeadlessDocumentView, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -48,6 +49,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   revisionAuthorFilter: 'document-coordinator',
   sectionFurniture: 'document-coordinator',
   evenAndOddHeaders: 'document-coordinator',
+  pageMarginSettings: 'document-coordinator',
   sectionColumns: 'layout-internal',
   paragraphLineUnitPt: 'layout-internal',
   sectionPageBorders: 'layout-internal',
@@ -253,6 +255,7 @@ function* layoutDocumentViewInModeSteps(
     // A settings.xml flag: every section's resolved parts carry the same value.
     evenAndOddHeaders:
       semanticInputs.view.headerFooterPartsBySection()[0]?.evenAndOddHeaders === true,
+    pageMarginSettings: pageMarginSettingsFrom(semanticInputs.view.settingsRoot()),
     projectLink: semanticInputs.linkProjectors.projectLink,
     projectFieldLink: semanticInputs.projectFieldLink,
     showFieldCodes: semanticInputs.showFieldCodes,

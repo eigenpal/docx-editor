@@ -10,7 +10,7 @@ import type { NumberingIndex } from './numbering-index.ts';
 import type { PageFurniture } from './page-furniture-insets.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import type { SectionColumns } from './section-properties.ts';
+import type { PageMarginSettings, SectionColumns } from './section-properties.ts';
 import type { SectionPageBorders } from './page-borders.ts';
 import type { PageGeometry, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
@@ -95,6 +95,11 @@ export interface SemanticLayoutOptions {
    * layout reads the flag from the section furniture.
    */
   readonly evenAndOddHeaders?: boolean;
+  /**
+   * `w:mirrorMargins` (ECMA-376 Part 1 §17.15.1.57) and `w:gutterAtTop` (§17.15.1.50) from
+   * settings.xml. They place each section's side margins and gutter (`geometryOfSection`).
+   */
+  readonly pageMarginSettings?: Pick<PageMarginSettings, 'mirrorMargins' | 'gutterAtTop'>;
   /** Authored column count/gap for anchored `relativeFrom="column"` frame resolution. */
   readonly sectionColumns?: SectionColumns;
   /** Active section line-grid pitch: line-unit margins and line snapping. Absent: no grid. */

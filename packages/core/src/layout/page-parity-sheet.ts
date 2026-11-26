@@ -6,7 +6,9 @@
 //   whose DISPLAYED number is odd / even. The skipped sheet takes the number in between.
 // - Under `w:evenAndOddHeaders` (§17.10.1) a section that restarts its numbering starts on a
 //   sheet whose continued number has the parity of the restarted number. A restart on a
-//   shared continuous sheet does not reset that sequence.
+//   shared continuous sheet does not reset that sequence. `w:mirrorMargins` (§17.15.1.57)
+//   gives the document the same facing pages, so it applies the same rule: the callers pass
+//   either setting as `evenAndOddHeaders`.
 //
 // A restarted number does not move when a sheet is added. With alternating headers enabled,
 // an explicit odd/even break selects physical sheet parity before the restart is applied.
@@ -124,6 +126,14 @@ const parityPlans = new WeakMap<SemanticLayout, ParityPlan>();
 /** Whether the layout alternates header and footer variants on odd and even page numbers. */
 export function layoutUsesEvenAndOddHeaders(layout: SemanticLayout): boolean {
   return parityPlans.get(layout)?.evenAndOddHeaders ?? false;
+}
+
+/** Whether a section of the layout puts even pages on other side margins than odd pages. */
+export function layoutHasPageSides(layout: SemanticLayout): boolean {
+  const starts = parityPlans.get(layout)?.starts;
+  if (!starts) return false;
+  for (const start of starts.values()) if (start.geometry.evenPageMargin) return true;
+  return false;
 }
 
 export function registerParityPlan(

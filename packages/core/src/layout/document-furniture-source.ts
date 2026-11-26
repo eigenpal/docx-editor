@@ -20,6 +20,7 @@ import {
   geometryOfSection,
   projectedSectionSourceIndexes,
 } from './section-properties.ts';
+import { pageMarginSettingsFrom, sectionMarginSettings } from './page-margin-settings.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
@@ -383,6 +384,7 @@ export function createDocumentFurnitureSource(
       revisionAuthorFilter
     );
     const bySection = view.headerFooterPartsBySection();
+    const marginSettings = pageMarginSettingsFrom(view.settingsRoot());
     const resolutionBySection =
       view.headerFooterResolutionBySection?.() ??
       resolveHeaderFooterResolutionBySection(packageOwner);
@@ -400,7 +402,10 @@ export function createDocumentFurnitureSource(
         occurrenceOwner,
         bySection[sourceIndex],
         resolutionBySection[sourceIndex],
-        geometryOfSection(section.properties),
+        geometryOfSection(
+          section.properties,
+          sectionMarginSettings(marginSettings, bySection[sourceIndex]?.evenAndOddHeaders)
+        ),
         (kind, variant) => seeds.seedFor(sourceIndex, kind, variant)
       );
     });
