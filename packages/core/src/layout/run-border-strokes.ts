@@ -7,20 +7,10 @@ import {
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
-import { borderStrokeWidthPt } from './border-metrics.ts';
+import { borderStrokeWidthPt, runBorderStart, sameBorderEdge } from './border-metrics.ts';
 import { baselineShiftPtOf } from './run-style.ts';
 import type { ParagraphBorderEdge } from './paragraph-style.ts';
 import type { LayoutBox, LineRecord, ParagraphBorderStrokeRecord } from './semantic-records.ts';
-
-function sameEdge(a: ParagraphBorderEdge, b: ParagraphBorderEdge): boolean {
-  return (
-    a.val === b.val &&
-    a.color === b.color &&
-    a.widthPt === b.widthPt &&
-    a.spacePt === b.spacePt &&
-    a.shadow === b.shadow
-  );
-}
 
 /** Character border geometry from placed spans, shared by screen and export painters. */
 export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBorderStrokeRecord[] {
@@ -68,13 +58,21 @@ export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBor
       span.borderBaselinePt === undefined
         ? span.box.y + (line.leading ?? 0)
         : line.box.y + line.baseline - span.borderBaselinePt;
-    const box = { ...span.box, y: faceTop - baselineShiftPtOf(span.style) };
+    // Spaces that hang at a wrap stay outside the border.
+    const width = Math.max(0, span.box.width - (span.borderEndTrimPt ?? 0));
+    // A span of hanging spaces alone has no part in the border, and does not reach it out.
+    if (span.borderEndTrimPt !== undefined && width <= 0.001) continue;
+    // Right-to-left text ends at its left side: the spaces hang there.
+    const x =
+      span.style.shaping?.direction === 'rtl' ? span.box.x + span.box.width - width : span.box.x;
+    const box = { ...span.box, x, width, y: faceTop - baselineShiftPtOf(span.style) };
     if (
       group &&
-      sameEdge(group.edge, edge) &&
+      sameBorderEdge(group.edge, edge) &&
       group.paragraphId === span.range.paragraphId &&
-      (group.end === span.range.start || group.start === span.range.end) &&
-      (group.end === span.range.start ? (span.wrapAdvanceBefore ?? 0) : group.wrapBefore) <= 0.001
+      (group.end === runBorderStart(span) || group.start === span.range.end) &&
+      (group.end === runBorderStart(span) ? (span.wrapAdvanceBefore ?? 0) : group.wrapBefore) <=
+        0.001
     ) {
       const bottom = Math.max(group.box.y + group.box.height, box.y + box.height);
       group.box = {
@@ -84,7 +82,7 @@ export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBor
         height: bottom - Math.min(group.box.y, box.y),
       };
       if (span.range.start < group.start) group.wrapBefore = span.wrapAdvanceBefore ?? 0;
-      group.start = Math.min(group.start, span.range.start);
+      group.start = Math.min(group.start, runBorderStart(span));
       group.end = Math.max(group.end, span.range.end);
     } else {
       flush();
@@ -92,7 +90,7 @@ export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBor
         box,
         edge,
         paragraphId: span.range.paragraphId,
-        start: span.range.start,
+        start: runBorderStart(span),
         end: span.range.end,
         wrapBefore: span.wrapAdvanceBefore ?? 0,
       };

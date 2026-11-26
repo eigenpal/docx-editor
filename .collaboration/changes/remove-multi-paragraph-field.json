@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An automation range delete that removed a paragraph mark inside the field codes of a field that spans paragraphs refused, also when it covered the whole field.",
+  "after": "An untracked automation range delete or replacement that holds every field character of such a field removes the field: deleteBlock removes the middle paragraphs without field characters, joinParagraphs joins the rest, and deleteText removes the range with the field whole. Partial and tracked deletes still refuse before they emit any operation.",
+  "reason": "The planner composes the existing deleteBlock, joinParagraphs, and deleteText operations, which released participants already replicate and interpret the same way. Operation shapes, canonical OOXML, source offsets, shared schema, and awareness messages remain unchanged. A peer that edits inside the removed range while the delete replicates converges on the delete.",
+  "tests": [
+    "packages/editor-api/src/runtime/__tests__/runtime-field-code-paragraphs.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-field-code-range-delete.test.ts"
+  ],
+  "changeset": "remove-multi-paragraph-field",
+  "migration": null
+}

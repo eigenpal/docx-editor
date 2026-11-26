@@ -1,6 +1,7 @@
 // A picture member of a `wpg:wgp` group can carry a visible outline (`a:ln` with a solid
 // fill). The group used to refuse such a member, so the whole group projected as nothing. Now
-// the group picture paints the raster and the outline strokes above it as a vector member.
+// the group picture paints the raster and the outline strokes above it as a vector member. An
+// outline that paint cannot represent paints nothing, and the picture still paints.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '../index.ts';
@@ -85,9 +86,9 @@ describe('group picture members with outlines', () => {
     }
   });
 
-  test('an outline with a gradient keeps the group refused', () => {
+  test('an outline with a gradient strokes in its mean colour, and both pictures paint', () => {
     const gradient =
-      '<a:ln w="12700"><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>' +
+      '<a:ln w="12700"><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="00FF00"/></a:gs>' +
       '</a:gsLst></a:gradFill></a:ln>';
     const part = parsePart(
       `<w:p><w:r>${unscaledGroup(
@@ -96,6 +97,16 @@ describe('group picture members with outlines', () => {
       )}</w:r></w:p>`
     );
     const [projection] = projectDrawingsInPart(part);
-    expect(projection?.groupPicture ?? null).toBeNull();
+    expect(projection?.groupPicture?.embeddedRelationshipId).toBe('rId1');
+    expect(
+      projection?.groupPictureLayers?.map((picture) => picture.embeddedRelationshipId)
+    ).toEqual(['rId2']);
+    // Each outline strokes above its own picture: the first one under the second picture.
+    const strokes = projection?.vectorShape?.components ?? [];
+    expect(strokes.map((stroke) => stroke.strokeHex)).toEqual(['00FF00', 'FF0000']);
+    expect(strokes.map((stroke) => stroke.picturesBelow)).toEqual([1, undefined]);
+    expect(strokes.every((stroke) => stroke.fillHex === null)).toBe(true);
+    expect(strokes[1]!.subpathsEmu[0]![0]).toEqual({ x: 1000, y: 500 });
+    expect(projection?.diagnostics.map((item) => item.code)).not.toContain('unsupported-graphic');
   });
 });

@@ -526,6 +526,165 @@ describe('a caret left in a paragraph layout removes', () => {
   }
 });
 
+// An IF field's true text runs over paragraphs inside its instruction. Layout removes those
+// paragraphs, but their marks are field code, so a join never absorbs them.
+describe('paragraphs inside a field instruction', () => {
+  const field =
+    '<w:p><w:r><w:t>Alpha</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    '<w:r><w:instrText xml:space="preserve">IF 1 = 1 "</w:instrText></w:r></w:p>' +
+    '<w:p><w:r><w:instrText>Inside</w:instrText></w:r></w:p><w:p/>' +
+    '<w:p><w:r><w:instrText xml:space="preserve">" ""</w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Yes</w:t></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+
+  const instructionParagraphs = async (surface: PaginatedSurface) =>
+    strFromU8(unzipSync(await surface.save())['word/document.xml']!)
+      .split('</w:p>')
+      .filter((paragraph) => paragraph.includes('<w:instrText'));
+
+  // "Alpha" and "Yes" share one line, so both keys take the character beside the caret.
+  for (const [label, key, at, kept] of [
+    ['Backspace at the field result', 'deleteBackward', 3, ['Alph', 'Yes']],
+    ['Delete before the field', 'deleteForward', 0, ['Alpha', 'es']],
+  ] as const) {
+    test(`${label} keeps the field code paragraphs`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      expect(ids).toHaveLength(4);
+      caret(surface, ids[at]!, at === 0 ? 5 : 0);
+      surface[key]();
+      expect(surface.session.paragraphIds()).toEqual(ids);
+      expect(await instructionParagraphs(surface)).toHaveLength(3);
+      expect(surface.state().lastRejection).toBeNull();
+      expect([ids[0]!, ids[3]!].map((id) => paragraphTextOf(surface.session.part(), id))).toEqual(
+        kept
+      );
+      expect(surface.state().selection.head).toEqual({
+        paragraphId: ids[0],
+        offset: at === 0 ? 5 : 4,
+      });
+    });
+  }
+
+  // Enter inside the field codes would add a paragraph mark to the field instruction and show
+  // no change, so it is refused.
+  for (const [label, at, offset] of [['in a paragraph inside the field codes', 1, 0]] as const) {
+    test(`Enter ${label} is refused and keeps the field code paragraphs`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      caret(surface, ids[at]!, offset);
+      surface.splitParagraph();
+      expect(surface.session.paragraphIds()).toEqual(ids);
+      expect(await instructionParagraphs(surface)).toHaveLength(3);
+      expect(surface.state().lastRejection).toStartWith('field-code-mark');
+    });
+  }
+
+  // On the shared line, Enter at the start of the result lands at the end of the first side,
+  // before the field's begin, so the field codes keep exactly their marks.
+  test('Enter at the start of the field result splits before the field', async () => {
+    const surface = mount(field);
+    const ids = surface.session.paragraphIds();
+    caret(surface, ids[3]!, 0);
+    surface.splitParagraph();
+    expect(surface.session.paragraphIds()).toHaveLength(5);
+    expect(await instructionParagraphs(surface)).toHaveLength(3);
+    expect(surface.state().lastRejection).toBeNull();
+  });
+
+  // A table or a table of contents placed anywhere in the result paragraph goes before the
+  // paragraph that holds the field's begin: the only place outside the field codes.
+  for (const [label, insert] of [
+    ['a table', (surface: PaginatedSurface) => surface.insertTable(1, 1)],
+    ['a table of contents', (surface: PaginatedSurface) => surface.insertToc()],
+  ] as const) {
+    test(`${label} in the field result goes before the field`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      for (const offset of [0, 3]) {
+        caret(surface, ids[3]!, offset);
+        expect(insert(surface)).toBe(true);
+        expect(surface.state().lastRejection).toBeNull();
+        surface.undo();
+      }
+      expect(insert(surface)).toBe(true);
+      const xml = strFromU8(unzipSync(await surface.save())['word/document.xml']!);
+      const start = xml.indexOf('IF 1 = 1');
+      const codes = xml.slice(start, xml.indexOf('w:fldCharType="separate"', start));
+      expect(codes.match(/<w:p[ >/]/g)).toHaveLength(3);
+      expect(codes).not.toContain('<w:tbl');
+      expect(codes).not.toContain('<w:sdt');
+      const block = label === 'a table' ? '<w:tbl>' : '<w:sdt>';
+      expect(xml.indexOf(block)).toBeGreaterThan(-1);
+      expect(xml.indexOf(block)).toBeLessThan(xml.indexOf('>Alpha<'));
+    });
+  }
+
+  // On the shared line, a paste at the start of the result lands at the end of the first side.
+  for (const [label, paste] of [
+    ['pasted lines', (surface: PaginatedSurface) => surface.insertPlainText('P\nQ')],
+    ['a rich paste', (surface: PaginatedSurface) => surface.pasteRich('P\nQ', '<p>P</p><p>Q</p>')],
+  ] as const) {
+    test(`${label} at the start of the field result keep the field codes`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      const before = await instructionParagraphs(surface);
+      caret(surface, ids[3]!, 0);
+      paste(surface);
+      expect(await instructionParagraphs(surface)).toHaveLength(before.length);
+      // Every paragraph start from the field's begin to its separate: the field-code marks.
+      const xml = strFromU8(unzipSync(await surface.save())['word/document.xml']!);
+      const codes = xml.slice(
+        xml.indexOf('w:fldCharType="begin"'),
+        xml.indexOf('w:fldCharType="separate"')
+      );
+      expect(codes.match(/<w:p[ >/]/g)).toHaveLength(3);
+      expect(surface.session.paragraphIds()).toHaveLength(ids.length + 1);
+      // On the shared line the paste lands at the end of the first side, so nothing refuses.
+      expect(surface.state().lastRejection).toBeNull();
+    });
+  }
+
+  test('Enter inside the field result still splits', () => {
+    const surface = mount(field);
+    const ids = surface.session.paragraphIds();
+    caret(surface, ids[3]!, 1);
+    surface.splitParagraph();
+    expect(surface.session.paragraphIds()).toHaveLength(5);
+    expect(surface.state().lastRejection).toBeNull();
+  });
+
+  test('a text edit that makes the field codes well formed lays them out again', () => {
+    const stray =
+      '<w:p><w:r><w:t>before </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve">IF 1 = 1 "</w:instrText></w:r></w:p>' +
+      '<w:p><w:r><w:t>Z</w:t></w:r></w:p><w:p/>' +
+      '<w:p><w:r><w:instrText xml:space="preserve">" ""</w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Yes</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    const surface = mount(stray);
+    const lines = () =>
+      surface
+        .layout()
+        .pages.flatMap((page) => page.fragments)
+        .flatMap((fragment) =>
+          fragment.kind === 'paragraph'
+            ? [
+                fragment.lines
+                  .map((line) => line.spans.map((span) => span.text).join(''))
+                  .join('')
+                  .trim(),
+              ]
+            : []
+        );
+    expect(lines()).toEqual(['before', 'Z', '', 'Yes']);
+    caret(surface, idOf(surface, 'Z'), 1);
+    surface.deleteBackward();
+    // The field codes now hold no text: the paragraphs on either side share one line.
+    expect(lines()).toEqual(['beforeYes']);
+  });
+});
+
 describe('hiddenParagraphsBetween', () => {
   const siblings = (body: string) => {
     const result = readOoxmlPart(

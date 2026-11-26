@@ -113,6 +113,9 @@ export interface FontResolverMark {
     readonly 'docx-editor.dev/font-resolver': true;
 }
 
+// @public
+export const GLYPH_FALLBACK_FACE_FAMILIES: readonly string[];
+
 // @public @deprecated
 export function installDefaultFontFaces(_options?: LoadDefaultFontsOptions & {
     readonly document?: Document;
@@ -146,6 +149,7 @@ export interface PackagedFontsFragment extends DefaultFontsFragment {
 // @public
 export interface PackagedFontsOptions {
     readonly allow?: readonly DefaultFontFamily[];
+    readonly fallbackFaces?: boolean;
     readonly fetcher?: typeof fetch;
     // @deprecated
     readonly install?: boolean;

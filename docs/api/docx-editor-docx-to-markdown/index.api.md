@@ -111,7 +111,13 @@ export interface DrawingGeometry {
 
 // @public
 export interface DrawingGroupPictureLayerRecord {
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
     readonly crop: SourceCrop;
+    readonly effects?: DrawingImageEffects;
+    readonly flipH?: true;
     readonly frameUnit: Readonly<{
         height: number;
         width: number;
@@ -119,11 +125,16 @@ export interface DrawingGroupPictureLayerRecord {
         y: number;
     }>;
     readonly resource: ImageResourceState;
+    readonly rotationDegrees?: number;
 }
 
 // @public
 export interface DrawingGroupPictureRecord {
     readonly alternateContent: boolean;
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
 }
 
 // @public (undocumented)
@@ -462,6 +473,7 @@ export interface InlineDrawingRecord {
     readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupMembersNotShown?: number;
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupPictureLayers?: readonly DrawingGroupPictureLayerRecord[];
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
@@ -729,6 +741,7 @@ export function openDocumentForExport(source: ExportDocumentSource, options?: Op
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
     readonly displayMode?: ReviewDisplayMode;
+    readonly fieldDate?: Date;
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;
@@ -1090,6 +1103,8 @@ export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     // @internal
     faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
+    // @internal
+    hasMeasurableFont?(style: ResolvedRunStyle): boolean;
     hasResolvedFont?(style: ResolvedRunStyle): boolean;
     inkBounds?(text: string, style: ResolvedRunStyle): {
         left: number;

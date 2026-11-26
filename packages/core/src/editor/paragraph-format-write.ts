@@ -20,10 +20,10 @@ export type LineSpacingRuleName = 'multiple' | 'exact' | 'atLeast';
  * measures in hundredths of a line instead of twips. A merging write that left either in
  * place wrote a number the file then ignored.
  *
- * They are cleared differently, because their off values differ. `w:beforeAutospacing="0"`
- * is a real off, so it is written explicitly and blocks an inherited flag. `w:beforeLines`
- * has no off value — `"0"` there means zero lines of space, which would supersede the twips
- * beside it — so the attribute is dropped instead.
+ * They are cleared differently. `w:beforeAutospacing="0"` is a real off, so it is written
+ * explicitly and blocks an inherited flag. `w:beforeLines` is dropped instead: layout reads
+ * `"0"` as "no line units" (see `paragraphSpacing`), but released editors read it as zero
+ * lines that supersede the twips, so writing it would change what their peers lay out.
  */
 export function spacingSideAttributes(
   side: 'before' | 'after',

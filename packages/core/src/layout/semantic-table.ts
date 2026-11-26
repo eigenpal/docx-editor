@@ -80,6 +80,7 @@ import {
 } from './table-cell-margins.ts';
 import { type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
+import { withMergedHeaderRows } from './table-header-merged-rows.ts';
 import { uniformRowCellSpacingPt } from './table-row-cell-spacing.ts';
 import { modernSharedPercentWidth, resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
@@ -211,6 +212,8 @@ export interface SemanticTableCell {
   readonly vMergeContinue: boolean;
   /** This cell starts a vertical merge that the next row continues. */
   readonly headsVerticalMerge?: true;
+  /** `w:vMerge w:val="restart"`, authored, whether or not the next row continues it. */
+  readonly restartsVerticalMerge?: true;
   /** `w:hideMark` excludes the end-of-cell glyph from row sizing. */
   readonly hideEndMark?: boolean;
   /** `w:noWrap`: autofit never narrows the cell's column below its preferred width. */
@@ -270,7 +273,11 @@ export interface SemanticTableRow {
   readonly revisionDate?: string;
   /** The row insertion a resolved view kept the row through; see the fragment record. */
   readonly changeSites?: readonly RevisionAttribution[];
-  /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
+  /**
+   * The row is in the leading header group, which repeats atop each page the table continues
+   * onto: a `w:trPr/w:tblHeader` row (17.4.49), or a body row that a vertical merge from one
+   * of those rows covers (`table-header-merged-rows.ts`).
+   */
   readonly isHeader: boolean;
   /**
    * `w:trPr/w:cantSplit` — the row must stay on one page. When no page can hold it, the
@@ -620,7 +627,7 @@ function readTableRows(
   );
   // A continuation only continues a cell with `w:vMerge` in the row above (17.4.84). Below
   // an unmerged cell, or in the first row, it starts its own merge and paints its own content.
-  const rows = resolveTableRows(
+  const resolvedRows = resolveTableRows(
     {
       tableStyle,
       look,
@@ -639,6 +646,8 @@ function readTableRows(
     styleFormattingFor,
     tblPr
   );
+  // A merge from a `w:tblHeader` row (17.4.49) extends the header group through its last row.
+  const rows = withMergedHeaderRows(resolvedRows);
 
   const style = readStyleTableProperties(tableStyle.tablePropertyNodes, {
     indentPt: MAX_TABLE_INDENT_PT,

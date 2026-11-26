@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Canvas and VML group text box members dropped their fill from the member story, and group member text inherited its color from the surrounding paint.",
+  "after": "Group, canvas, and VML group member stories keep their fill. Member text, cell text under a revision colour, and text in a gradient-filled box with an automatic color paint white on a dark background and black otherwise.",
+  "reason": "Only the derived drawing projection and local paint change. The member fill is read from the same shape properties as before. Shared nodes, operations, awareness, and package serialization stay unchanged.",
+  "tests": [
+    "packages/core/src/output/__tests__/textbox-automatic-text-color.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-group.test.ts",
+    "packages/core/src/store/__tests__/drawing-shape-geometry-projection.test.ts",
+    "packages/pro/src/collaboration/__tests__/automatic-text-color-peers.test.ts",
+    "packages/core/src/output/__tests__/semantic-paint-automatic-text.test.ts"
+  ],
+  "changeset": "textbox-automatic-text-dark-fill",
+  "migration": null
+}

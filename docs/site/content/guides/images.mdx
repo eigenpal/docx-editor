@@ -366,6 +366,7 @@ To copy a picture, shape, line, text box, or group, select it and press Ctrl+C (
 - Each copy gets its own drawing ID and legacy shape ID. Copies made by several collaborators stay distinct.
 - Undo reverts a paste or a cut. In a collaboration session, undo also reverts your edits made in the same few seconds. In suggesting mode, the paste and the cut become tracked changes.
 - Other applications receive the text of a text box, or the picture.
+- The context menu **Paste** reads the clipboard, and the browser can refuse that read. Then **Paste** uses the editor's last copy or cut, if the window kept focus since that copy and no other copy ran in the page. Otherwise **Paste** shows the browser's reason. Keyboard paste always reads the clipboard. For more information, see [Your own Paste control](#your-own-paste-control).
 
 The editor refuses to copy a drawing in a header, footer, or note. It also refuses a shape that is selected inside a group, a text box linked to another, a drawing that names a part other than an image, and a picture too large for the clipboard. A copied drawing pastes only at a caret in the body text. Each refusal reports a translated reason. A selected chart copies through its own clipboard. For more information, see [Charts](/docs/2.x/guides/charts).
 
@@ -394,6 +395,21 @@ import { forwardClipboardEvents } from '@docx-editor.dev/core/editor';
 // Call the returned function when the overlay unmounts.
 const stopForwarding = forwardClipboardEvents(overlay, editor);
 ```
+
+### Your own Paste control
+
+A Paste button or menu item must read the clipboard in the click handler. Use `readClipboardForPaste()` for this read. If the browser refuses the read, the function returns the editor's last copy or cut, while that copy is still the clipboard content. Otherwise it throws the browser's error. Use `hasEditorClipboardCopy()` to keep the control enabled after a refused read.
+
+```ts
+import { hasEditorClipboardCopy, readClipboardForPaste } from '@docx-editor.dev/core/editor';
+
+async function paste(viewport: HTMLElement): Promise<void> {
+  const { text, html } = await readClipboardForPaste(viewport);
+  if (text || html) editor.exec({ type: 'paste', text, ...(html ? { html } : {}) });
+}
+```
+
+The editor forgets its copy when the window loses focus or the page runs another copy. It cannot see other clipboard writes while the window keeps focus. To write text from your own controls, use `writeTextToClipboard()`, so the editor remembers that text instead.
 
 ## Limits
 

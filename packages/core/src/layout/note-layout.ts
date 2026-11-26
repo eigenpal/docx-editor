@@ -567,7 +567,11 @@ export function layoutNoteSeparator(
         options.displayMode,
         options.revisionAuthorFilter
       );
-      let flowHeight = laid.flowHeight;
+      // The separator mark sits in an ordinary paragraph (ECMA-376 Part 1, §17.11.23
+      // separator), so its flow height keeps the space after from the paragraph cascade
+      // (§17.7.2), including the application default for an omitted `w:pPrDefault`
+      // (§17.7.5.3). The first note starts below that space.
+      const flowHeight = laid.flowHeight;
       let ruleBox: LayoutBox | undefined;
       let ruleColor: string | null | undefined;
       let singleRule = false;
@@ -579,28 +583,6 @@ export function layoutNoteSeparator(
           )
         );
         singleRule = markers.length === 1;
-        const last = paragraphs.at(-1);
-        const authoredBlocks = noteStoryBlocks(
-          authored,
-          options.displayMode,
-          options.revisionAuthorFilter
-        );
-        const lastBlock = authoredBlocks.at(-1);
-        const properties =
-          lastBlock?.kind === 'paragraph'
-            ? lastBlock.children.find((child) => child.kind === 'paragraphProperties')
-            : undefined;
-        // Plain separators do not acquire the body's implicit trailing paragraph space.
-        // Explicit paragraph spacing and named styles remain part of their story geometry.
-        const hasAuthoredSpacing =
-          properties?.kind === 'paragraphProperties' &&
-          properties.children.some(
-            (child) =>
-              child.localName === 'pStyle' ||
-              (child.localName === 'spacing' &&
-                child.attributes.some((attribute) => attribute.localName === 'after'))
-          );
-        flowHeight -= hasAuthoredSpacing ? 0 : (last?.spacing.after ?? 0);
         const marker = markers[0];
         if (marker) {
           ruleColor = marker.span.style.color;

@@ -40,8 +40,13 @@ import {
 } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
 import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
-import { carryNumberingFlow, withoutHiddenMarkParagraphs } from './hidden-paragraph-mark.ts';
+import {
+  carryNumberingFlow,
+  insideFieldCodeSpan,
+  withoutHiddenMarkParagraphs,
+} from './hidden-paragraph-mark.ts';
 import { projectRevisionFormatting } from './revision-formatting-projection.ts';
+import { fieldCodeMergedParagraph } from './field-code-paragraph-merge.ts';
 import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
@@ -87,6 +92,11 @@ export interface ParagraphMergeGroup {
   readonly merged: OoxmlElement;
   /** Members in document order. The last one is the survivor whose mark stays. */
   readonly members: readonly OoxmlElement[];
+  /**
+   * The members share a line because the first one's mark is field code
+   * (`field-code-paragraph-merge.ts`), not because a revision view removed a mark.
+   */
+  readonly fieldCode?: true;
 }
 
 /** Groups keyed by the synthetic node, so a caller holding one can ask what it came from. */
@@ -205,6 +215,14 @@ function mergedTrailingRun(members: readonly OoxmlElement[]): readonly OoxmlElem
  * shares its parent, which is the same rule the store applies.
  *
  * Last, an empty paragraph whose mark is hidden leaves the flow; see `hidden-paragraph-mark.ts`.
+ * A paragraph inside a field instruction leaves it too, and the paragraphs on either side of
+ * those field codes merge; see `field-code-paragraph-merge.ts`.
+ *
+ * `excludedParagraphs` names table of contents paragraphs, which lay out their own field chrome
+ * and never take part in a field-code merge. Only `storyBlocks` passes it, for the top-level
+ * blocks of a part's story, where a table of contents lays out that way. Notes, text boxes,
+ * and table cells lay out without it, and so do the editor's callers: they read which
+ * paragraphs are laid out, and both members of a merge are laid out with or without it.
  */
 export function mergedFlowBlocks(
   children: readonly OoxmlNode[],
@@ -238,8 +256,33 @@ export function mergedFlowBlocks(
     accepted,
     displayMode,
     authorFilter,
-    (block) => !mergeGroups.has(block)
+    (block) => !mergeGroups.has(block),
+    // A table of contents lays out its own field chrome, so its paragraphs never merge here.
+    (first, last) =>
+      inExclusions(excludedParagraphs, first.id) || inExclusions(excludedParagraphs, last.id)
+        ? null
+        : fieldCodeMergedParagraph(first, last, {
+            viewKey: `${displayMode}|${authorFilter?.cacheKey ?? ''}|${currentFieldResultsMode()}`,
+            addressable: (block) => memberIsAddressable(block, displayMode, authorFilter),
+            balanced: fieldCharsBalanced,
+            register: (merged, members) =>
+              mergeGroups.set(merged, { merged, members, fieldCode: true }),
+          })
   );
+}
+
+/** Resolved exclusion sets, per lazy source: asked only when a field-code merge is a candidate. */
+const resolvedExclusions = new WeakMap<() => ReadonlySet<string>, ReadonlySet<string>>();
+
+function inExclusions(
+  exclusions: ReadonlySet<string> | (() => ReadonlySet<string>) | undefined,
+  id: string
+): boolean {
+  if (exclusions === undefined) return false;
+  if (typeof exclusions !== 'function') return exclusions.has(id);
+  let resolved = resolvedExclusions.get(exclusions);
+  if (!resolved) resolvedExclusions.set(exclusions, (resolved = exclusions()));
+  return resolved.has(id);
 }
 
 /**
@@ -566,7 +609,8 @@ function carriedBlocks(
           after.kind === 'paragraph' &&
           paragraphProperties(before) === paragraphProperties(after) &&
           !markReachesNeighbours(paragraphProperties(after)) &&
-          !reachesFields(before, after))
+          !reachesFields(before, after) &&
+          !insideFieldCodeSpan(lastList, before.id))
       )
     )
       return undefined;

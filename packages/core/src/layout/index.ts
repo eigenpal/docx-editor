@@ -239,6 +239,11 @@ export { lineSegments, type LineSegment } from './line-segments.ts';
 export { vectorShapeInkClip } from './vector-shape-ink.ts';
 export {
   groupPictureLayerDrawing,
+  groupPicturePaintsPastExtent,
+  groupPictureInkReach,
+  regionCutClipBox,
+  pictureCornerFrame,
+  vectorPictureBand,
   type DrawingGroupPictureLayerRecord,
 } from './drawing-group-picture-layers.ts';
 export type {
@@ -635,6 +640,41 @@ export {
   type ParagraphLayoutCacheOptions,
 } from './layout-cache.ts';
 export { SYNTHETIC_BOLD_ADVANCE_EM } from './synthetic-bold.ts';
+export { nearestFaceOrder } from './served-font-families.ts';
+export {
+  CJK_FALLBACK_FAMILY,
+  CJK_SUBSTITUTED_FAMILIES,
+  FALLBACK_FACE_FAMILIES,
+  GLYPH_FALLBACK_FACES,
+  GLYPH_FALLBACK_FAMILIES,
+  LOCALIZED_FONT_FAMILIES,
+  SYMBOL_STAND_IN_FAMILY,
+  canonicalFontFamily,
+  genericStandInFamily,
+  isCjkRuledFontFamily,
+  isGenericStandIn,
+  isRuledFontFamily,
+  namedSubstituteFamily,
+  standInLineBox,
+  type FallbackLineBox,
+} from './font-fallback-rules.ts';
+export {
+  namedFallbackFontResolver,
+  standInFontResolver,
+  substitutionsToFallback,
+  type FallbackFaceReader,
+  type FallbackFontResolver,
+  type FallbackFontsAnswer,
+} from './font-fallback-resolvers.ts';
+// The types that the fallback resolvers hand out.
+export type { FontConfiguration, FontSource, FontSourceSubstitution } from '../contracts/editor.ts';
+export type { FontFaceRequest } from '../contracts/editor-fonts.ts';
+export type {
+  FontConfigurationFragment,
+  FontResolutionRequest,
+  FontResolver,
+} from './font-composition.ts';
+export type { FontResolverMark, MarkedFontResolver } from './font-resolver.ts';
 export {
   createLayoutScheduler,
   type LayoutScheduler,

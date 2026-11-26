@@ -293,17 +293,26 @@ describe('group text box members', () => {
     expect(content.style.transformOrigin).toBe('42.8px 46.4px');
   });
 
-  test('a group that cannot paint whole lays out no member text', () => {
-    // A nested group member is past the one-level cap, so the group refuses to paint.
+  test('a group that paints without one member still lays out its member text', () => {
+    // Paint cannot place a nested group without a transform, so that member paints nothing.
     const nested = `<wpg:grpSp><wpg:cNvGrpSpPr/><wpg:grpSpPr/></wpg:grpSp>`;
-    const record = layoutBody(
-      group(
-        picture(0, 0, 100 * PT, 100 * PT) +
-          nested +
-          textbox(100 * PT, 0, 100 * PT, 100 * PT, para(WORDS))
-      )
-    ).pages[0]!.anchoredDrawings?.[0];
-    expect(record?.groupTextboxStories).toBeUndefined();
+    const run = group(
+      picture(0, 0, 100 * PT, 100 * PT) +
+        nested +
+        textbox(100 * PT, 0, 100 * PT, 100 * PT, para(WORDS))
+    );
+    const [projection] = [...indexInlineDrawingProjectionsInPart(documentPart(run)).values()];
+    const omitted = projection!.diagnostics.filter((d) => d.code === 'group-member-not-shown');
+    expect(omitted).toHaveLength(1);
+    // The nested group is the member between the picture and the text box.
+    expect(omitted[0]!.nodeId).toBe(
+      projection!.groupTextboxes![0]!.memberNodeId.replace(/\d+$/, (index) => `${+index - 1}`)
+    );
+    expect(projection!.groupPicture).not.toBeNull();
+    const record = anchored(run);
+    expect(record.groupTextboxStories).toHaveLength(1);
+    expect(record.groupTextboxStories![0]!.box).toEqual({ x: 100, y: 0, width: 100, height: 100 });
+    expect(memberLines(record)).toEqual(['aaaa bbbb cccc ', 'dddd']);
   });
 
   test('a wrap footprint of the group carries no member text', () => {

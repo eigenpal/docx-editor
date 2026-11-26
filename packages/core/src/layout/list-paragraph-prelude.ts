@@ -119,6 +119,8 @@ export interface ParagraphListPrelude {
   readonly belowLevel: readonly OoxmlProperty[];
   readonly aboveLevel: readonly OoxmlProperty[];
   readonly inheritedMarkProps: readonly OoxmlProperty[];
+  /** The paragraph's cascaded properties, which choose the marker's script lane (`w:bidi`). */
+  readonly paragraphProperties: readonly OoxmlProperty[];
   /** Outline level 0-8 for a heading, null for body text. */
   readonly outlineLevel: number | null;
   readonly perLevel: WeakMap<
@@ -166,6 +168,7 @@ export function paragraphListPrelude(
         ...(cascaded?.runProperties.filter((property) => property.localName === 'vanish') ?? []),
       ]
     : markProps;
+  const paragraphProperties = cascaded ? cascaded.paragraphProperties : propertiesOf(pPr);
   const prelude: ParagraphListPrelude = {
     styleCascade,
     numPr,
@@ -173,8 +176,9 @@ export function paragraphListPrelude(
     belowLevel: tiers.below,
     aboveLevel: tiers.above,
     inheritedMarkProps,
+    paragraphProperties,
     outlineLevel: resolveParagraphOutlineLevel(
-      cascaded ? cascaded.paragraphProperties : propertiesOf(pPr),
+      paragraphProperties,
       styleCascade,
       cascaded ? cascaded.styleId : styleIdFromProps(propertiesOf(pPr), 'pStyle')
     ),

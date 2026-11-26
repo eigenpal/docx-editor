@@ -3,7 +3,8 @@ import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { ResolvedListItem } from './list-resolve.ts';
 import { markerMeasureToken } from './list-marker-measure-key.ts';
 import { bulletMarkerStyle } from './marker-symbol-face.ts';
-import { resolveRunStyle, runStylesEqual } from './run-style.ts';
+import { listMarkerRunStyle } from './list-marker-lane.ts';
+import { runStylesEqual } from './run-style.ts';
 import {
   cascadeParagraphFormatting,
   cascadeRunProperties,
@@ -55,12 +56,12 @@ export function cellListItem(
   if (cached) return cached;
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   // The number takes the mark's formatting except its underline, as outside a table.
-  const mark = cascadeParagraphFormatting(styleCascade, pPr, cellStyle).markRunProperties.filter(
-    (property) => property.localName !== 'u'
-  );
+  const cascaded = cascadeParagraphFormatting(styleCascade, pPr, cellStyle);
+  const mark = cascaded.markRunProperties.filter((property) => property.localName !== 'u');
   const resolved = {
-    ...resolveRunStyle(
+    ...listMarkerRunStyle(
       cascadeRunProperties(mark, source.level, styleCascade),
+      cascaded.paragraphProperties,
       styleCascade.themeFonts
     ),
     smallCaps: false,

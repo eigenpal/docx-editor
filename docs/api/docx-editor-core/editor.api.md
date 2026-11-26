@@ -1558,6 +1558,7 @@ export interface ChromeExportView {
     readonly comments?: boolean;
     // (undocumented)
     readonly displayMode: ReviewDisplayMode;
+    readonly fieldDate?: Date;
     readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
     // (undocumented)
     readonly revisionMarkup: ResolvedRevisionMarkup;
@@ -2286,6 +2287,7 @@ export interface DocxEditorConfig {
     container?: HTMLElement;
     contentLockPolicy?: ContentLockPolicy;
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
@@ -2314,6 +2316,7 @@ export interface DocxEditorInstance extends Editor {
     fontMeasurement(): FontMeasurementState;
     // @internal
     getConfiguredAuthor(): string | null;
+    getFieldDate(): Date | undefined;
     getReviewAuthors(): readonly ReviewAuthorInfo[];
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
@@ -2818,6 +2821,11 @@ export function goToHeading(editor: Editor, blockId: string): boolean;
 
 // @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
+
+// @public
+export function hasEditorClipboardCopy(owner: Node | null, options?: {
+    readonly plainText?: boolean;
+}): boolean;
 
 // @internal
 export function hasOpenNestedPopup(panel: Element | null): boolean;
@@ -3843,6 +3851,7 @@ export interface PaginatedSurfaceOptions {
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
+    readonly fieldDate?: Date;
     readonly fieldResults?: FieldResultsMode;
     readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
@@ -4298,6 +4307,14 @@ export const PX_PER_INCH = 96;
 
 // @internal
 export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration): number;
+
+// @public
+export function readClipboardForPaste(owner: Node | null, options?: {
+    readonly plainText?: boolean;
+}): Promise<{
+    html: string | null;
+    text: string;
+}>;
 
 // @internal
 export function readColumnGap(style: CSSStyleDeclaration): number;
@@ -4835,10 +4852,10 @@ export interface RulerTick {
 export type RulerUnit = 'inch' | 'cm';
 
 // @public
-export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers, settings?: ChromePrintSettings): Promise<ChromeExportResult>;
+export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors' | 'getFieldDate'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers, settings?: ChromePrintSettings): Promise<ChromeExportResult>;
 
 // @public
-export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
+export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors' | 'getFieldDate'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
 
 // @internal
 export function runImageFilePaste(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>, event: ClipboardEvent, insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>, refuse: (reason: string) => void): Promise<void> | null;
@@ -5729,6 +5746,8 @@ export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     // @internal
     faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
+    // @internal
+    hasMeasurableFont?(style: ResolvedRunStyle): boolean;
     hasResolvedFont?(style: ResolvedRunStyle): boolean;
     inkBounds?(text: string, style: ResolvedRunStyle): {
         left: number;
@@ -6151,6 +6170,9 @@ export function withTabStop(stops: readonly ParagraphTabStop[], stop: ParagraphT
 
 // @public @deprecated (undocumented)
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public
+export function writeTextToClipboard(owner: Node | null, text: string): Promise<void>;
 
 // @public
 export const ZOOM_MAX = 5;

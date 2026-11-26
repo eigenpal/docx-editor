@@ -111,6 +111,22 @@ const codes = await runtime.run(async (context) => {
 | `Field.code` | Writing `'PAGE'` or `'NUMPAGES'` keeps the cached result. Code writes refuse on protected fields, unsupported instructions, and while tracking. |
 | `Field.delete()` | Removes the field. Its proxy becomes invalid. |
 
+A field whose instruction spans paragraphs is not listed in `Body.fields` or `Range.fields`, so `Field.delete()` cannot reach it. To remove it, delete a range that covers the whole field, from the start of the field through the end of its result. The delete removes the field characters, the instruction with the paragraphs inside it, and the result, then joins the paragraphs on each side. Like any untracked range delete, it also removes pending tracked changes inside the field, and it leaves an inline content control in the result with empty content. A delete that covers only part of the field fails with `NotSupported`. With change tracking on, the delete also fails with `NotSupported`, because a tracked deletion of another author's field is not supported.
+
+```ts
+await runtime.run(async (context) => {
+  const before = context.document.body.search('Dear');
+  const result = context.document.body.search('Yes');
+  before.load('items');
+  result.load('items');
+  await context.sync();
+
+  // From the end of the text before the field through the end of the field result.
+  before.items[0].getRange('End').expandTo(result.items[0].getRange('End')).delete();
+  await context.sync();
+});
+```
+
 ## Configure measured server pagination
 
 Server result updates require `CreateServerOptions.pagination`, a `ServerPaginationOptions` with a required `measurer` and optional `producer`:

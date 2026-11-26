@@ -62,6 +62,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     tabLeaderAdvancePt: 'layout-only',
     link: 'represented',
     wrapAdvanceBefore: 'layout-only',
+    borderEndTrimPt: 'layout-only',
     revisions: 'represented',
     // Simple Markup's margin bar has no Markdown; the revision itself is represented above.
     changeSites: 'explicitly-omitted',
@@ -265,6 +266,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     frameEffects: 'explicitly-omitted',
     groupPicture: 'explicitly-omitted',
     groupPictureLayers: 'explicitly-omitted',
+    groupMembersNotShown: 'explicitly-omitted',
     revisions: 'explicitly-omitted',
     bidiLevel: 'layout-only',
     bidiRunDirection: 'layout-only',
@@ -298,6 +300,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     frameEffects: 'explicitly-omitted',
     groupPicture: 'explicitly-omitted',
     groupPictureLayers: 'explicitly-omitted',
+    groupMembersNotShown: 'explicitly-omitted',
     revisions: 'explicitly-omitted',
     bidiLevel: 'layout-only',
     bidiRunDirection: 'layout-only',

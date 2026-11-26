@@ -161,8 +161,8 @@ export function validateDeleteBlock(part: OoxmlPart, blockId: string): TreeOpRej
     // survivor to carry it to, and dropping it merges the section into the one that
     // follows — taking that section's page size, orientation and headers over every page.
     if (namedChild(paragraphPropertiesNodeOf(block), 'sectPr')) return 'carries-section-mark';
-    // A cell must end with a paragraph (17.4.65); one with none is markup Word rejects and
-    // a cell the caret can never enter.
+    // A cell must end with a paragraph (17.4.65); one with none is invalid markup and a cell
+    // the caret can never enter.
     if (
       parent.kind === 'tableCell' &&
       remainingChildrenOfKind(parent, 'paragraph', blockId) === 0

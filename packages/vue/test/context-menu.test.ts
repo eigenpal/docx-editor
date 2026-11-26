@@ -193,6 +193,8 @@ describe('DocxEditorContextMenu', () => {
   });
 
   test('a refused read disables Paste with the reason on the next open', async () => {
+    // A new window focus period: an earlier file's copy is not the clipboard content.
+    window.dispatchEvent(new Event('blur'));
     Object.defineProperty(globalThis.navigator, 'clipboard', {
       value: { readText: () => Promise.reject(new Error('Read permission denied.')) },
       configurable: true,

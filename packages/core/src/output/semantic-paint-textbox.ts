@@ -13,6 +13,7 @@ import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
 import { applyAccessibility, positionedBox } from './semantic-paint-drawing-box.ts';
 import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
 import { vectorShapeInkClip } from '../layout/vector-shape-ink.ts';
+import { automaticTextCss } from './semantic-paint-automatic-text.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const n = (value: number) => String(Math.round(value * 1000) / 1000);
@@ -234,6 +235,15 @@ export function paintTextboxStory(
   // line that holds an inline box, which carries its paragraph mark's face.
   content.style.fontWeight = 'normal';
   content.style.fontStyle = 'normal';
+  // Automatic text (17.3.2.6 color, CT_Color) follows the box's own fill (20.1.8.54 solidFill),
+  // not shading around the box: white on a dark fill, black on a light fill or none. A box
+  // whose shape paints as vector components has no story fill: its fill component's colour
+  // stands in, the mean of the stops for a gradient (20.1.8.33 gradFill).
+  const chromeFill = story.chromeByVector
+    ? drawing.vectorShape?.components.find((component) => !component.shadowOnly)?.fillHex
+    : null;
+  const automaticText = automaticTextCss(story.fillHex ?? chromeFill);
+  content.style.color = automaticText;
   const turn = story.contentRotation;
   if (turn) {
     const originX = (turn.pivot.x - story.contentOffset.x) * scale;
@@ -242,7 +252,7 @@ export function paintTextboxStory(
     content.style.transform = `rotate(${turn.degrees}deg)`;
   }
   for (const fragment of story.fragments) {
-    content.append(ctx.paintStoryFragment!(document, fragment));
+    content.append(ctx.paintStoryFragment!(document, fragment, { automaticText }));
   }
   // Keep story bindings inert until the surface enters this textbox for editing.
   for (const bound of content.querySelectorAll<HTMLElement>('[data-paragraph-id]')) {

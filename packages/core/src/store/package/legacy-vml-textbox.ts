@@ -359,3 +359,19 @@ export function legacyTextboxStory(
     ...(shadow && !geometry.invisible ? { shadow } : {}),
   });
 }
+
+/**
+ * The room the outline of an inline VML text box takes on its line, past its box.
+ *
+ * ECMA-376 does not define this room (`v:stroke`, `strokeweight`; Part 4, 19.1.2.21). The
+ * editor reserves it in whole points: the weight rounds to a point count, the left and top
+ * sides take the smaller half and the right and bottom sides take the rest. A 1pt outline reserves a point at the right and
+ * the bottom only; a 6pt outline reserves 3pt on each side.
+ */
+export function legacyInlineOutlineRoom(
+  story: Pick<TextboxStoryProjection, 'strokeHex' | 'strokeWidthEmu'> | null
+): Readonly<{ top: number; right: number; bottom: number; left: number }> {
+  const points = story && story.strokeHex !== null ? Math.round(story.strokeWidthEmu / 12_700) : 0;
+  const [near, far] = [Math.floor(points / 2) * 12_700, Math.ceil(points / 2) * 12_700];
+  return Object.freeze({ top: near, right: far, bottom: far, left: near });
+}

@@ -51,6 +51,7 @@ import { MIN_CELL_BOX_PT, sumCols, type TableFlowDeps } from './semantic-table-l
 import type { ParagraphLayoutInputs } from './style-cascade.ts';
 import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import { cellFlowBox } from './table-cell-text-direction.ts';
+import { loneRestartFloorsRow } from './table-unsized-row-floor.ts';
 import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
 import { authoredRowMinimumFloorPt } from './table-row-minimum-insets.ts';
 import { shiftBlocks } from './table-fragment-finalize.ts';
@@ -866,6 +867,8 @@ export function moveRowToTop(
     return noteShiftedRowRefusal('row');
   // An exact row clips to its authored box, a branch this does not repeat.
   if (row.height.rule === 'exact') return noteShiftedRowRefusal('height');
+  // A lone merge restart can floor its row above the content (`unsizedRowFloorPt`).
+  if (loneRestartFloorsRow(row)) return noteShiftedRowRefusal('floor');
   const geometry = columnGeometryOf(cols);
   const context: MoveContext = {
     deps,
@@ -910,7 +913,7 @@ export function moveRowToTop(
   rowBottom = Math.min(Number.POSITIVE_INFINITY, Math.max(rowBottom, top));
   for (const needed of bottoms)
     if (needed > rowBottom && needed <= Number.POSITIVE_INFINITY + 0.001) rowBottom = needed;
-  // Placement gives a row nothing raised its line-height fallback; this does not repeat it.
+  // Placement gives a row nothing raised its floor (`unsizedRowFloorPt`); this does not repeat it.
   if (rowBottom <= top + 0.001) return noteShiftedRowRefusal('floor');
   rowBottom = Math.min(Number.POSITIVE_INFINITY, rowBottom);
   const authoredFloorPt =

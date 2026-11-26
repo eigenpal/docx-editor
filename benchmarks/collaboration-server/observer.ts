@@ -36,6 +36,11 @@ export async function joinObserver(
     awareness,
     token: JSON.stringify({ token, collaborationVersion: COLLABORATION_FORMAT_VERSION }),
   });
+  // The server refuses a sync that no room generation precedes (`checkCollaborationRoomGeneration`).
+  // The editor's provider names it on `open`; a reader holds no room yet, so it names none.
+  provider.on('open', () =>
+    provider.sendStateless(JSON.stringify({ type: 'docx-room-generation', generation: null }))
+  );
   provider.on('status', (event: { status: string }) => {
     // `connecting` follows every drop, so counting it too would double each disconnect.
     if (event.status === 'connecting') return;

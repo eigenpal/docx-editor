@@ -66,3 +66,11 @@ export function embeddedFontSources(
 ): EmbeddedFontSources {
   return mapEmbeddedFontSources(embedded, budgets);
 }
+
+/** A supplied configuration that contributed no usable source, for the host's font callback. */
+export function noUsableFontSourcesError(): EditorFontError {
+  return new EditorFontError(
+    'missing',
+    'the supplied font configuration contains no usable sources; the fixed measurer stays in effect'
+  );
+}

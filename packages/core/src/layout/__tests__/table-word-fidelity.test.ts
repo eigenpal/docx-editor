@@ -3,9 +3,9 @@
 // `w:val="nil"` against an inherited interior rule, border conflict weight, and the two
 // unbounded file-derived numbers in table geometry.
 //
-// Clause numbers are cited where the behaviour is spec-driven. Border conflict resolution
-// is Word-matching only: ECMA-376 §17.4.38 (`w:tblBorders`) and §17.4.66 (`w:tcBorders`)
-// describe the elements and say nothing about which of two adjacent cells wins.
+// Clause numbers are cited where the behaviour is spec-driven. ECMA-376 does not define border
+// conflict resolution: §17.4.38 (`w:tblBorders`) and §17.4.66 (`w:tcBorders`) describe the
+// elements and say nothing about which of two adjacent cells wins.
 
 import { describe, expect, test } from 'bun:test';
 import {

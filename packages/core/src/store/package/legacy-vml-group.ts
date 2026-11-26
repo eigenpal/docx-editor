@@ -163,8 +163,10 @@ function projectMember(
         cx: Math.round(box.width * EMU_PER_POINT),
         cy: Math.round(box.height * EMU_PER_POINT),
       }),
-      // The member's shape paints as a vector component; its story paints text only.
-      story: Object.freeze({ ...story, fillHex: null, strokeHex: null }),
+      // The member's shape paints as a vector component; its story paints text only. The
+      // outline stays on the story: its inner half insets the text, as in a top-level shape.
+      // The fill stays too: automatic text takes its colour from it.
+      story: Object.freeze({ ...story }),
       rotationDegrees: 0,
     })
   );

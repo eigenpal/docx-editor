@@ -213,3 +213,41 @@ const LINE_BORDER_VALS = new Set([
 export function isLineBorderVal(val: string): boolean {
   return LINE_BORDER_VALS.has(val);
 }
+
+/** Whether two character border edges draw the same border, so their runs share one outline. */
+export function sameBorderEdge(
+  a: {
+    readonly val: string;
+    readonly color: string | null;
+    readonly widthPt: number;
+    readonly spacePt: number;
+    readonly shadow?: true;
+  },
+  b: typeof a
+): boolean {
+  return (
+    a.val === b.val &&
+    a.color === b.color &&
+    a.widthPt === b.widthPt &&
+    a.spacePt === b.spacePt &&
+    a.shadow === b.shadow
+  );
+}
+
+// Text the paragraph does not show, such as hidden text, leaves a hole in the model offsets
+// of the placed text. A character border (`w:bdr`, ECMA-376 Part 1, 17.3.2.4) goes on across
+// it: the text after the hole carries the offset where the hole starts.
+const joinsFrom = Symbol('runBorderJoin');
+type Joined = { readonly [joinsFrom]?: { readonly from: number; readonly start: number } };
+type Ranged = { readonly range: { readonly start: number } };
+
+/** `value` as text whose character border continues from the model offset `from`. */
+export function withRunBorderJoin<T extends Ranged>(value: T, from: number): T {
+  return { ...value, [joinsFrom]: { from, start: value.range.start } };
+}
+
+/** The model offset the character border around this text continues from. */
+export function runBorderStart(value: Ranged): number {
+  const join = (value as Joined)[joinsFrom];
+  return join?.start === value.range.start ? join.from : value.range.start;
+}

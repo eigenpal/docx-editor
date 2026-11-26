@@ -13,7 +13,8 @@ import {
   schemaFlagIsUnset,
   WPG_NAMESPACE_URI,
 } from './drawing-group-frame.ts';
-import { transformComponent } from './drawing-group-transform.ts';
+import { groupMemberPlacement, transformComponent } from './drawing-group-transform.ts';
+import { shapeTransformElement } from './drawing-shape-transform.ts';
 import { readLineProperties } from './drawing-line-properties.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { directFill } from './drawing-shape-color.ts';
@@ -21,14 +22,17 @@ import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
 import {
   childTransform,
   projectShapeComponents,
-  projectWspTextboxStory,
   type ShapeSchemeColorResolver,
   type ShapeStyleMatrixResolver,
   type VectorShapeComponent,
   type VectorShapeProjection,
 } from './drawing-shape-projection.ts';
 import { findDirectChild, parseEmu, readSize } from './drawing-shape-readers.ts';
-import { memberTextRotation, type GroupTextboxProjection } from './group-textbox-projection.ts';
+import {
+  memberTextRotation,
+  projectMemberStory,
+  type GroupTextboxProjection,
+} from './group-textbox-projection.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 
@@ -148,9 +152,18 @@ function projectMember(
 ): boolean {
   const shape = childTransform(member);
   if (!shape) return false;
+  // The member box maps into the canvas first, and its geometry is evaluated at that size, as
+  // for a member of a group: a nested group that scales its axes unevenly never skews it.
+  const place = groupMemberPlacement(
+    shape,
+    { x: 0, y: 0 },
+    placement.scaleX,
+    placement.scaleY,
+    shapeRotationDegrees(shapeTransformElement(member)) ?? 0
+  );
   const components = projectShapeComponents(
     member,
-    shape.extent,
+    place.extent,
     pointBudget,
     context.resolveSchemeColor,
     context.resolveStyleMatrixReference,
@@ -158,36 +171,38 @@ function projectMember(
     groupFill
   );
   if (components === null) return false;
-  const origin = {
-    x: placement.x + shape.offset.x * placement.scaleX,
-    y: placement.y + shape.offset.y * placement.scaleY,
-  };
+  const origin = { x: placement.x + place.offset.x, y: placement.y + place.offset.y };
   for (const component of components) {
-    out.components.push(transformComponent(component, origin, placement.scaleX, placement.scaleY));
+    out.components.push(transformComponent(component, origin, place.scaleX, place.scaleY));
   }
   const rotationDegrees = memberTextRotation(member);
   if (rotationDegrees === null) return true;
-  const cx = Math.round(shape.extent.cx * placement.scaleX);
-  const cy = Math.round(shape.extent.cy * placement.scaleY);
-  const story = projectWspTextboxStory(
+  const cx = Math.round(place.extent.cx * place.scaleX);
+  const cy = Math.round(place.extent.cy * place.scaleY);
+  const placed = projectMemberStory(
     member,
     { cx, cy },
+    place,
+    rotationDegrees,
     context.resolveSchemeColor,
     context.resolveStyleMatrixReference
   );
-  if (!story) return true;
+  if (!placed) return true;
+  // Vertical text lays out in the member box with its sides swapped about the same centre.
   out.texts.push(
     Object.freeze({
       memberNodeId: member.id,
-      frameEmu: Object.freeze({ x: Math.round(origin.x), y: Math.round(origin.y), cx, cy }),
-      // The member's shape paints as a vector component; its story paints text only.
-      story: Object.freeze({
-        ...story,
-        insetsEmu: Object.freeze({ ...story.insetsEmu }),
-        fillHex: null,
-        strokeHex: null,
+      frameEmu: Object.freeze({
+        x: Math.round(origin.x + (cx - placed.cx) / 2),
+        y: Math.round(origin.y + (cy - placed.cy) / 2),
+        cx: placed.cx,
+        cy: placed.cy,
       }),
-      rotationDegrees,
+      // The member's shape paints as a vector component; its story paints text only. The
+      // outline stays on the story: its inner half insets the text, as in a top-level shape.
+      // The fill stays too: automatic text takes its colour from it.
+      story: Object.freeze({ ...placed.story }),
+      rotationDegrees: placed.rotationDegrees,
     })
   );
   return true;

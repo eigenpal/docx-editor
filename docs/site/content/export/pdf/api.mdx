@@ -49,6 +49,7 @@ try {
 | `comments` | `true` | Native annotations. In `'all-markup'`, pages also shrink beside a balloon pane. |
 | `revisionMarkup` | Omitted | Viewer markup preferences. Set at session creation. |
 | `revisionAuthorSlots` | Omitted | Author names mapped to nonnegative safe integer color slots. Omit for document order. |
+| `fieldDate` | Omitted | A valid `Date`. `DATE` and `TIME` fields with a `\@` picture show it. Omit to show saved results. Set at session creation. See [Show the current date](/docs/2.x/guides/fields#show-the-current-date). |
 | `useSystemFonts` | `true` | Searches installed fonts. Disable for consistent selection across hosts. |
 | `fonts` | None | Sources before installed and packaged fonts. |
 | `fallbackFonts` | None | Sources after packaged substitutes. |
@@ -103,7 +104,7 @@ Each `PdfDiagnostic` has `code`, `message`, and `severity`. Page diagnostics add
 | `incomplete-font` | `information` | Incomplete coverage or substituted variants in a family. `fontPolicy: 'strict'` rejects incomplete coverage and required source failures. Substituted variants with complete coverage pass. |
 | `font-substitution` | `unsupported` | A generic substitute that can change pagination. |
 | `missing-glyph` | `unsupported` | No source covers a character. |
-| `drawing` | `unsupported` | A drawing cannot render and is left out, for example `Unsupported drawing: chart`. A shape group left out because its picture cannot embed reports `information`. |
+| `drawing` | `unsupported` | A drawing cannot render and is left out, for example `Unsupported drawing: chart`. A shape group that renders without some members reports `Shape group paints without N of its members`. A group picture left out because its format cannot embed reports `information`. |
 | `metafile-limit`, `metafile-record` | `unsupported` | An EMF or WMF picture stopped early at a resource bound or a malformed record. |
 | `metafile-image`, `metafile-text` | `unsupported` | An image or text inside an EMF or WMF picture failed and is left out. |
 | `metafile-font` | `information` | An EMF or WMF picture names an unused font and uses the default font. |
@@ -133,7 +134,7 @@ A strict font refusal throws `ExportResourceError` with `code: 'layoutFailed'`. 
 
 | Function | Behavior |
 | --- | --- |
-| `openDocumentForExport(source, options?)` | Takes `OpenPdfDocumentForExportOptions`, including `revisionMarkup` and `revisionAuthorSlots`. Returns `OpenPdfDocumentForExportResult`: `session` (`PdfExportSession`), or `reason` and `detail` on refusal. |
+| `openDocumentForExport(source, options?)` | Takes `OpenPdfDocumentForExportOptions`, including `revisionMarkup`, `revisionAuthorSlots`, and `fieldDate`. Returns `OpenPdfDocumentForExportResult`: `session` (`PdfExportSession`), or `reason` and `detail` on refusal. |
 | `exportPdfFrom(session, options?)` | Takes `PdfProjectionOptions`: `comments`, `fidelityPolicy`, `displayMode`, `timeoutMs`, `maxPages`, `maxOutputBytes`, and `signal`. `timings.openMs` is `0`. |
 | `session.dispose()` | Call in `finally`. Later exports throw `ExportResourceError` with `disposed`. |
 

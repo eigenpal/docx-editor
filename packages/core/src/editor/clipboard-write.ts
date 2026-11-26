@@ -9,6 +9,9 @@
 // and Safari, which is why `paste` takes its text as an argument instead — see the command
 // docs in `contracts/editor.ts`.
 
+import { forgetEditorCopy, rememberEditorCopy } from './clipboard-editor-copy.ts';
+import { hostWindowOf } from './host-realm.ts';
+
 /**
  * Put `text` on the system clipboard, if this environment has one.
  *
@@ -22,17 +25,31 @@
  *
  * `view` is the window the editor is mounted in. Its clipboard is the one with focus when the
  * editor lives in a pop-out window; the opener's rejects the write there.
+ *
+ * The window remembers the text as the editor's last copy only once the write lands, for a
+ * menu Paste that the browser will not let read the clipboard (`clipboard-editor-copy.ts`).
+ * A refused write forgets the previous copy, because the clipboard content is then unknown.
  */
 export function writeClipboardText(text: string, view?: Window): void {
-  if (text === '') return;
+  if (text === '') {
+    forgetEditorCopy(view);
+    return;
+  }
   const clipboard = (view ?? globalThis).navigator?.clipboard;
-  if (!clipboard?.writeText) return;
+  if (!clipboard?.writeText) {
+    forgetEditorCopy(view);
+    return;
+  }
   try {
     // `void` the promise explicitly: a rejected clipboard write must not surface as an
     // unhandled rejection in the host's console for something the user cannot act on.
-    void clipboard.writeText(text).catch(() => {});
+    void clipboard.writeText(text).then(
+      () => rememberEditorCopy(view, { text, html: null }),
+      () => forgetEditorCopy(view)
+    );
   } catch {
     // Some environments throw synchronously rather than rejecting. Same answer.
+    forgetEditorCopy(view);
   }
 }
 
@@ -43,6 +60,7 @@ export function writeClipboardText(text: string, view?: Window): void {
  * payloads resolvable inside the user gesture. Where `ClipboardItem` or `write` is missing
  * (Firefox behind a flag, headless hosts), the plain text still lands via `writeText`;
  * the richer flavour is an enhancement, never the difference between copy working and not.
+ * The window remembers what landed, as `writeClipboardText` does.
  */
 export function writeClipboardRich(text: string, html: string | null, view?: Window): void {
   if (text === '' && (html === null || html === '')) return;
@@ -52,7 +70,10 @@ export function writeClipboardRich(text: string, html: string | null, view?: Win
     Blob?: typeof Blob;
   };
   const clipboard = realm.navigator?.clipboard;
-  if (!clipboard) return;
+  if (!clipboard) {
+    forgetEditorCopy(view);
+    return;
+  }
   const ClipboardItemCtor = realm.ClipboardItem;
   const BlobCtor = realm.Blob;
   if (html && clipboard.write && ClipboardItemCtor && BlobCtor) {
@@ -61,13 +82,37 @@ export function writeClipboardRich(text: string, html: string | null, view?: Win
         'text/plain': new BlobCtor([text], { type: 'text/plain' }),
         'text/html': new BlobCtor([html], { type: 'text/html' }),
       });
-      void clipboard.write([item]).catch(() => {
-        writeClipboardText(text, view);
-      });
+      void clipboard.write([item]).then(
+        () => rememberEditorCopy(view, { text, html }),
+        () => writeClipboardText(text, view)
+      );
       return;
     } catch {
       // Fall through to the plain write below.
     }
   }
   writeClipboardText(text, view);
+}
+
+/**
+ * Write `text` to the clipboard of the editor's window, for chrome such as a Copy link button.
+ *
+ * The editor remembers the text once the write lands, so a later menu Paste whose clipboard
+ * read the browser refuses pastes this text, as the keyboard paste does. Host chrome that
+ * writes the clipboard while the editor is open should use this function too.
+ *
+ * @param owner - A node in the editor's window, such as the viewport element.
+ * @param text - The text to write.
+ * @throws The browser's error when it refuses the write.
+ * @public
+ */
+export async function writeTextToClipboard(owner: Node | null, text: string): Promise<void> {
+  const view = hostWindowOf(owner);
+  try {
+    await view.navigator.clipboard.writeText(text);
+  } catch (error) {
+    forgetEditorCopy(view);
+    throw error;
+  }
+  rememberEditorCopy(view, { text, html: null });
 }

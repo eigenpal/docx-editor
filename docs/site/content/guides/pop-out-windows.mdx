@@ -158,7 +158,7 @@ The hooks come from the adapter packages. The other helpers come from `@docx-edi
 - Style copying skips rules inserted into a `<link>` stylesheet and cross-origin stylesheets.
 - Stop the `copyEditorStyles` observer when the destination closes.
 - `load()` on a detached editor replaces the kept document.
-- The context menu **Paste** command needs the clipboard-read permission. Keyboard paste does not.
+- The context menu **Paste** command needs the clipboard-read permission. Keyboard paste does not. Without the permission, **Paste** inserts only the editor's last copy or cut from the same window.
 
 ## See also
 

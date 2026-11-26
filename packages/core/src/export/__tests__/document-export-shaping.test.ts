@@ -90,6 +90,7 @@ function fontCatalogDocx(): Uint8Array {
         '<w:p><w:r><w:drawing><w:txbxContent><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Box Text"/></w:rPr><w:t>Boxed</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:p>' +
         '<w:p><w:pPr><w:pStyle w:val="SymbolStyle"/></w:pPr><w:fldSimple w:instr=" SYMBOL 183 "/></w:p>' +
         '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:rPr><w:rFonts w:ascii="Field Face"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> = </w:instrText></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:rPr><w:rFonts w:ascii="Formula Face"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
         '<w:p><w:pPr><w:pStyle w:val="AutoStyle"/></w:pPr><w:fldSimple w:instr=" AUTONUM "/></w:p>' +
         '<w:p><w:r><w:rPr><w:rFonts w:ascii="Autonum Marker"/></w:rPr><w:fldChar w:fldCharType="begin"/><w:instrText> AUTONUM </w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
         '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> MACROBUTTON SafeMacro Display </w:instrText></w:r><w:r><w:rPr><w:rFonts w:ascii="Button Marker"/></w:rPr><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
@@ -221,6 +222,7 @@ test('the public export opener requests run, style, story, symbol, and equation 
     'CJK Face',
     'Box Text',
     'Field Face',
+    'Formula Face',
     'Autonum Marker',
     'Button Marker',
     'Soft Cache Marker',
@@ -748,6 +750,48 @@ test('body textbox PAGE fields stay deferred and cannot crowd active fonts out',
   expect(request?.families).toContain('Body Face');
   expect(request?.families).toContain('Textbox Symbol Marker');
   expect(request?.families.some((family) => family.startsWith('Textbox Page '))).toBe(false);
+  if (opened.ok) opened.session.dispose();
+});
+
+test('a page field or formula in another field result requests the face that paints it', async () => {
+  const begin = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
+  const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const instr = (value: string) =>
+    `<w:r><w:instrText xml:space="preserve">${value}</w:instrText></w:r>`;
+  const separate = (face: string) =>
+    `<w:r><w:rPr><w:rFonts w:ascii="${face}"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r>`;
+  const empty = (instruction: string) => begin + instr(instruction) + separate('Inner Face') + end;
+  const formula =
+    begin + instr(' = ') + empty(' PAGE ') + instr(' + 1 ') + separate('Inner Face') + end;
+  const outer = (face: string, result: string) =>
+    `<w:p>${begin}${instr(' QUOTE "x" ')}${separate(face)}${result}${end}</w:p>`;
+  const bytes = minimalDocx(
+    '<w:p><w:r><w:rPr><w:rFonts w:ascii="Body Face"/></w:rPr><w:t>body</w:t></w:r></w:p>' +
+      outer('Outer Page Face', empty(' NUMPAGES ')) +
+      outer('Outer Formula Face', formula) +
+      outer('Outer Inert Face', empty(' SEQ Figure ')) +
+      // A page field inside a nested instruction feeds that instruction and is not painted.
+      outer(
+        'Outer Instruction Face',
+        begin +
+          instr(' IF ') +
+          empty(' PAGE ') +
+          instr(' = 1 "a" "b" ') +
+          separate('Inner Face') +
+          end
+      )
+  );
+  let request: FontResolutionRequest | undefined;
+  const resolver = defineFontResolver((next: FontResolutionRequest) => {
+    request = next;
+    return fontFragment();
+  });
+  const opened = await openFontBackedDocumentForExport(bytes, { fonts: resolver });
+  expect(opened.ok).toBe(true);
+  expect(request?.families).toContain('Outer Page Face');
+  expect(request?.families).toContain('Outer Formula Face');
+  expect(request?.families).not.toContain('Outer Inert Face');
+  expect(request?.families).not.toContain('Outer Instruction Face');
   if (opened.ok) opened.session.dispose();
 });
 

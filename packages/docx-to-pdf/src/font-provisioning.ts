@@ -6,18 +6,30 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { create as openFont } from 'fontkit';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL, URL as NodeURL } from 'node:url';
+import { URL as NodeURL } from 'node:url';
 import type { FontSource, FontSourceSubstitution } from '@docx-editor.dev/core';
 import { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontRequest } from '@docx-editor.dev/core/export';
+import {
+  CJK_FALLBACK_FAMILY as CJK_FAMILY,
+  CJK_SUBSTITUTED_FAMILIES,
+  FALLBACK_FACE_FAMILIES,
+  GLYPH_FALLBACK_FACES,
+  LOCALIZED_FONT_FAMILIES,
+  canonicalFontFamily,
+  genericStandInFamily,
+  isGenericStandIn,
+  namedFallbackFontResolver,
+  namedSubstituteFamily,
+  nearestFaceOrder,
+  standInFontResolver,
+  substitutionsToFallback,
+  type FallbackFaceReader,
+} from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
 import { buildSystemFontIndex, indexedFace, type SystemFontIndex } from './system-font-index.ts';
 import { derivedOnce, fontFiles } from './font-file-cache.ts';
 
-const assetRoot = new NodeURL(
-  '../assets/',
-  typeof __dirname === 'string' ? pathToFileURL(__dirname + '/').href : import.meta.url
-);
 type FaceStyle = 'normal' | 'italic';
 type PackagedFace = readonly [
   family: string,
@@ -39,8 +51,6 @@ const latinSubstitute = (family: string, prefix: string): readonly PackagedFace[
     weight,
     style,
   ]);
-/** The CJK fallback face. Its file comes from the optional `@docx-editor.dev/fonts-cjk`. */
-const CJK_FAMILY = 'Noto Sans CJK JP';
 /**
  * Every face this resolver can read: the symbol, mathematics, Arabic and emoji faces this
  * package carries, and the metric-compatible Latin substitutes from `@docx-editor.dev/fonts`,
@@ -48,11 +58,16 @@ const CJK_FAMILY = 'Noto Sans CJK JP';
  * its file is located on demand ({@link CjkFaceLocator}).
  */
 const supplemental: readonly PackagedFace[] = [
-  ['Noto Sans Symbols 2', new NodeURL('NotoSansSymbols2-Regular.ttf', assetRoot), 400, 'normal'],
-  ['Noto Sans Math', new NodeURL('NotoSansMath-Regular.ttf', assetRoot), 400, 'normal'],
-  ['Noto Sans Arabic', new NodeURL('NotoSansArabic-Regular.ttf', assetRoot), 400, 'normal'],
-  ['Twemoji Mozilla', new NodeURL('TwemojiMozilla.ttf', assetRoot), 400, 'normal'],
-  ['Noto Emoji', new NodeURL('NotoEmoji-Regular.ttf', assetRoot), 400, 'normal'],
+  [
+    'Noto Sans Symbols 2',
+    new NodeURL('NotoSansSymbols2-Regular.ttf', FONT_ASSET_ROOT),
+    400,
+    'normal',
+  ],
+  ['Noto Sans Math', new NodeURL('NotoSansMath-Regular.ttf', FONT_ASSET_ROOT), 400, 'normal'],
+  ['Noto Sans Arabic', new NodeURL('NotoSansArabic-Regular.ttf', FONT_ASSET_ROOT), 400, 'normal'],
+  ['Twemoji Mozilla', new NodeURL('TwemojiMozilla.ttf', FONT_ASSET_ROOT), 400, 'normal'],
+  ['Noto Emoji', new NodeURL('NotoEmoji-Regular.ttf', FONT_ASSET_ROOT), 400, 'normal'],
   ...latinSubstitute('Liberation Sans', 'LiberationSans'),
   ...latinSubstitute('Liberation Serif', 'LiberationSerif'),
   ...latinSubstitute('Liberation Mono', 'LiberationMono'),
@@ -60,248 +75,48 @@ const supplemental: readonly PackagedFace[] = [
   ...latinSubstitute('Caladea', 'Caladea'),
 ];
 /**
- * The fallback faces offered to every export, small faces first.
+ * The fallback faces offered to every export: the shared glyph fallback order of
+ * `@docx-editor.dev/core/layout`, so the editor and the PDF draw a missing glyph in one face.
  *
  * Offering a face costs nothing until a family the document uses needs it: the resolver
  * below reads a packaged file only for a family it is asked about.
  */
-export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = [
-  'Segoe UI Symbol',
-  'Noto Sans Symbols 2',
-  'Noto Sans Math',
-  'Noto Sans Arabic',
-  // Hebrew, and Latin, Greek or Cyrillic letters the faces above lack. A missing glyph falls
-  // back to Times New Roman in the reference renderer. A host without it resolves the packaged
-  // Liberation Serif, whose Latin letters share its widths but whose Hebrew runs about 12%
-  // wider, so Hebrew in that face can wrap earlier.
-  'Times New Roman',
-  // Prefer available Word CJK faces; Noto Sans CJK JP from `@docx-editor.dev/fonts-cjk` is
-  // the portable fallback when that package is installed.
-  'SimSun',
-  'Batang',
-  CJK_FAMILY,
-  // Color first: a COLR face paints its layers in the writer. The monochrome face stays
-  // behind it for the few symbols the color set leaves out.
-  'Twemoji Mozilla',
-  'Noto Emoji',
-].map((family) => ({ family, weight: 400, style: 'normal' }));
+export const PDF_GLYPH_FALLBACKS: readonly FontRequest[] = GLYPH_FALLBACK_FACES;
 const face = (
   family: string,
   weight = 400,
   style: 'normal' | 'italic' = 'normal'
 ): FontRequest => ({ family, weight, style });
 
-/**
- * East Asian families the packaged CJK face stands in for. `@docx-editor.dev/fonts-cjk` keeps
- * the same list for the editor; a test holds the two equal.
- */
-export const CJK_SUBSTITUTED_FAMILIES: readonly string[] = [
-  'MS Gothic',
-  'MS PGothic',
-  'MS UI Gothic',
-  'MS Mincho',
-  'MS PMincho',
-  'Meiryo',
-  'Yu Gothic',
-  'Yu Mincho',
-  'SimSun',
-  'NSimSun',
-  'SimHei',
-  'FangSong',
-  'KaiTi',
-  'DengXian',
-  'Microsoft YaHei',
-  'Microsoft JhengHei',
-  'MingLiU',
-  'PMingLiU',
-  'Batang',
-  'Gulim',
-  'Dotum',
-  'Malgun Gothic',
-];
+export { CJK_SUBSTITUTED_FAMILIES };
 
 /**
- * Word families whose text a packaged face can carry when the family itself is absent.
- *
- * Helvetica is the one metric match here (Arial was drawn to its widths, and Liberation Sans
- * to Arial's). The CJK entries are coverage, not metrics: a document set in SimSun or
- * MS Mincho renders in Noto Sans CJK rather than refusing every ideograph, the same fall
- * back Word shows when the face is missing.
+ * The localized names of the East Asian faces, in the language of the application that saved
+ * the document. Each names the same font as its English name; a shared table.
  */
-const substitutes: Record<string, string> = {
-  'Cambria Math': 'Noto Sans Math',
-  Georgia: 'Liberation Serif',
-  Verdana: 'Liberation Sans',
-  Helvetica: 'Liberation Sans',
-  ...Object.fromEntries(CJK_SUBSTITUTED_FAMILIES.map((family) => [family, CJK_FAMILY])),
-};
-/**
- * The localized names Word writes for its East Asian faces, in the language of the Word
- * that saved the document. Word treats each as the same font; so does this resolver.
- */
-export const localizedFamilies: Record<string, string> = {
-  宋体: 'SimSun',
-  新宋体: 'NSimSun',
-  黑体: 'SimHei',
-  仿宋: 'FangSong',
-  楷体: 'KaiTi',
-  等线: 'DengXian',
-  微软雅黑: 'Microsoft YaHei',
-  微軟正黑體: 'Microsoft JhengHei',
-  新細明體: 'PMingLiU',
-  細明體: 'MingLiU',
-  'ＭＳ 明朝': 'MS Mincho',
-  'ＭＳ Ｐ明朝': 'MS PMincho',
-  'ＭＳ ゴシック': 'MS Gothic',
-  'ＭＳ Ｐゴシック': 'MS PGothic',
-  'ＭＳ ＵＩ Ｇｏｔｈｉｃ': 'MS UI Gothic',
-  メイリオ: 'Meiryo',
-  游ゴシック: 'Yu Gothic',
-  游明朝: 'Yu Mincho',
-  '맑은 고딕': 'Malgun Gothic',
-  바탕: 'Batang',
-  굴림: 'Gulim',
-  돋움: 'Dotum',
-};
-/**
- * The family a document names, read as Word reads it.
- *
- * A converter that writes face names for family names produces `Times New Roman Bold`, and a
- * Chinese Word writes `宋体` for SimSun. Both name a face this resolver knows; neither is a
- * key in its tables. The style words fold into the request's weight and style, and a
- * localized name resolves to the English one the tables use. The face is still registered
- * under the name the document wrote, which is the name layout asks for.
- */
-export function canonicalFamily(family: string): {
-  readonly family: string;
-  readonly bold: boolean;
-  readonly italic: boolean;
-} {
-  // No regular expression: the name is file-derived and unbounded, and a lazy prefix against
-  // a greedy run of spaces is quadratic in the spaces. A real face name is short; anything
-  // longer than Word's 31-character family limit by a wide margin is left as it is.
-  let base = family;
-  let bold = false;
-  let italic = false;
-  if (family.length <= 128) {
-    const lower = family.toLowerCase();
-    for (const [suffix, flags] of [
-      [' bold italic', [true, true]],
-      [' bolditalic', [true, true]],
-      [' bold', [true, false]],
-      [' italic', [false, true]],
-    ] as const) {
-      if (!lower.endsWith(suffix) || lower.length === suffix.length) continue;
-      base = family.slice(0, family.length - suffix.length).trimEnd();
-      [bold, italic] = flags;
-      break;
-    }
-  }
-  return {
-    family: Object.hasOwn(localizedFamilies, base) ? localizedFamilies[base]! : base,
-    bold,
-    italic,
-  };
-}
-/**
- * The families `@docx-editor.dev/fonts` substitutes when the document names them exactly.
- * Named through a style word or a localized name, they reach this resolver instead.
- */
-const packagedSubstitutes: Record<string, string> = {
-  Calibri: 'Carlito',
-  Cambria: 'Caladea',
-  'Times New Roman': 'Liberation Serif',
-  Arial: 'Liberation Sans',
-  'Courier New': 'Liberation Mono',
-  'Century Gothic': 'TeX Gyre Adventor',
-  'Segoe UI': 'Selawik',
-};
-const substituteFor = (family: string): string | undefined => {
-  const canonical = canonicalFamily(family).family;
-  if (Object.hasOwn(substitutes, canonical)) return substitutes[canonical];
-  if (canonical !== family && Object.hasOwn(packagedSubstitutes, canonical))
-    return packagedSubstitutes[canonical];
-  return undefined;
-};
-
-/**
- * The packaged face that stands in for a family nothing else resolved.
- *
- * Word does the same when a document names a font the machine lacks: it picks a face of the
- * same class and renders. The class is read from the name, which is all a resolver sees:
- * monospaced names to Liberation Mono, symbol names to Noto Sans Symbols 2, serif names to
- * Liberation Serif, everything else to Liberation Sans. The metrics are not the missing font's,
- * and the export says so with an information diagnostic, but the page shows the text.
- *
- * A symbol name must not get a text face: `Segoe UI Symbol` heads the glyph fallback list, and
- * a Liberation Sans stand-in there drew every Hebrew letter an Arabic face lacks in Liberation
- * Sans, before the Times New Roman entry was reached.
- */
-export function genericSubstituteFor(family: string): string {
-  const name = canonicalFamily(family).family;
-  if (/mono|courier|consol|menlo|typewriter|\bcode\b|fixed/i.test(name)) return 'Liberation Mono';
-  if (/symbol/i.test(name)) return 'Noto Sans Symbols 2';
-  if (/sans/i.test(name)) return 'Liberation Sans';
-  if (
-    /serif|roman|garamond|georgia|times|book|baskerville|cambria|minion|palatino|century|didot|caslon|constantia|sagona|lora|merriweather|playfair|charter|bodoni|perpetua|rockwell|goudy|bembo|sabon|antiqua/i.test(
-      name
-    )
-  )
-    return 'Liberation Serif';
-  return 'Liberation Sans';
+export const localizedFamilies: Record<string, string> =
+  Object.fromEntries(LOCALIZED_FONT_FAMILIES);
+/** The localized names of each English family in {@link localizedFamilies}. */
+const localizedNamesOf = new Map<string, string[]>();
+for (const [localized, english] of Object.entries(localizedFamilies)) {
+  const names = localizedNamesOf.get(english);
+  if (names) names.push(localized);
+  else localizedNamesOf.set(english, [localized]);
 }
 
-/**
- * The line box of a missing family whose stand-in has another one, as em ratios of the font
- * size. Symbols that the text faces lack draw in Segoe UI Symbol, at the head of the glyph
- * fallback list: its line is 1.33 em, where Noto Sans Symbols 2, which stands in for it, is
- * 1.7 em. A missing ballot box would otherwise make its line a third taller.
- */
-const standInLineBoxes: Record<string, { readonly heightEm: number; readonly baselineEm: number }> =
-  {
-    // hhea ascender 2210 and descender 514 of a 2048-unit em, no line gap.
-    'Segoe UI Symbol': { heightEm: 2724 / 2048, baselineEm: 2210 / 2048 },
-    // hhea ascender 1765 and descender 539, no line gap: the box core's measurers record for
-    // the family in `authored-line-boxes.ts`, so export and editor break lines alike.
-    Garamond: { heightEm: 2304 / 2048, baselineEm: 1765 / 2048 },
-  };
+/** The family a document names, read through the shared rules of `@docx-editor.dev/core/layout`. */
+export const canonicalFamily = canonicalFontFamily;
+const substituteFor = namedSubstituteFamily;
 
-/**
- * The families the generic stand-in must not touch: the ones this package answers for by
- * name, and the legacy symbol-encoded faces. A Symbol or Wingdings run draws private-use
- * codepoints that only those faces carry; a text face standing in has no glyph for them,
- * where the glyph fallback path maps them to their Unicode twins in a symbol face.
- */
-const knownFamilies = new Set<string>([
-  ...supplemental.map(([family]) => family),
-  CJK_FAMILY,
-  ...Object.keys(substitutes),
-  ...Object.keys(packagedSubstitutes),
-  ...Object.values(packagedSubstitutes),
-  'Symbol',
-  'Wingdings',
-  'Wingdings 2',
-  'Wingdings 3',
-  'Webdings',
-  'MT Extra',
-]);
-/**
- * The CJK face and the Word families planned onto it. The plan holds only when that face
- * resolves, so the stand-in covers one that is still uncovered when it runs. A document can
- * name the CJK face itself, so it is here too.
- */
+/** The packaged face that stands in for a family nothing else resolved; a shared rule. */
+export const genericSubstituteFor = genericStandInFamily;
+
 /** The faces this package ships, by case-folded name: never read from a system copy. */
 const shippedFamilies = new Set<string>(
-  [
-    ...supplemental.map(([family]) => family),
-    CJK_FAMILY,
-    ...Object.values(packagedSubstitutes),
-  ].map((family) => family.toLowerCase())
+  [...FALLBACK_FACE_FAMILIES, CJK_FAMILY, 'TeX Gyre Adventor', 'Selawik'].map((family) =>
+    family.toLowerCase()
+  )
 );
-const cjkWordFamilies = new Set<string>([
-  CJK_FAMILY,
-  ...Object.keys(substitutes).filter((family) => substitutes[family] === CJK_FAMILY),
-]);
 
 /** The optional package that carries the CJK face. */
 const CJK_PACKAGE = '@docx-editor.dev/fonts-cjk';
@@ -356,36 +171,38 @@ const paintedFaces = (resolvedFaces: readonly FontRequest[] | undefined) => {
     covered.has(`${family.toLowerCase()}/${weight}/${style}`);
 };
 
+const substitutionsTo = substitutionsToFallback;
+
 /**
- * Substitutions that point every face of `family` at `target`: at the one packaged face when
- * the target is a single-face Noto family, at the matching weight and style otherwise. With
- * `painted`, a matching face that is not painted falls back to the target's regular face.
+ * Substitutions that point every face of `family` at the nearest painted face of `target`,
+ * another name of the same font, in the editor's order (`nearestFaceOrder`). A face that
+ * `target` lacks then draws as a synthesized style of that face, as it does in the editor.
  */
-const substitutionsTo = (
+const sameFontSubstitutions = (
   family: string,
   target: string,
-  painted?: (family: string, weight: number, style: FaceStyle) => boolean
-) => {
+  painted: (family: string, weight: number, style: FaceStyle) => boolean
+): FontSourceSubstitution[] => {
+  // A face name (`Meiryo Bold`) asks for its own weight and style in every face.
   const { bold, italic } = canonicalFamily(family);
   return [400, 700].flatMap((weight) =>
-    (['normal', 'italic'] as const).map((style) => {
-      const matching = face(
-        target,
+    (['normal', 'italic'] as const).flatMap((style) => {
+      const nearest = nearestFaceOrder(
         bold || weight === 700 ? 700 : 400,
         italic || style === 'italic' ? 'italic' : 'normal'
-      );
-      return {
-        from: face(family, weight, style),
-        // The packaged CJK, symbol and mathematics faces come in one weight and one style.
-        to:
-          target.startsWith('Noto') ||
-          (painted && !painted(target, matching.weight, matching.style))
-            ? face(target)
-            : matching,
-      };
+      ).find(([w, s]) => painted(target, w, s));
+      return nearest ? [{ from: face(family, weight, style), to: face(target, ...nearest) }] : [];
     })
   );
 };
+
+/** The four static faces of a family. */
+const STATIC_FACES = [
+  [400, 'normal'],
+  [700, 'normal'],
+  [400, 'italic'],
+  [700, 'italic'],
+] as const;
 
 /**
  * The packaged resolvers, over one way to locate the CJK face.
@@ -436,34 +253,22 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * as the substitute for a family the document uses. The CJK face is not here: see
    * `cjkFonts`.
    */
-  const supplementalFonts = defineFontResolver(async ({ families, signal }) => {
-    const wanted = new Set<string>();
-    for (const family of families) {
-      wanted.add(family);
-      const target = substituteFor(family);
-      if (target) wanted.add(target);
-    }
-    const sources = await readFaces(
+  const readSupplemental: FallbackFaceReader = (wanted, signal) =>
+    readFaces(
       supplemental.filter(([family]) => wanted.has(family)),
       signal
     );
-    return {
-      sources,
-      substitutions: families.flatMap((family) => {
-        const target = substituteFor(family);
-        return target && target !== CJK_FAMILY ? substitutionsTo(family, target) : [];
-      }),
-    };
-  });
+  const supplementalFonts = namedFallbackFontResolver(readSupplemental);
 
   /**
    * The CJK face from `@docx-editor.dev/fonts-cjk`, with the substitutions that point the
    * Word CJK families at it.
    *
-   * Only a family no earlier origin paints goes to the CJK face. A family whose regular face is
-   * painted keeps it: its missing bold or italic resolves to that face through the stand-in,
-   * as a synthesized style. A localized name whose English family is painted resolves to that
-   * family, which is the same font.
+   * Only a family no earlier origin paints goes to the CJK face. A family with a painted face
+   * keeps it: its missing faces resolve to its nearest face through the stand-in, as a
+   * synthesized style. A localized name whose English family is painted resolves to that
+   * family, which is the same font, and so does an English name whose localized name is
+   * painted (`Meiryo` supplied as `メイリオ`).
    *
    * Its own origin, so a package that is installed but cannot supply its face (a broken
    * install, a deployment without its `assets/`, a failed read) fails here alone and is
@@ -472,12 +277,18 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    */
   const cjkFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
     const painted = paintedFaces(resolvedFaces);
-    const aliases: { from: FontRequest; to: FontRequest }[] = [];
+    const paintsAny = (family: string): boolean =>
+      STATIC_FACES.some(([weight, style]) => painted(family, weight, style));
+    const aliases: FontSourceSubstitution[] = [];
     const planned = families.filter((family) => {
-      if (substituteFor(family) !== CJK_FAMILY || painted(family, 400, 'normal')) return false;
+      if (substituteFor(family) !== CJK_FAMILY || paintsAny(family)) return false;
       const english = canonicalFamily(family).family;
-      if (english === family || !painted(english, 400, 'normal')) return true;
-      aliases.push(...substitutionsTo(family, english, painted));
+      const sameFont = [
+        ...(english === family ? [] : [english]),
+        ...(localizedNamesOf.get(english) ?? []),
+      ].find(paintsAny);
+      if (sameFont === undefined) return true;
+      aliases.push(...sameFontSubstitutions(family, sameFont, painted));
       return false;
     });
     if (!families.includes(CJK_FAMILY) && planned.length === 0)
@@ -506,56 +317,15 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * fonts so it can never shadow one of them.
    *
    * Two answers. A family with no face at all renders in a packaged face of its class
-   * ({@link genericSubstituteFor}); the export reports it. A family whose regular face is
-   * covered but whose bold or italic is not points those at the regular face, as Word does
-   * when it emboldens a font that ships in one weight: every symbol face, most CJK faces.
+   * ({@link genericSubstituteFor}); the export reports it. A family with some faces covered
+   * points each other face at its nearest covered face, in the editor's order
+   * (`nearestFaceOrder` in `@docx-editor.dev/core/layout`), which the renderer emboldens or
+   * slants: every symbol face, most CJK faces, and a family that ships
+   * in bold only.
    * Legacy symbol families never get a text stand-in; their private-use bullets belong to the
    * glyph fallback path.
    */
-  const standInFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
-    const has = paintedFaces(resolvedFaces);
-    const faces = [
-      [400, 'normal'],
-      [700, 'normal'],
-      [400, 'italic'],
-      [700, 'italic'],
-    ] as const;
-    const substitutions: FontSourceSubstitution[] = [];
-    const wanted = new Set<string>();
-    for (const family of families) {
-      if (has(family, 400, 'normal')) {
-        for (const [weight, style] of faces)
-          if (!has(family, weight, style))
-            substitutions.push({ from: face(family, weight, style), to: face(family) });
-        continue;
-      }
-      // A Word CJK family reaching here is uncovered: its plan needed a face that did not
-      // resolve in this export.
-      const canonical = canonicalFamily(family).family;
-      if (knownFamilies.has(canonical) && !cjkWordFamilies.has(canonical)) continue;
-      const target = genericSubstituteFor(family);
-      wanted.add(target);
-      const { bold, italic } = canonicalFamily(family);
-      const lineBox = Object.hasOwn(standInLineBoxes, canonical)
-        ? { lineMetrics: standInLineBoxes[canonical]! }
-        : {};
-      for (const [weight, style] of faces)
-        substitutions.push({
-          from: face(family, weight, style),
-          to: face(
-            target,
-            bold || weight === 700 ? 700 : 400,
-            italic || style === 'italic' ? 'italic' : 'normal'
-          ),
-          ...lineBox,
-        });
-    }
-    const sources = await readFaces(
-      supplemental.filter(([family]) => wanted.has(family)),
-      signal
-    );
-    return { sources, substitutions };
-  });
+  const standInFonts = standInFontResolver(readSupplemental);
 
   return {
     supplementalFonts,
@@ -567,12 +337,7 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
      * family in its stand-in rather than the CJK face. The writer reports these, since the
      * page carries the text in another font's metrics.
      */
-    isGenericSubstitution(family: string, sourceFamily: string): boolean {
-      if (family === sourceFamily) return false;
-      const canonical = canonicalFamily(family).family;
-      if (cjkWordFamilies.has(canonical)) return sourceFamily === genericSubstituteFor(family);
-      return !knownFamilies.has(canonical);
-    },
+    isGenericSubstitution: isGenericStandIn,
     /**
      * What a missing-glyph report adds for `text`: the package to install, when the text is
      * CJK and the lookup found no usable package. Empty otherwise.

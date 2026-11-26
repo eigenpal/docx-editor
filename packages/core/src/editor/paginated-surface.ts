@@ -306,6 +306,7 @@ import { createSurfaceCaret } from './surface-caret.ts';
 import { createSurfaceBookmarks, storyContentBox } from './surface-bookmarks.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
+import { focusPagesLayerInPlace } from './surface-focus.ts';
 import { createSurfaceFormat } from './surface-format.ts';
 import { createSurfaceFormatPainter } from './surface-format-painter.ts';
 import { authoredRunPropertiesAt, type SurfaceProperty } from './surface-formatting.ts';
@@ -832,7 +833,7 @@ export function mountPaginatedSurface(
               { paragraphId, offset: replacing.end }
             ),
           }
-        : positionPastDeletion(editingLayout(), anchor);
+        : hiddenMarks.insertPoint(anchor);
     if (at.paragraphId !== paragraphId || at.offset !== offset) return [];
     return [
       {
@@ -1514,7 +1515,7 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context && !context.live ? false : showFieldCodes,
-      fieldResults: fieldScope.mode,
+      ...fieldScope.layout, // `fieldResults`, and a copy of `fieldDate` the host cannot mutate
       revisionAuthorFilter: activeAuthorFilter,
       bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
@@ -1714,7 +1715,7 @@ export function mountPaginatedSurface(
       kind === 'insertion'
         ? {
             ops: [] as readonly TreeDocOp[],
-            collapseTo: positionPastDeletion(editingLayout(), range.from),
+            collapseTo: hiddenMarks.insertPoint(range.from),
           }
         : deleteSelectionPlan(writer);
     const ops = attributeTrackedOps(plan.ops, revision, formattingTracked());
@@ -3474,7 +3475,7 @@ export function mountPaginatedSurface(
     later: (task) => afterNextPaint(timers, fieldScope.wrap(landing.wrap(task))),
     modelTextOf: (id) => paragraphTextOf(partOfNodeId(session, id) ?? session.part(), id),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
-    compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,
+    compositionUsesTyping: () => typingSelectionPlan().composesAsTyping === true,
     promptLanding: typedLanding,
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
@@ -4049,7 +4050,7 @@ export function mountPaginatedSurface(
    */
   function insertTableOp(rows: number, cols: number) {
     if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
-    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    const beforeParagraphId = tocBlockAnchor(session.part(), hiddenMarks.lineFirst(selection.head));
     if (beforeParagraphId === null) return null;
     const section = structure.sectionPropertiesAt(selection.head.paragraphId);
     const contentWidth =
@@ -4128,7 +4129,7 @@ export function mountPaginatedSurface(
 
   function insertTocOp() {
     const instruction = parseTocInstruction(INSERT_TOC_INSTRUCTION);
-    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    const beforeParagraphId = tocBlockAnchor(session.part(), hiddenMarks.lineFirst(selection.head));
     if (!instruction || beforeParagraphId === null) return null;
     const outline = session.documentOutline();
     const plan = planTocEntries(
@@ -4920,12 +4921,12 @@ export function mountPaginatedSurface(
         );
         return;
       }
+      const forward = hiddenMarks.forwardJoinOps(position.paragraphId, next); // 'step': field codes
+      if (forward === 'step') return setSelection(collapsedAt({ paragraphId: next, offset: 0 }));
       commit(
         () =>
           applyOps(
-            hiddenMarks.forwardJoinOps(position.paragraphId, next) ?? [
-              { op: 'joinParagraphs', firstId: position.paragraphId, secondId: next },
-            ],
+            forward ?? [{ op: 'joinParagraphs', firstId: position.paragraphId, secondId: next }],
             selectionMark()
           ),
         () => collapsedAt(position),
@@ -5715,7 +5716,7 @@ export function mountPaginatedSurface(
       // An already-focused surface may have a newer native selection or active IME
       // composition. A redundant focus request must not overwrite either with the model.
       if (pagesLayer.ownerDocument.activeElement === pagesLayer) return;
-      pagesLayer.focus({ preventScroll: true });
+      focusPagesLayerInPlace(pagesLayer);
       // Returning from a toolbar input can place the browser caret at the document's
       // start. Restore the saved model range before selectionchange adopts that caret
       // and follows it into view (including when no formatting command was executed).
@@ -6135,11 +6136,11 @@ export function mountPaginatedSurface(
       },
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
-      // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
-      // it into view — to its top. The first click anywhere in a long document therefore
-      // threw the reader back to page 1 before the caret it had just placed could be seen.
-      // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
-      focus: () => pagesLayer.focus({ preventScroll: true }),
+      // No browser scroll (see `focusPagesLayerInPlace`): the caret is positioned from layout.
+      // A dropped range is written back, because not every press sets a selection.
+      focus: () => {
+        if (focusPagesLayerInPlace(pagesLayer)) selectionSync.mirrorToDom(true);
+      },
       // An armed format painter paints the selection the gesture just produced. Word's
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),

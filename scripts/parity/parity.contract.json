@@ -28,6 +28,7 @@
       "revisionMarkup",
       "reviewDisplayMode",
       "fieldResults",
+      "fieldDate",
       "contentLockPolicy",
       "lockedControlNavigation"
     ],

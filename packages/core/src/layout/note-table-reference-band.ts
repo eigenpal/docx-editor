@@ -99,8 +99,8 @@ export function tableReferenceRowBand(
   let headerHeight = 0;
   let leadingHeaders = true;
   let previous: TableRowFragmentRecord | undefined;
-  // A zero-height head-row continuation directly above: its carried text is this row's.
-  let carried: TableRowFragmentRecord | undefined;
+  // The zero-height head-row continuations directly above: their carried text is this row's.
+  let carried: TableRowFragmentRecord[] = [];
   for (const row of table.rows) {
     leadingHeaders &&= row.isHeaderRepeat || row.isHeaderRow;
     if (leadingHeaders) headerHeight += row.box.height;
@@ -109,8 +109,8 @@ export function tableReferenceRowBand(
     const cell = owningCell(row, ref);
     if (!cell) {
       // The carried head row is part of the row below it, never a row that precedes it.
-      if (isCarriedHeadRow(row)) carried = row;
-      else [previous, carried] = [row, undefined];
+      if (isCarriedHeadRow(row)) carried.push(row);
+      else [previous, carried] = [row, []];
       continue;
     }
     if (row.isHeaderRow || (cell.rowSpan ?? 1) > 1 || rowKeepsWithNext(row)) return 'table';

@@ -57,12 +57,10 @@ export function withResolvedGroupFill(
   } as OoxmlElement;
 }
 
-const SPANNING = new Set(['gradFill', 'pattFill', 'blipFill']);
-
 /**
- * Whether `spPr` says `a:grpFill` while the group fill is a gradient, a pattern or a picture.
- * Word spans a gradient across the group box (2026-11-12 render), which per-member paint cannot
- * match; a pattern or picture group fill has no per-member paint here either.
+ * Whether `spPr` says `a:grpFill` while the group fill is a picture, which has no per-member
+ * paint here. A pattern group fill paints on each member. A gradient group fill spans the box
+ * of the group that sets it (`spanningGroupGradient`).
  *
  * @internal
  */
@@ -70,6 +68,34 @@ export function groupFillSpansMembers(
   spPr: OoxmlElement,
   groupFill: OoxmlElement | null | undefined
 ): boolean {
-  if (!groupFill || !SPANNING.has(groupFill.localName)) return false;
+  if (!groupFill || groupFill.localName !== 'blipFill') return false;
   return firstFill(spPr)?.localName === 'grpFill';
+}
+
+/**
+ * Whether the own fill of `spPr` is a picture (`a:blipFill`, CT_BlipFillProperties; ECMA-376
+ * Part 1, 20.1.8.14).
+ *
+ * @internal
+ */
+export function ownFillIsPicture(spPr: OoxmlElement | null): boolean {
+  return spPr !== null && firstFill(spPr)?.localName === 'blipFill';
+}
+
+/**
+ * Whether `spPr` authors a colour, gradient, or pattern fill, or a line that is not `a:noFill`
+ * (`a:ln`, CT_LineProperties; ECMA-376 Part 1, 20.1.2.2.24). A picture member with neither
+ * has no frame to paint around its picture.
+ *
+ * @internal
+ */
+export function hasOwnFrameInk(spPr: OoxmlElement): boolean {
+  const fill = firstFill(spPr)?.localName;
+  if (fill === 'solidFill' || fill === 'gradFill' || fill === 'pattFill') return true;
+  for (const node of spPr.children) {
+    if (node.kind === 'textValue') continue;
+    if (node.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || node.localName !== 'ln') continue;
+    return firstFill(node)?.localName !== 'noFill';
+  }
+  return false;
 }

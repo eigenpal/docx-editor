@@ -18,8 +18,16 @@ import {
 import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
-import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
-import { growRunBorderLineMetrics } from './run-border-strokes.ts';
+import {
+  cellTabReplayScope,
+  tabAllowsWordChop,
+  tabCarriesItsWord,
+  tabClosesLine,
+  tabContextFor,
+  tabPlacement,
+  tabWordBreaksFor,
+} from './paragraph-tab-flow.ts';
+import { runBorderAdvance } from './run-border-advance.ts';
 import { inlineExtentSpacing, lineSpacingBand } from './equation-line-spacing.ts';
 import { setCharacterFillBand } from './character-fill-band.ts';
 import {
@@ -34,7 +42,7 @@ import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { graphemeContinuationWidth } from './grapheme-continuation-width.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
-import { spacedLine } from './positioned-run-spacing.ts';
+import { raiseLineToMarker, spacedLine } from './positioned-run-spacing.ts';
 import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
 import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
 import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
@@ -90,12 +98,7 @@ import {
   piecesMayTakeAutomaticSpacing,
   splitAtAutomaticSpacing,
 } from './cjk-automatic-spacing.ts';
-import {
-  EMPTY_TAB_STOPS,
-  tabAdvanceWidth,
-  tabStopSpanFields,
-  type ResolvedTabStops,
-} from './paragraph-tabs.ts';
+import { EMPTY_TAB_STOPS, tabStopSpanFields, type ResolvedTabStops } from './paragraph-tabs.ts';
 import { SINGLE_LINE_SPACING } from './paragraph-style.ts';
 import { displayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -142,11 +145,7 @@ import type { TocParagraphFlowOptions } from './paragraph-flow-options.ts';
 import { ignoreCellColumnBreaks } from './table-cell-column-breaks.ts';
 export type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 export { propertiesOf };
-import {
-  measureFollowingTabSegment,
-  placeableContentSuffixes,
-  positionalTabDestination,
-} from './paragraph-piece-metrics.ts';
+import { measureWordAfterTab, placeableContentSuffixes } from './paragraph-piece-metrics.ts';
 
 // The pending-line record and its budget/freeze helpers live in pending-line.ts;
 // re-exported so every existing import through this module stays stable.
@@ -279,6 +278,7 @@ export function breakParagraph(
   const paragraphFinal = paragraphFinalAt(pieces);
   const endSpacesAt = lineEndSpaces.paragraphEndSpacesOf(pieces, paragraphRtl, measurer);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
+  const tabWordBreaks = tabWordBreaksFor(cjkBreaks);
   const clusterTail = graphemeContinuationWidth(pieces, measurer, typography);
   const { opticalParagraph, opticalCompression, fitCjkOptically } = createParagraphCjkOpticalFitter(
     allPieces,
@@ -469,10 +469,13 @@ export function breakParagraph(
   let firstLineOpen = true;
   const opensFirstLine = (): boolean => firstLineOpen;
   const holdsContent = (): boolean => lineHoldsContent(line, pageBreaksIgnored);
+  const canChopAfterTabs = () =>
+    !flow?.pageExclusionZones?.length && !sameParagraphAnchorStarts.length;
   // Where the line being built starts, and how much room it has. Only the first differs.
   const lineOffset = (): number => (opensFirstLine() ? firstLineOffset : 0);
   const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
-  const baseLineAvailable = (): number => Math.max(1, available - lineOffset());
+  const borders = runBorderAdvance(pieces, paragraphId, () => line, measurer);
+  const baseLineAvailable = (): number => Math.max(1, available - lineOffset() - borders.trailing);
 
   // Closed line heights stay fixed. Accumulate in the same order as a full reduction,
   // without rescanning every previous line for each float or drawing placement.
@@ -629,7 +632,7 @@ export function breakParagraph(
     const origin = lineOrigin() + line.width;
     const remaining = remainingWidthAtX(origin, intervals);
     if (remaining <= 0.001) return 0;
-    return Math.min(base, line.width + remaining);
+    return Math.min(base, line.width + remaining - borders.trailing);
   };
 
   /** Room left ahead of the pen on the current line. */
@@ -820,13 +823,9 @@ export function breakParagraph(
     // text's alone. Only the paragraph's first line carries a marker.
     const firstLine = opensFirstLine();
     if (firstLine && firstLineOffset !== 0) line.firstLineOffset = firstLineOffset;
-    if (firstLine && markerAscent > line.baseline) {
-      const raised = markerAscent - line.baseline;
-      line.baseline = markerAscent;
-      line.height += raised;
-      glyphBaseline += raised;
-    }
-    growRunBorderLineMetrics(line, measurer);
+    const markerRise = firstLine ? raiseLineToMarker(line, markerAscent) : 0;
+    glyphBaseline += markerRise;
+    borders.closeLine(line);
     markSyntheticBoldSpans(line, measurer);
     syncPendingDrawingBaselines(line, pageBreaksIgnored);
     growPendingLineDrawingExtent(line);
@@ -843,7 +842,9 @@ export function breakParagraph(
     const equationBand = band?.equation ? band : undefined;
     const spacingBase = band?.height ?? naturalHeight;
     const bandBaseline = band?.baseline ?? line.baseline;
-    const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer);
+    const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer, {
+      unscaledRise: band || empty ? 0 : markerRise,
+    });
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     else if (equationBand) line.baseline += spaced.baseline - bandBaseline;
     const floored = firstLine && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;
@@ -978,6 +979,7 @@ export function breakParagraph(
       trailingLineBreak = true;
       continue;
     }
+    if (piece.unsupported || piece.equation || piece.inlineDrawing) borders.beforeObject();
     if (piece.unsupported) {
       const unsupported = piece.unsupported;
       const atomWidth = Math.min(unsupported.width, lineAvailable());
@@ -1177,15 +1179,17 @@ export function breakParagraph(
         : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
 
       if (candidate === '\t') {
+        const plainTab =
+          !paragraphRtl &&
+          !piece.positionalTab &&
+          (activeExclusionZones().length === 0 ||
+            lineOrigin() + lineAvailable() >= contentOriginX + rightEdge - 0.5);
         if (
           holdsContent() &&
           tabClosesLine(
             replayScope,
             flow?.edgeStopKeepsTrailingTabs === true && flow?.cellAnchorScope?.inTableCell !== true,
-            !paragraphRtl &&
-              !piece.positionalTab &&
-              (activeExclusionZones().length === 0 ||
-                lineOrigin() + lineAvailable() >= contentOriginX + rightEdge - 0.5),
+            plainTab,
             tabStops,
             lineOrigin() + line.width,
             rightEdge,
@@ -1194,53 +1198,51 @@ export function breakParagraph(
           )
         )
           closeLine();
-        const currentX = lineOrigin() + line.width;
         // RTL stops use leading-edge coordinates before bidi placement and alignment.
         const leading = paragraphRtl ? rtlLeadingIndent : 0;
-        const stopX = paragraphRtl ? leading + lineOffset() + line.width : currentX;
         const stopRight = paragraphRtl ? leading + available : rightEdge;
-        const segment = measureFollowingTabSegment(
+        const tabContext = tabContextFor({
           pieces,
           pieceIndex,
           boundary,
           measurer,
-          pageBreaksIgnored
-        );
-        // A `w:ptab` states its own destination and leader, so it does NOT consult the
-        // paragraph's tab stops — a table-of-contents line authored with one has none.
-        // A positional tab whose destination is at or behind the caret cannot advance —
-        // a left-aligned one almost never can, and it is also the fallback for a malformed
-        // `w:alignment`. Falling back to the ordinary stop rule keeps the glyphs apart
-        // instead of reproducing the very run-together text this element exists to prevent.
-        const positional = piece.positionalTab
-          ? positionalTabDestination(piece.positionalTab, indentLeft, rightEdge, flow?.marginExtent)
-          : null;
-        // Authored aligned tabs may reach the containing margin beyond the paragraph's
-        // right indent. Only their following segment gets that extra room.
-        const tabEdge =
-          activeExclusionZones().length === 0
-            ? Math.max(stopRight, flow?.marginExtent?.right ?? stopRight)
-            : stopRight;
-        const destination = tabDestinationForFlow(
-          tabStops,
-          stopX,
-          stopRight,
-          tabEdge,
-          currentX,
+          pageBreaksIgnored,
+          positionalTab: piece.positionalTab,
+          tabs: tabStops,
+          indentLeft,
           rightEdge,
-          positional,
-          flow?.leftTabsPastMargin,
-          paragraphRtl,
-          alignedTabRight
-        );
+          stopRight,
+          marginExtent: flow?.marginExtent,
+          zonesActive: activeExclusionZones().length > 0,
+          pastMargin: flow?.leftTabsPastMargin,
+          rtl: paragraphRtl,
+        });
+        const penX = () => lineOrigin() + line.width;
+        const stopXAtPen = () => (paragraphRtl ? leading + lineOffset() + line.width : penX());
+        let placed = tabPlacement(tabContext, penX(), stopXAtPen(), alignedTabRight);
+        const word = () =>
+          measureWordAfterTab(
+            pieces,
+            pieceIndex,
+            boundary,
+            measurer,
+            tabWordBreaks,
+            pageBreaksIgnored
+          );
+        const chopsWord = canChopAfterTabs() && tabAllowsWordChop(piece);
+        const fresh = { x: contentOriginX + indentLeft, room: available - borders.trailing };
+        const pen = { x: penX(), stopX: stopXAtPen(), room: lineAvailable() - line.width };
+        if (
+          plainTab &&
+          holdsContent() &&
+          tabCarriesItsWord(tabContext, word(), placed, pen, { ...fresh, chopsWord })
+        ) {
+          closeLine();
+          placed = tabPlacement(tabContext, penX(), stopXAtPen(), alignedTabRight);
+        }
+        const currentX = penX();
+        const { destination, width } = placed;
         alignedTabRight = destination.segmentRight;
-        const width = tabAdvanceWidth(
-          destination.alignment,
-          positional === null ? stopX : currentX,
-          destination.positionPt,
-          segment.width,
-          paragraphRtl && positional === null ? segment.rtlDecimalOffset : segment.decimalOffset
-        );
         line.spans.push({
           range: spanRange,
           text: '\t',
@@ -1269,13 +1271,14 @@ export function breakParagraph(
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
       // would size the line for characters the reader never sees. Note marks may reserve
       // a wider measureText (eachPage) while painting the real digits.
-      const automaticGap = candidateAutomaticGap(
+      const cjkGap = candidateAutomaticGap(
         automaticSpacing && { line: () => line, lineOrigin, paragraphId, typography, measurer },
         piece,
         faceStyle,
         candidate,
         spanRange.start
       );
+      const automaticGap = borders.gapBefore(cjkGap, piece.style, candidate, spanRange.start);
       const measureSource = piece.measureText ?? candidate;
       let width = piece.noteSeparator
         ? Math.min(piece.noteSeparator === 'separator' ? 144 : lineAvailable(), lineAvailable())
@@ -1448,8 +1451,7 @@ export function breakParagraph(
         canChopWord &&
         !paragraphRtl &&
         alignedTabRight === 0 &&
-        !flow?.pageExclusionZones?.length &&
-        sameParagraphAnchorStarts.length === 0 &&
+        canChopAfterTabs() &&
         wordFollowsOnlyTabs(line, wordStartSpan);
       if (
         (!opensWord && penLeftWord()) ||

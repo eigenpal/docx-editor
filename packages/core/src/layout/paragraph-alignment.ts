@@ -19,6 +19,7 @@ import {
   withoutTrailingSpaces,
   withoutTrailingZeroWidthSpaces,
 } from './trailing-spaces.ts';
+import { closingRunBorderPad } from './run-border-advance.ts';
 import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
 import {
   alignBidiPassageSpans,
@@ -274,6 +275,8 @@ function alignLogicalSpans(
         )
       : hangingStart) ??
     contentEndWithoutTrailingWhitespace();
+  // A justified line keeps the closing side of the border it ends in inside the measure.
+  if (lineUsedWidth === undefined && !paragraphRtl) used += closingRunBorderPad(contentEnd);
   let rtlTrailingAdvance = 0;
   // A space retained at a natural wrap still owns its model/caret advance, but Word
   // centers/right-aligns the visible text. Do not subtract from drawing-owned width,
@@ -314,8 +317,11 @@ function alignLogicalSpans(
   }
   // Every trailing U+0020 hangs past a centred or right-aligned line, also the spaces that
   // still fit before the measure and the one that closes the last word's span.
-  if ((alignment === 'center' || alignment === 'right') && !paragraphRtl && visible !== undefined)
-    used = Math.min(used, visible);
+  // A border that closes before those spaces keeps its closing side with the visible text.
+  if ((alignment === 'center' || alignment === 'right') && !paragraphRtl && visible !== undefined) {
+    const hangsPastBorder = spans.some((span) => span.borderEndTrimPt !== undefined);
+    used = hangsPastBorder ? visible + closingRunBorderPad(contentEnd) : Math.min(used, visible);
+  }
   // The hanging mark keeps its advance outside the measure; only its prefix fills the line.
   if (alignment === 'both') used -= hangingPunctuationAdvance;
   const slack = available - used;

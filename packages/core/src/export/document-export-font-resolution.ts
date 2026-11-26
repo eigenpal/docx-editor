@@ -8,12 +8,14 @@ import {
 } from '../layout/font-resolver.ts';
 import {
   FontResolutionError,
+  fontRequestKey,
   HARD_MAX_FONT_SOURCES,
   trustedFontBytes,
   type FontRequest,
   type FontSubstitution,
   type ResolvedFont,
 } from '../layout/font-resource.ts';
+import { sameFontFamily } from '../store/package/default-font-faces.ts';
 import { ExportResourceError } from './export-session.ts';
 
 /** One paintable face in an export font-resolution report. @public */
@@ -206,6 +208,16 @@ export function snapshotDroppedEmbeddedFonts(
   );
 }
 
+/** Whether `substitution` draws a face from another weight or style of its own family. */
+function sameFamilyOtherFace(substitution: FontSubstitution | null | undefined): boolean {
+  if (!substitution) return false;
+  const { requested, resolved } = substitution;
+  return (
+    sameFontFamily(requested.family, resolved.family) &&
+    (requested.weight !== resolved.weight || requested.style !== resolved.style)
+  );
+}
+
 export function fontResolutionReport(
   requestedFamilies: readonly string[],
   defaultFamily: string,
@@ -213,7 +225,9 @@ export function fontResolutionReport(
   resolve?: (request: FontRequest) => ResolvedFont | FontResolutionError,
   droppedEmbeddedFonts: readonly DroppedEmbeddedFont[] = [],
   /** Families drawn in a stand-in reached through a host substitute; see `hostChainedDocumentFallbacks`. */
-  standInFamilies: ReadonlySet<string> = new Set()
+  standInFamilies: ReadonlySet<string> = new Set(),
+  /** Faces drawn as a synthesized style of their family; see `synthesizedServedFaces`. */
+  synthesizedFaces: ReadonlySet<string> = new Set()
 ): ExportFontResolutionReport {
   const familyNames = new Map<string, string>();
   for (const family of [...requestedFamilies, defaultFamily]) {
@@ -238,10 +252,15 @@ export function fontResolutionReport(
         })
       );
     }
-    // A stand-in shows in `faces` as evidence, but does not cover the family.
+    // A stand-in or a synthesized style shows in `faces` as evidence, but does not cover the
+    // family. A substitution to another weight or style of the same family is a synthesized
+    // style too, whichever origin supplied it (the PDF converter's stand-in origin does).
+    const synthesized = (face: ExportFontFaceResolution): boolean =>
+      synthesizedFaces.has(fontRequestKey({ family, weight: face.weight, style: face.style })) ||
+      sameFamilyOtherFace(face.substitution);
     const covering = standInFamilies.has(family.trim().toLowerCase())
       ? faces.filter((face) => face.via === 'direct').length
-      : faces.length;
+      : faces.filter((face) => !synthesized(face)).length;
     return Object.freeze({
       family,
       coverage: covering === 4 ? 'complete' : covering > 0 ? 'partial' : 'none',

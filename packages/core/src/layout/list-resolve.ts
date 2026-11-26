@@ -40,11 +40,12 @@ import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import { bulletMarkerStyle } from './marker-symbol-face.ts';
 import { withListMarkerSource } from './cell-list-marker.ts';
 import type { TextMeasurer } from './semantic-records.ts';
-import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
+import type { ResolvedRunStyle } from './run-style.ts';
+import { listMarkerRunStyle } from './list-marker-lane.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
 import type { LayoutSession } from './layout-session.ts';
-import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
+import { listCountingBlocks } from './hidden-paragraph-mark.ts';
 import { numPrFieldsOf, paragraphListPrelude, readNumPr } from './list-paragraph-prelude.ts';
 import { isBareSectionMark } from './section-mark-break.ts';
 import { paragraphSectionNode } from './section-properties.ts';
@@ -348,7 +349,7 @@ function resolveListSequence(
       );
       // A marker never draws in small capitals; `w:caps` still applies.
       const resolved = {
-        ...resolveRunStyle(markerProps, styleCascade?.themeFonts),
+        ...listMarkerRunStyle(markerProps, prelude.paragraphProperties, styleCascade?.themeFonts),
         smallCaps: false,
       };
       levelDerived = {
@@ -596,8 +597,9 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
-  // Paragraphs a hidden mark took out of the flow still count; see `hidden-paragraph-mark.ts`.
-  const blocks = numberingFlowBlocks(flowBlocks);
+  // Paragraphs a hidden mark took out of the flow still count, but field-code paragraphs do
+  // not; see `hidden-paragraph-mark.ts`.
+  const blocks = listCountingBlocks(flowBlocks);
   const isFontAvailable = listFontAvailability(options);
   if (options.listItems === undefined && options.listCounterSeed) {
     return {

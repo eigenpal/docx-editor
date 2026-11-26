@@ -1,0 +1,17 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A paragraph inside a field instruction showed as a blank line with its list marker, and Backspace, Delete, or mergeParagraphs at the break around it joined it away.",
+  "after": "Layout removes such a paragraph from the flow, also in table cells and content controls, and it advances no list counter. Joins do not absorb it, and Delete before the field moves the caret over it. Enter, mergeParagraphs, and automation splits and deletes that would add or remove a field-code paragraph mark refuse before they emit any operation.",
+  "reason": "Only derived layout, the local choice of which existing join operations to emit, and local refusals change. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/hidden-mark-joins.test.ts",
+    "packages/core/src/editor/__tests__/selection-edit-commands.test.ts",
+    "packages/core/src/layout/__tests__/field-instruction-paragraphs.test.ts",
+    "packages/core/src/layout/__tests__/field-instruction-scan-cost.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-field-code-paragraphs.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-field-instruction-paragraphs.test.ts"
+  ],
+  "changeset": "field-instruction-paragraphs",
+  "migration": null
+}

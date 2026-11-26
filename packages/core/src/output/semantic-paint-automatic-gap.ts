@@ -7,6 +7,7 @@
 // different fill. Screen paint draws that part of the fill as the run's box shadow, and the PDF
 // writer widens the fill band by the same width.
 import { automaticTextSpacingBefore } from '../layout/cjk-automatic-spacing.ts';
+import { runBorderGapBetween, type BorderedText } from '../layout/run-border-advance.ts';
 
 /**
  * The fields of a laid span that {@link automaticGapFillAfter} reads. A `StyleSpanRecord` is one.
@@ -18,11 +19,16 @@ export interface AutomaticGapSpan {
   readonly style: { readonly shaping?: { readonly baseLevel?: number } | null };
 }
 
+/** Whether a span carries what its border room is read from. */
+const placedText = (span: AutomaticGapSpan): span is AutomaticGapSpan & BorderedText =>
+  typeof (span as Partial<BorderedText>).text === 'string' &&
+  typeof (span as Partial<BorderedText>).range?.end === 'number';
+
 /**
  * The width of the automatic advance before `next` that the fill of `span` covers, in points:
  * the advance layout placed at the start of `next`, at most the painted `gap` between the two
- * spans. Justification slack in the same gap stays unfilled. Zero when `next` starts with no
- * automatic advance, and on a right-to-left line, where the run order differs from the
+ * spans. Justification slack in the same gap stays unfilled, and so does the room of a
+ * character border. Zero when `next` starts with no automatic advance, and on a right-to-left line, where the run order differs from the
  * visual order.
  *
  * @internal
@@ -34,7 +40,10 @@ export function automaticGapFillAfter(
 ): number {
   if (!(gap > 0.001)) return 0;
   if (span.style.shaping?.baseLevel === 1 || next.style.shaping?.baseLevel === 1) return 0;
-  const width = Math.min(gap, automaticTextSpacingBefore(next));
+  // The room of a character border (`w:bdr`, ECMA-376 Part 1, 17.3.2.4) shares the advance
+  // before `next`. It belongs to the border, so the fill of `span` stops before it.
+  const border = placedText(span) && placedText(next) ? runBorderGapBetween(span, next) : 0;
+  const width = Math.min(gap, automaticTextSpacingBefore(next) - border);
   return width > 0.001 ? width : 0;
 }
 

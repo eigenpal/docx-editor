@@ -85,15 +85,14 @@ test('a continuation cell measures its mark, never the content it does not paint
   expect(result.rows[1]!.cells[0]!.blocks).toEqual([]);
 });
 
-// `w:hideMark` excludes the end-of-cell glyph from row height (17.4.21), so it keeps its
-// engine-wide meaning here. NOT reference-confirmed: the captured control gives a
-// continuation-only row with `w:hideMark` 23.52pt, which is neither zero nor any line the
-// rule derives, and no corpus document sets `w:hideMark` on a continuation. This asserts
-// what the engine does, not what the reference does.
-test('w:hideMark keeps a continuation-only row at no height', () => {
+// `w:hideMark` (17.4.21) excludes the end-of-cell glyph, so the row takes one line of the
+// default paragraph style instead of the mark (`mergedRowFirstCellHeight`). No styles part
+// here, so that is the default run style. Synthetic controls with hidden marks of several
+// sizes and spacings each gave that line; the older t6 control (23.52pt) is not derived.
+test('w:hideMark gives a continuation-only row one default line', () => {
   const result = table('', p('Head'), cell('', 'Ignored', '<w:hideMark/>'));
-  expect(result.rows[1]!.box.height).toBe(0);
-  expect(result.rows[2]!.box.y).toBe(result.rows[1]!.box.y);
+  expect(result.rows[1]!.box.height).toBeCloseTo(MARK_LINE_PT, 6);
+  expect(result.rows[2]!.box.y).toBeCloseTo(result.rows[1]!.box.y + MARK_LINE_PT, 6);
 });
 
 for (const rule of ['atLeast', 'exact']) {

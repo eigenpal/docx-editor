@@ -1,4 +1,7 @@
-import { repositionInlineDrawingsForBaseline } from './drawing-layout.ts';
+import {
+  inlineDrawingBottom,
+  repositionInlineDrawingsForBaseline,
+} from './inline-drawing-baseline.ts';
 import type { PendingLine } from './pending-line.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 
@@ -17,13 +20,13 @@ export function syncPendingDrawingBaselines(line: PendingLine, pageBreaksIgnored
     for (const drawing of line.drawings)
       line.baseline = Math.max(
         line.baseline,
-        drawing.y + drawing.height + (drawing.runPositionPt ?? 0)
+        inlineDrawingBottom(drawing) + (drawing.runPositionPt ?? 0)
       );
   repositionPendingDrawings(line);
   for (const drawing of line.drawings)
     line.baseline = Math.max(
       line.baseline,
-      drawing.y + drawing.height + (drawing.runPositionPt ?? 0)
+      inlineDrawingBottom(drawing) + (drawing.runPositionPt ?? 0)
     );
 }
 

@@ -283,7 +283,7 @@ const faceKey = (face: FontFaceRequest): string =>
  * With both rules, skipping a reported face genuinely cannot lose one, which is what lets
  * `resolvedFaces` be documented as an optimization a resolver may ignore.
  */
-function paintableFaces(
+export function paintableFaces(
   inherited: readonly FontFaceRequest[],
   sourceFaces: ReadonlyMap<string, FontFaceRequest>,
   substitutions: readonly FontSourceSubstitution[]

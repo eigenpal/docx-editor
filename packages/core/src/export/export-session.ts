@@ -23,6 +23,7 @@ import {
 } from '../layout/document-furniture-source.ts';
 import { createDocumentLinkProjectors } from '../layout/document-link-projector.ts';
 import { createDocumentStyleDependencies } from '../layout/document-style-deps.ts';
+import { copyValidFieldDate } from '../layout/field-date.ts';
 import { createFieldLinkRegistry } from '../layout/field-link-registry.ts';
 import { forEachSemanticDrawing } from '../layout/semantic-record-queries.ts';
 import { TablePaginationError } from '../layout/semantic-table-layout.ts';
@@ -105,6 +106,17 @@ export interface OpenDocumentForExportOptions {
   readonly resourceTimeoutMs?: number;
   /** Retain incremental state for a live view. Defaults to true for views and false for bytes. */
   readonly reuseAcrossRevisions?: boolean;
+  /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, as the editor's
+   * `fieldDate` option does. This covers complex fields (`w:fldChar`, `CT_FldChar`, ECMA-376
+   * Part 1, 17.16.18) and simple fields (`w:fldSimple`, `CT_SimpleField`, 17.16.19): DATE
+   * (17.16.5.13), TIME (17.16.5.65), and the picture (17.16.4.1). Pass `ChromeExportView.fieldDate` here to export
+   * the dates the editor shows. Fields show it in the local time of this process, so a server in
+   * another time zone shows other wall-clock values. Absent (the default), fields show their
+   * saved results. Export only: the source is not changed. Refused with a `TypeError` when it is
+   * not a valid `Date`.
+   */
+  readonly fieldDate?: Date;
 }
 
 /**
@@ -306,6 +318,8 @@ export function openDocumentForExport(
     // typed refusal the caller can branch on instead.
     return { ok: false, reason: 'aborted' };
   }
+  // One copy per session: layout compares the installed date by identity.
+  const fieldDate = copyValidFieldDate(options.fieldDate);
   if (
     options.revisionAuthorSlots !== undefined &&
     (!options.revisionAuthorSlots ||
@@ -634,6 +648,8 @@ export function openDocumentForExport(
         bodyBlockLimit: undefined,
         // Export paints every field as one unit; the painted text is the same in both modes.
         fieldResults: 'atomic',
+        // Saved DATE and TIME results unless the caller asked for a moment.
+        fieldDate,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         const restartedBeforePublish = restartOnRevisionDrift();

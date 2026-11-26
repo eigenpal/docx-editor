@@ -28,6 +28,8 @@ import {
 } from '../store/package/field-marker-scope.ts';
 import { MAX_FIELD_RESULT_NODES } from '../store/package/field-result-text.ts';
 import { parseButtonInstruction } from './field-button.ts';
+import { currentFieldDate, formatDateField, parseDateFieldInstruction } from './field-date.ts';
+import { runTextLanguage } from './run-proofing.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
@@ -61,11 +63,16 @@ import {
   onFldCharEnd,
   onFldCharSeparate,
   matchAllowlistedPageField,
-  type AllowlistedPageFieldMatch,
   type FieldScanBudget,
 } from './field-instruction.ts';
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
-import { createNestedPageTracker } from './field-nested-page.ts';
+import {
+  createNestedPageTracker,
+  deferredSegmentsMarker,
+  nestedPageArming,
+  noteDeferredPage,
+  type DeferredPageSegment,
+} from './field-nested-page.ts';
 import {
   PAGE_FIELD_PLACEHOLDER,
   pageFieldMarker,
@@ -73,6 +80,7 @@ import {
   projectPageFieldValue,
   type BodyPageFieldContext,
   type FieldPageContext,
+  type PageFieldMarker,
 } from './field-page-furniture.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import {
@@ -103,6 +111,8 @@ export interface SimpleFieldDisplay {
    * count: the mode resolved it away, and synthesis must be free to fill that view.
    */
   readonly sawResultContent: boolean;
+  /** Body page fields nested in the saved result, which document finalize fills. */
+  readonly nestedPageSegments: readonly DeferredPageSegment[];
 }
 
 /**
@@ -122,6 +132,8 @@ export function collectSimpleFieldDisplay(args: {
   readonly inheritedRunProperties: readonly OoxmlProperty[];
   readonly cascadeRuns?: SimpleFieldRunCascader;
   readonly themeFonts?: ThemeFonts;
+  /** In BODY flow, nested page fields defer to document finalize. */
+  readonly bodyPageFields?: BodyPageFieldContext | false;
 }): SimpleFieldDisplay {
   const {
     simple,
@@ -140,6 +152,7 @@ export function collectSimpleFieldDisplay(args: {
   let resultStyle: ResolvedRunStyle | undefined;
   let resultStyleIsDirectional = false;
   let sawResultContent = false;
+  const nestedPageSegments: DeferredPageSegment[] = [];
 
   const nested = createFieldParseState();
   // Level-aware live evaluation of an allowlisted page field nested in the cache (shared with
@@ -204,14 +217,18 @@ export function collectSimpleFieldDisplay(args: {
               // A field inside an enclosing instruction never arms: its value feeds that
               // instruction and is not displayed.
               const shown = displayed() && !isInsideOpenFieldInstruction(nested);
-              tracker.onSeparate(pageContext && shown ? match : null, separateLevel);
+              const arming = nestedPageArming(match, shown, pageContext, args.bodyPageFields);
+              tracker.onSeparate(arming, separateLevel);
             }
             continue;
           }
           if (isFldChar(grand, 'end')) {
             scope?.consume(grand);
             const appendedLive = tracker.onEnd(nested.nesting, pageContext);
-            if (appendedLive !== null) text += appendedLive;
+            if (appendedLive !== null) {
+              noteDeferredPage(nestedPageSegments, tracker.takeDeferred(), text, appendedLive);
+              text += appendedLive;
+            }
             onFldCharEnd(nested);
             continue;
           }
@@ -255,7 +272,7 @@ export function collectSimpleFieldDisplay(args: {
           if (!revisionSuppressed) sawResultContent = true;
           const suppressed = style.hidden || revisionSuppressed;
           if (tracker.active) {
-            tracker.noteResult(!suppressed);
+            tracker.noteResult(!suppressed, value);
             if (!suppressed) captureStyle(props, style, value);
             continue;
           }
@@ -314,12 +331,29 @@ export function collectSimpleFieldDisplay(args: {
       text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField);
       return;
     }
+    if (simplePageField && args.bodyPageFields) {
+      // In the body, the saved result measures the width and finalize fills each page's value.
+      if (!revisionsVisible(local, displayMode, args.authorFilter)) return;
+      const beforeLen = text.length;
+      collect(child, nodeDepth + 1, local);
+      const saved = text.slice(beforeLen);
+      const width = saved.length > 0 ? saved : PAGE_FIELD_PLACEHOLDER;
+      text = text.slice(0, beforeLen);
+      noteDeferredPage(
+        nestedPageSegments,
+        pageFieldMarker(simplePageField.kind, simplePageField),
+        text,
+        width
+      );
+      text += width;
+      return;
+    }
     collect(child, nodeDepth + 1, local);
   };
 
   collect(simple, depth, revisions);
 
-  return { text, resultProps, resultStyle, sawResultContent };
+  return { text, resultProps, resultStyle, sawResultContent, nestedPageSegments };
 }
 
 /** The one projected piece a `w:fldSimple` paints over its reserved model unit. */
@@ -333,7 +367,7 @@ export interface SimpleFieldProjection {
    * Present when this is a BODY page-field placeholder (no page context): {@link text} is the
    * measurement digit and document finalize substitutes the real value for this kind.
    */
-  readonly pageField?: AllowlistedPageFieldMatch;
+  readonly pageField?: PageFieldMarker;
   /**
    * Present when this is a BODY `PAGEREF`: the cached display paints now and document
    * finalize substitutes the number of the page the resolved target lands on.
@@ -496,6 +530,27 @@ function projectSimpleFieldDisplay(
     }
   }
 
+  // DATE and TIME show the layout's field date over a saved result, like the complex shape.
+  // Names follow the language of the run that holds the instruction (17.16.4.1). A simple
+  // field holds its instruction in `w:instr` (17.16.19, `CT_SimpleField`), not in a run, so
+  // the language comes from the paragraph's run properties without direct formatting: the
+  // document defaults, table style, and paragraph style. A language set there decides, also
+  // over a result run in another language. The result run's language decides only when none
+  // of them sets one. The paragraph mark's `w:rPr` never names it.
+  const dateSpec = parseDateFieldInstruction(instr);
+  const fieldDate = dateSpec ? currentFieldDate() : undefined;
+  const languageProps =
+    runTextLanguage(inheritedRunProperties) !== null ? inheritedRunProperties : props;
+  const dateText =
+    dateSpec && fieldDate && (display.text.length > 0 || !display.sawResultContent)
+      ? formatDateField(dateSpec, fieldDate, languageProps)
+      : null;
+  if (dateText !== null) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return null;
+    return { text: dateText, props, style };
+  }
+
   // Synthesis fills only a result the file never cached: a cached result that exists but is
   // hidden stays hidden (`sawResultContent`), matching the complex-field flush. A
   // document-property field (TITLE / AUTHOR / … / DOCPROPERTY) paints its property value here.
@@ -523,5 +578,10 @@ function projectSimpleFieldDisplay(
   // to inherited properties the same way a top-level simple PAGE does.
   const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
   if (style.hidden) return null;
-  return { text: display.text, props, style };
+  // In the body, page fields nested in the saved result get a marker for document finalize.
+  const segmented =
+    args.bodyPageFields && display.nestedPageSegments.length > 0
+      ? deferredSegmentsMarker(display.text, display.nestedPageSegments)
+      : null;
+  return { text: display.text, props, style, ...(segmented ? { pageField: segmented } : {}) };
 }

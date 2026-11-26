@@ -22,6 +22,14 @@ export interface ChromeExportView {
    * `exportPdf` as `comments`. Absent means the converter default, which shows comments.
    */
   readonly comments?: boolean;
+  /**
+   * The moment DATE and TIME fields with a `\@` picture show in the editor, from the editor's
+   * `fieldDate` option. Pass it to `exportPdf` as `fieldDate`, so the PDF shows the same dates.
+   * Fields show it in the local time of the process that lays out the PDF: for a server in
+   * another time zone, send the local wall-clock time and rebuild it there. The source bytes keep
+   * the saved results. Absent when the editor shows saved results.
+   */
+  readonly fieldDate?: Date;
 }
 
 /**
@@ -78,10 +86,12 @@ export class ChromeExportError extends Error {
  * Saves the current document and converts those bytes through the configured handler.
  * Missing handlers fail before saving. Conversion never changes the editor document.
  * `settings` overrides the captured view for PDF conversion, such as print settings.
+ * The view carries the editor's `fieldDate`, so the PDF can show the dates the editor shows.
  * @public
  */
 export async function runChromeExport(
-  editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>,
+  editor: Pick<Editor, 'save'> &
+    Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors' | 'getFieldDate'>>,
   format: ChromeExportFormat,
   handlers: ChromeExportHandlers = {},
   settings: ChromePrintSettings = {}
@@ -100,13 +110,16 @@ export async function runChromeExport(
   if (format !== 'pdf') throw new TypeError('Unsupported export format.');
   if (!handlers.pdf) throw new ChromeExportError(format);
   const snapshot = editor.snapshot?.();
+  const fieldDate = editor.getFieldDate?.();
   const chosen = settings.displayMode !== undefined || settings.comments !== undefined;
-  // Without a snapshot, explicit settings still reach the handler, with default markup.
-  const view =
-    snapshot || chosen
+  // Without a snapshot, explicit settings and the field date still reach the handler, with
+  // default markup.
+  const view: ChromeExportView | undefined =
+    snapshot || chosen || fieldDate
       ? {
           displayMode: settings.displayMode ?? snapshot?.reviewDisplayMode ?? 'proposed',
           ...(settings.comments === undefined ? {} : { comments: settings.comments }),
+          ...(fieldDate ? { fieldDate } : {}),
           revisionMarkup: snapshot?.revisionMarkup ?? DEFAULT_REVISION_MARKUP,
           ...(editor.getReviewAuthors
             ? {

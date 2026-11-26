@@ -857,16 +857,16 @@ describe('wps vector shape projection', () => {
       ][0]!.vectorShape
     ).not.toBeNull();
 
+    // A nested group without properties paints nothing, and the two shapes still paint.
     const nested = parsePart(
       `<w:p><w:r>${drawing.replace('</wpg:wgp>', '<wpg:grpSp/></wpg:wgp>')}</w:r></w:p>`
     );
-    expect(
-      [
-        ...indexInlineDrawingProjectionsInPart(nested, {
-          resolveSchemeColor: () => '4472C4',
-        }).values(),
-      ][0]!.vectorShape
-    ).toBeNull();
+    const resolved = { resolveSchemeColor: () => '4472C4' };
+    const [flat] = [...indexInlineDrawingProjectionsInPart(nested, resolved).values()];
+    expect(flat!.vectorShape?.components.map((c) => c.fillHex)).toEqual(['4472C4', 'FF0000']);
+    expect(flat!.diagnostics).toEqual([
+      { code: 'group-member-not-shown', nodeId: `${drawingOf(nested).id}.0.2.0.0.3`, detail: null },
+    ]);
   });
 
   test('an MC-wrapped wps textbox projects a story; the VML fallback never renders', () => {

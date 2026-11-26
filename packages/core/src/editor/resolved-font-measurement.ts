@@ -7,7 +7,13 @@ import {
   resolveDefaultSurfaceMeasurer,
 } from '../layout/index.ts';
 import type { LayoutShapingOptions, ResolvedFont, ShapeInput } from '../layout/index.ts';
-import { markFacePreservingShaper, preservesShapingFace } from '../layout/shaped-run.ts';
+import {
+  markFacePreservingShaper,
+  markMissingGlyphFallbackShaper,
+  preservesShapingFace,
+  substitutesOnlyMissingGlyphs,
+} from '../layout/shaped-run.ts';
+import { documentStandInFaces } from '../layout/document-font-substitution.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { fontTableSerifHangulFace } from '../store/package/font-table-alternates.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
@@ -91,9 +97,13 @@ export function resolvedFontMeasurement(
     : shaping.shaper;
   // It only reports a refusal and rethrows it, so its runs are the wrapped shaper's.
   const shaper =
-    observed !== shaping.shaper && preservesShapingFace(shaping.shaper)
-      ? markFacePreservingShaper(observed)
-      : observed;
+    observed === shaping.shaper
+      ? observed
+      : preservesShapingFace(shaping.shaper)
+        ? markFacePreservingShaper(observed)
+        : substitutesOnlyMissingGlyphs(shaping.shaper)
+          ? markMissingGlyphFallbackShaper(observed)
+          : observed;
   const measurer = createLayoutShapedMeasurer(
     { ...shaping, shaper },
     {
@@ -127,6 +137,24 @@ export function resolvedFontMeasurement(
       fallback: fallback.measurer,
     }
   );
+  // A synthesized stand-in measures and paints, but its own face is not installed: the probe
+  // for an installed face must not count it, or a face that loads later looks loaded already.
+  // Layout still measures it with real metrics, so `hasMeasurableFont` keeps the measurer's
+  // own answer (`measuresWithAdmittedFace`).
+  const standIns = documentStandInFaces(fonts);
+  const hasResolvedFont = measurer.hasResolvedFont;
+  if (standIns.size > 0 && hasResolvedFont) {
+    measurer.hasResolvedFont = (style) => {
+      const family = style.fontFamily ?? fonts.defaultFont.family;
+      const request = {
+        family: held?.(family) ?? family,
+        weight: style.bold ? 700 : 400,
+        style: style.italic ? ('italic' as const) : ('normal' as const),
+      };
+      if (request.family.trim().length > 0 && standIns.has(fontRequestKey(request))) return false;
+      return hasResolvedFont.call(measurer, style);
+    };
+  }
   // The fallback is part of the geometry producer: the same HarfBuzz faces over a
   // different unresolved-family measurer must never share paragraph-cache entries.
   const producer =

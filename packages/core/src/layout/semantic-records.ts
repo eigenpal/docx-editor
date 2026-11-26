@@ -273,6 +273,8 @@ export interface StyleSpanRecord {
    * from the gap alone spread the float's whole width across every space on the line.
    */
   readonly wrapAdvanceBefore?: number;
+  /** Width of this span's end spaces that hang outside its character border at a wrap. @internal */
+  readonly borderEndTrimPt?: number;
   /**
    * The revision wrappers this text sits inside, outermost first, absent when untracked.
    *
@@ -749,7 +751,7 @@ export interface TableRowFragmentRecord {
   readonly changeSites?: readonly RevisionAttribution[];
   /** Authored row ordinal within the table; repeats share the original row's index. */
   readonly rowIndex: number;
-  /** True when the authored row resolves `w:tblHeader`, including its first occurrence. */
+  /** The row is in the header group (`w:tblHeader` or covered by its merge), at each occurrence. */
   readonly isHeaderRow: boolean;
   /** True for a `w:tblHeader` row repeated atop a continuation page; not an interaction stop. */
   readonly isHeaderRepeat: boolean;

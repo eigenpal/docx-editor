@@ -13,10 +13,33 @@ describe('Word line-unit paragraph margins', () => {
         paragraphSpacing([p({ beforeLines: '100', afterLines: '150', line: '600', lineRule })])
       ).toEqual({ before: 12, after: 18 });
   });
-  test('line units override twips, including explicit zero', () => {
+  test('positive line units override twips; zero line units leave the twips in force', () => {
     expect(
       paragraphSpacing([p({ before: '900', after: '800', beforeLines: '0', afterLines: '50' })])
-    ).toEqual({ before: 0, after: 6 });
+    ).toEqual({ before: 45, after: 6 });
+  });
+  // Each row is a cascade: [style, paragraph] → points after.
+  test.each([
+    ['direct points with zero lines', [{}, { after: '360', afterLines: '0' }], 18],
+    ['direct points with positive lines', [{}, { after: '360', afterLines: '50' }], 6],
+    ['zero lines over style lines', [{ afterLines: '100' }, { after: '360', afterLines: '0' }], 18],
+    ['direct points under style lines', [{ afterLines: '100' }, { after: '360' }], 12],
+    ['style points with zero lines', [{ after: '360', afterLines: '0' }, {}], 18],
+    ['zero lines alone cancel style lines', [{ afterLines: '100' }, { afterLines: '0' }], 0],
+    ['zero lines keep style points', [{ after: '360' }, { afterLines: '0' }], 18],
+    [
+      'zero lines fall back to the points beside style lines',
+      [{ after: '120', afterLines: '100' }, { afterLines: '0' }],
+      6,
+    ],
+  ] as const)('%s', (_name, [style, direct], after) => {
+    expect(paragraphSpacing([p(style), p(direct)]).after).toBe(after);
+  });
+  test('zero line units leave the points before a paragraph in force', () => {
+    expect(paragraphSpacing([p({ before: '360', beforeLines: '0' })]).before).toBe(18);
+    expect(
+      paragraphSpacing([p({ beforeLines: '50' }), p({ before: '300', beforeLines: '0' })]).before
+    ).toBe(15);
   });
   test('inherits line units independently; automatic spacing has precedence', () => {
     expect(

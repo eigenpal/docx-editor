@@ -11,6 +11,7 @@ import { findNode } from '../store/package/ooxml-edit.ts';
 import { findContentControl } from '../store/package/content-control-nodes.ts';
 import { isParagraph } from '../store/store/tree-op-segments.ts';
 import { contentControlAtCaret } from '../store/store/tree-op-validate.ts';
+import { fieldCodeSplitRefusal } from './field-code-split-refusal.ts';
 
 /** The characters a text write treats as a paragraph break. */
 const PARAGRAPH_BREAK_IN_TEXT = /[\r\n]/;
@@ -117,6 +118,8 @@ export function planParagraphBreaks(
     at += segment.length;
     offsets.push(at);
   }
+  const fieldCode = fieldCodeSplitRefusal(story.part, head.paragraphId, offsets);
+  if (fieldCode) return fieldCode;
   const created = planning.reserve(head.paragraphId, offsets.length);
   if (!created) return refuse('that paragraph is not in this story', 'paragraph-break');
 

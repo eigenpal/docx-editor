@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The text before a field and the field result showed on separate lines when the field instruction spanned paragraphs.",
+  "after": "Layout lays the text on either side of the field codes out as one display-only merged paragraph. Backspace and Delete on the shared line edit the character beside the caret, and typed, composed, or tracked inserts at the start of the result side land before the field's begin. All of these emit existing operations.",
+  "reason": "Only derived layout and the local choice of which existing text and join operations to emit change. Canonical OOXML, source offsets, paragraph identity, replicated operation shapes, and awareness messages remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/field-code-join-edges.test.ts",
+    "packages/core/src/editor/__tests__/field-code-merged-line.test.ts",
+    "packages/core/src/editor/__tests__/merged-line-navigation.test.ts",
+    "packages/core/src/layout/__tests__/field-instruction-paragraphs.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-field-instruction-paragraphs.test.ts"
+  ],
+  "changeset": "field-code-line-merge",
+  "migration": null
+}

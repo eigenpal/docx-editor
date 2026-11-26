@@ -557,8 +557,12 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       },
     });
     await fontsSettled(editor);
-    // The file's OWN face wins, so the composed configuration drops the redirect.
-    expect(captured.configurations.at(-1)?.substitutions ?? []).toEqual([]);
+    // The file's OWN face wins over the redirect, and stands in for the faces it lacks.
+    const substitutions = captured.configurations.at(-1)?.substitutions ?? [];
+    const faces = substitutions.map(({ from }) => `${from.weight} ${from.style}`).sort();
+    expect(faces).toEqual(['400 italic', '700 italic', '700 normal']);
+    const regular = { family: 'Original Face', weight: 400, style: 'normal' };
+    for (const { to } of substitutions) expect(to).toEqual(regular);
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
     editor.destroy();
     captured.restore();
@@ -591,12 +595,22 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       },
     });
     await fontsSettled(editor);
-    // A refused embedded face restores the configured redirect on recomposition.
-    expect(captured.configurations.at(-1)?.substitutions).toEqual([
-      expect.objectContaining({
-        from: expect.objectContaining({ family: 'Original Face' }),
-        to: expect.objectContaining({ family: 'DejaVu Sans' }),
-      }),
+    // A refused embedded face restores the configured redirect on recomposition. The faces
+    // that the redirect does not name stand in through the same family.
+    const substitutions = captured.configurations.at(-1)?.substitutions ?? [];
+    expect(substitutions).toContainEqual({
+      from: { family: 'Original Face', weight: 400, style: 'normal' },
+      to: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+    });
+    expect(
+      substitutions
+        .map(({ from, to }) => `${from.family} ${from.weight} ${from.style} > ${to.family}`)
+        .sort()
+    ).toEqual([
+      'Original Face 400 italic > DejaVu Sans',
+      'Original Face 400 normal > DejaVu Sans',
+      'Original Face 700 italic > DejaVu Sans',
+      'Original Face 700 normal > DejaVu Sans',
     ]);
     // Covered THROUGH the redirect, so the fidelity notice stays quiet: the run paginates
     // on the metrics the app chose for it.

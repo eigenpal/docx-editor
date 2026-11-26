@@ -17,6 +17,7 @@ import { DialogProvider } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
 import { warnFieldResultsChanged } from './field-results-warning';
 import { warnContentLockPolicyChanged } from './content-lock-policy-warning';
+import { warnFieldDateChanged } from './field-date-warning';
 import { warnLockedControlNavigationChanged } from './locked-control-navigation-warning';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { ChromeDarkContext, useResolvedDark } from './color-mode-context';
@@ -161,6 +162,16 @@ export interface DocxEditorRootProps {
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
+   * The saved document keeps the saved results. Print and PDF export from the File menu pass the
+   * date to the PDF handler as `ChromeExportView.fieldDate`. Absent (the default), fields show
+   * their saved results. Read once, when the editor is created: a later
+   * change to a different time is ignored, with a development warning. A new `Date` with the same
+   * time does nothing. Refused with a `TypeError` when it is not a valid `Date`, or with
+   * `fieldResults: 'editable'`.
+   */
+  fieldDate?: Date;
   /**
    * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
    * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
@@ -315,6 +326,8 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   const [editor, setEditor] = useState<DocxEditorInstance | null>(null);
   /** The `fieldResults` the current instance was created with. */
   const createdFieldResults = useRef(props.fieldResults);
+  /** The `fieldDate` the current instance was created with. */
+  const createdFieldDate = useRef(props.fieldDate);
   /** The `contentLockPolicy` the current instance was created with. */
   const createdContentLockPolicy = useRef(props.contentLockPolicy);
   /** The `lockedControlNavigation` the current instance was created with. */
@@ -347,6 +360,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     // FIRST paint is already styled — no kind-coloured frame.
     const declaredStyles = revisionStyleRegistry.current();
     createdFieldResults.current = p.fieldResults;
+    createdFieldDate.current = p.fieldDate;
     createdContentLockPolicy.current = p.contentLockPolicy;
     createdLockedControlNavigation.current = p.lockedControlNavigation;
     const instance = createDocxEditor({
@@ -360,6 +374,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
       ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
       ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
+      ...(p.fieldDate !== undefined ? { fieldDate: p.fieldDate } : {}),
       ...(p.contentLockPolicy !== undefined ? { contentLockPolicy: p.contentLockPolicy } : {}),
       ...(p.lockedControlNavigation !== undefined
         ? { lockedControlNavigation: p.lockedControlNavigation }
@@ -512,6 +527,11 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   useEffect(() => {
     if (editor) warnFieldResultsChanged(createdFieldResults.current, props.fieldResults);
   }, [editor, props.fieldResults]);
+
+  // Compared by time, so an inline `new Date(...)` re-created on each render does not warn.
+  useEffect(() => {
+    if (editor) warnFieldDateChanged(createdFieldDate.current, props.fieldDate);
+  }, [editor, props.fieldDate]);
 
   // Compared by value, so an inline policy object re-created on each render does not warn.
   useEffect(() => {

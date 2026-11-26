@@ -77,6 +77,9 @@ export type { GroupPictureProjection } from './drawing-group-picture.ts';
 
 export type { DrawingDiagnostic, DrawingProjectionLimits };
 
+/** The most members one group names in `group-member-not-shown` diagnostics. */
+const MAX_OMITTED_MEMBER_DIAGNOSTICS = 16;
+
 function removeSupersededDrawingDiagnostic(
   diagnostics: DrawingDiagnostic[],
   superseded: DrawingDiagnostic
@@ -1483,6 +1486,13 @@ export function projectDrawingWithState(
   );
   if (content.paints && pictureResult.diagnostic) {
     removeSupersededDrawingDiagnostic(state.diagnostics, pictureResult.diagnostic);
+  }
+  // A group that paints without some members names each of them, up to a bound.
+  for (const nodeId of (content.omittedGroupMembers ?? []).slice(
+    0,
+    MAX_OMITTED_MEMBER_DIAGNOSTICS
+  )) {
+    state.diagnostics.push({ code: 'group-member-not-shown', nodeId, detail: null });
   }
   return freezeDrawingProjection(
     Object.freeze({

@@ -22,9 +22,26 @@ import { cellContentInsets } from './table-cell-geometry.ts';
 import { withTableContentBorders } from './table-content-borders.ts';
 
 /**
- * Stamps `minimumContentInsets` on the cells of every `atLeast` row, resolved as if no cell
- * in the table continued a vertical merge. Rows without a minimum, and tables that pair no
- * minimum with a merge, are returned by identity.
+ * Whether the row asks for row-local clearance: it has an `atLeast` minimum, or only merge
+ * heads (lone `restart` cells too), continuations, and `btLr` cells (which `waitsForRowHeight`
+ * covers) hold it, so its first cell's end paragraph can set a floor (`unsizedRowFloorPt`).
+ * This reads the authored merge; layout decides later whether each head is detached. A stamp
+ * that layout does not use changes nothing.
+ */
+function takesRowMinimum(row: SemanticTableRow): boolean {
+  if (row.height.rule === 'atLeast') return true;
+  const heads = (cell: SemanticTableCell) =>
+    cell.headsVerticalMerge === true || cell.restartsVerticalMerge === true;
+  return (
+    row.cells.some(heads) &&
+    row.cells.every((cell) => cell.vMergeContinue || heads(cell) || cell.textDirection === 'btLr')
+  );
+}
+
+/**
+ * Stamps `minimumContentInsets` on the cells of every row that {@link takesRowMinimum},
+ * resolved as if no cell in the table continued a vertical merge. Other rows, and tables
+ * that pair no minimum with a merge, are returned by identity.
  */
 export function withRowMinimumContentInsets(
   contentRows: readonly SemanticTableRow[],
@@ -37,10 +54,10 @@ export function withRowMinimumContentInsets(
   return stampRowMinimumContentInsets(contentRows, visualRows, tableBorders, columns, collapsed);
 }
 
-/** Whether the table pairs an `atLeast` row with a vertical merge, so minimums are stamped. */
+/** Whether the table pairs a row minimum with a vertical merge, so minimums are stamped. */
 export function rowMinimumContentInsetsApply(visualRows: readonly SemanticTableRow[]): boolean {
   return (
-    visualRows.some((row) => row.height.rule === 'atLeast') &&
+    visualRows.some(takesRowMinimum) &&
     visualRows.some((row) => row.cells.some((cell) => cell.vMergeContinue))
   );
 }
@@ -63,7 +80,7 @@ export function stampRowMinimumContentInsets(
     collapsed
   );
   return contentRows.map((row, rowIndex) =>
-    row.height.rule !== 'atLeast'
+    !takesRowMinimum(row)
       ? row
       : {
           ...row,

@@ -5283,6 +5283,7 @@ export interface TextboxStoryProjection {
         top: number;
     }>;
     readonly legacyFrame?: TextboxLegacyFrame;
+    readonly linesFromBottom?: true;
     readonly noWrap?: true;
     readonly shadow?: LegacyTextboxShadow;
     readonly strokeCap?: 'round' | 'square';
@@ -6444,6 +6445,7 @@ export interface VectorShapeComponent {
     readonly fillHex: string | null;
     readonly fillPattern?: VectorPattern;
     readonly fillRule?: 'nonzero';
+    readonly picturesBelow?: number;
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)

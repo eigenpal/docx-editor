@@ -13,8 +13,11 @@ import {
   rootGroupSpace,
   turnGroupPoint,
   turnGroupTextAngle,
+  type GroupSpace,
 } from './drawing-group-members.ts';
+import { quarterTurned } from './drawing-group-transform.ts';
 import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
+import { shapeTextAreaEmu, stacksLinesLeftToRight } from './drawing-textbox-frame.ts';
 import { shapeTransformElement } from './drawing-shape-transform.ts';
 import {
   readDrawingGroupFrame,
@@ -25,7 +28,6 @@ import type { DrawingProjection } from './drawing-projection.ts';
 import {
   childTransform,
   findDirectChild,
-  isUnpaintedGroupTextbox,
   projectWspTextboxStory,
   type ShapeSchemeColorResolver,
   type ShapeStyleMatrixResolver,
@@ -36,11 +38,7 @@ import {
   schemaAttributeValue,
   WPS_NAMESPACE_URI,
 } from './ooxml-drawing-rules.ts';
-import {
-  DRAWINGML_MAIN_NAMESPACE_URI,
-  PIC_NAMESPACE_URI,
-  type OoxmlElement,
-} from './ooxml-tree.ts';
+import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 
 /** One text box member of a drawing group. @internal */
@@ -122,7 +120,8 @@ function textStaysUpright(member: OoxmlElement): boolean {
 
 /**
  * The quarter turn that `wps:bodyPr/@vert` (ST_TextVerticalType, ECMA-376 Part 1, 20.1.10.83)
- * gives a member's text: 90 for `vert` and `eaVert`, 270 for `vert270`, and 0 otherwise. As for
+ * gives a member's text: 90 for `vert`, `eaVert` and the modes that stack their lines from the
+ * left ({@link stacksLinesLeftToRight}), 270 for `vert270`, and 0 otherwise. As for
  * a text box outside a group, `eaVert` lays out as a turned block, so East Asian glyphs turn
  * with the line instead of standing upright.
  */
@@ -133,7 +132,7 @@ function verticalFlowTurn(member: OoxmlElement): 0 | 90 | 270 {
   });
   const raw = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'vert') : undefined;
   const vert = raw === undefined ? undefined : collapseSchemaWhitespace(raw);
-  if (vert === 'vert' || vert === 'eaVert') return 90;
+  if (vert === 'vert' || vert === 'eaVert' || stacksLinesLeftToRight(vert)) return 90;
   return vert === 'vert270' ? 270 : 0;
 }
 
@@ -153,6 +152,116 @@ function turnedInsets(insets: Insets, flowTurn: 0 | 90 | 270): Insets {
   return { ...insets };
 }
 
+/**
+ * Insets that keep the centre of the text area and swap its width and height: the area of
+ * upright text in a shape that turns nearer a quarter turn. An inset can be negative, where
+ * the swapped area leaves the box.
+ */
+function swappedTextArea(insets: Insets, box: Readonly<{ cx: number; cy: number }>): Insets {
+  const width = box.cx - insets.left - insets.right;
+  const height = box.cy - insets.top - insets.bottom;
+  const shift = (width - height) / 2;
+  return {
+    top: insets.top - shift,
+    right: insets.right + shift,
+    bottom: insets.bottom - shift,
+    left: insets.left + shift,
+  };
+}
+
+/** The net flip of the groups around a member: two flips on one axis cancel. */
+function netGroupFlips(space: GroupSpace): { flipH: boolean; flipV: boolean } {
+  let flipH = false;
+  let flipV = false;
+  for (const { turn } of space.turns ?? []) {
+    if (turn.flipH) flipH = !flipH;
+    if (turn.flipV) flipV = !flipV;
+  }
+  return { flipH, flipV };
+}
+
+/** A member's story with the box it lays out in and the turn its text paints with. */
+export interface MemberStoryPlacement {
+  /** The size of the box the story lays out in: the member box, swapped for vertical text. */
+  readonly cx: number;
+  readonly cy: number;
+  /** The story, with insets that hold the shape's text rectangle, as edges of the laid-out box. */
+  readonly story: TextboxStoryProjection;
+  /** Clockwise turn of the painted story about the centre of the member box, in [0, 360). */
+  readonly rotationDegrees: number;
+}
+
+/**
+ * The story of a text box member of a group or a canvas, placed in its shape.
+ *
+ * The text lays out in the text rectangle of the member's geometry (`a:rect`, CT_GeomRect,
+ * ECMA-376 Part 1, 20.1.9.22) less the body insets (`wps:bodyPr`, CT_TextBodyProperties,
+ * 21.1.2.1.1), as the text of a top-level shape does. The rectangle is evaluated at
+ * `geometry.extent`, the extent the member's outline is projected at, and scaled with it, so
+ * it stays on the painted geometry. The story's insets carry it, which keeps one text layout
+ * and both painters.
+ *
+ * `box` is the member box at its painted size. `shapeTurnDegrees` is the turn the text takes
+ * from the shape and the groups around it, and `groupFlips` the net flip of those groups.
+ * Upright text (`@upright`) ignores that turn; where the turn is nearer a quarter turn, its
+ * text area keeps its centre and swaps its sides.
+ * Vertical text (`@vert`) lays out across the box and adds its quarter turn.
+ */
+export function projectMemberStory(
+  member: OoxmlElement,
+  box: Readonly<{ cx: number; cy: number }>,
+  geometry: Readonly<{
+    extent: Readonly<{ cx: number; cy: number }>;
+    scaleX: number;
+    scaleY: number;
+  }>,
+  shapeTurnDegrees: number,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupFlips?: Readonly<{ flipH: boolean; flipV: boolean }>
+): MemberStoryPlacement | null {
+  // Vertical text lays out across the box, with the sides swapped about its centre, and
+  // turns a quarter: clockwise for top-to-bottom lines, counterclockwise for bottom-to-top.
+  const flowTurn = verticalFlowTurn(member);
+  const [cx, cy] = flowTurn === 0 ? [box.cx, box.cy] : [box.cy, box.cx];
+  const story = projectWspTextboxStory(
+    member,
+    { cx, cy },
+    resolveSchemeColor,
+    resolveStyleMatrixReference
+  );
+  if (!story) return null;
+  const spPr = findDirectChild(member.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'spPr',
+  });
+  const area = spPr ? shapeTextAreaEmu(spPr, geometry.extent, groupFlips) : null;
+  const scaleX = Math.abs(geometry.scaleX);
+  const scaleY = Math.abs(geometry.scaleY);
+  let insets: Insets = area
+    ? {
+        top: story.insetsEmu.top + Math.round(area.top * scaleY),
+        right: story.insetsEmu.right + Math.round(area.right * scaleX),
+        bottom: story.insetsEmu.bottom + Math.round(area.bottom * scaleY),
+        left: story.insetsEmu.left + Math.round(area.left * scaleX),
+      }
+    : story.insetsEmu;
+  const upright = textStaysUpright(member);
+  if (upright && quarterTurned(shapeTurnDegrees)) insets = swappedTextArea(insets, box);
+  return {
+    cx,
+    cy,
+    story: Object.freeze({
+      ...story,
+      insetsEmu: Object.freeze(turnedInsets(insets, flowTurn)),
+    }),
+    // Group flips and turns carry the shape's turn; the vertical flow turns after them, so
+    // top-to-bottom text stays top-to-bottom in a flipped group. Upright text keeps only
+    // its flow turn.
+    rotationDegrees: upright ? flowTurn : (((shapeTurnDegrees + flowTurn) % 360) + 360) % 360,
+  };
+}
+
 /** The `w:txbxContent` root of a `wps:wsp`, or null when it holds no story. */
 function storyRootOf(wsp: OoxmlElement): OoxmlElement | null {
   const txbx = findDirectChild(wsp.children, {
@@ -167,7 +276,7 @@ function storyRootOf(wsp: OoxmlElement): OoxmlElement | null {
 /** One text box story root of a group, as read-only derivations list it. */
 export interface GroupTextboxContent {
   readonly root: OoxmlElement;
-  /** Layout lays out none of it: its member is hidden, or its group paints a placeholder. */
+  /** Layout lays out none of it: its member is hidden, or its group cannot place it. */
   readonly unplaced?: true;
 }
 
@@ -175,33 +284,27 @@ export interface GroupTextboxContent {
  * The story roots of a group's text box members, in document order, for read-only
  * derivations such as Find and paragraph reads. A bounded read of the group frame and its
  * members, nested and hidden members included. Text that layout lays out none of (a hidden
- * member, or a group that paints a placeholder) stays listed for paragraph reads, marked
- * `unplaced`, so the selectable story list leaves it out.
+ * member, a member of a nested group that cannot be placed, or a group whose members do not
+ * read) stays listed for paragraph reads, marked `unplaced`, so the selectable story list
+ * leaves it out.
  */
 export function groupTextboxContents(anchor: OoxmlElement): readonly GroupTextboxContent[] {
   const frame = readDrawingGroupFrame(anchor, { turned: true });
   if (!frame) return [];
   const members = listGroupMembers(frame);
-  // Only whether the members place is read here, so the scale does not matter. A picture in a
-  // turned or flipped space has no frame, so its group paints a placeholder too.
-  const flattened = flattenGroupMembers(
-    frame,
-    rootGroupSpace(frame, { cx: 0, cy: 0 }, { withTurn: true })
+  // Only which members place is read here, so the scale does not matter. A member inside a
+  // nested group that cannot be placed lays out no text.
+  const placed = new Set(
+    flattenGroupMembers(frame, rootGroupSpace(frame, { cx: 0, cy: 0 }, { withTurn: true }))?.map(
+      ({ member }) => member
+    )
   );
-  const placed =
-    flattened !== null &&
-    !flattened.some(
-      ({ member, space }) =>
-        space.turns !== undefined &&
-        member.namespaceUri === PIC_NAMESPACE_URI &&
-        member.localName === 'pic'
-    );
   const contents: GroupTextboxContent[] = [];
   for (const { member: child, hidden } of members) {
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;
     if (memberTextRotation(child) === null) continue;
     const root = storyRootOf(child);
-    if (root) contents.push(placed && !hidden ? { root } : { root, unplaced: true });
+    if (root) contents.push(placed.has(child) && !hidden ? { root } : { root, unplaced: true });
   }
   return contents;
 }
@@ -209,16 +312,13 @@ export function groupTextboxContents(anchor: OoxmlElement): readonly GroupTextbo
 /**
  * The text box members of a group drawing, in document order.
  *
- * A group paints whole or not at all, so its member text follows the group: `groupPaints`
- * says whether the rest of the group paints. A group whose only members are text boxes
- * without fill or outline has nothing else to paint, and its text alone still renders.
- * A rotated or flipped member lays out upright and records the turn its text takes. Null
- * when no member contributes text.
+ * The text of each member lays out whether or not the shape of the member, or another
+ * member of the group, paints. A rotated or flipped member lays out upright and records the
+ * turn its text takes. Null when no member contributes text.
  */
 export function projectGroupTextboxes(
   anchor: OoxmlElement,
   extent: Readonly<{ cx: number; cy: number }>,
-  groupPaints: boolean,
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
 ): readonly GroupTextboxProjection[] | null {
@@ -229,13 +329,7 @@ export function projectGroupTextboxes(
   const flattened = flattenGroupMembers(frame, rootGroupSpace(frame, extent, { withTurn: true }));
   if (!flattened) return null;
   const members: GroupTextboxProjection[] = [];
-  let onlyUnpaintedText = true;
-  for (const { member: child, space, groupFill } of flattened) {
-    if (
-      !isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
-    ) {
-      onlyUnpaintedText = false;
-    }
+  for (const { member: child, space } of flattened) {
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;
     const rotationDegrees = memberTextRotation(child);
     if (rotationDegrees === null) continue;
@@ -250,17 +344,17 @@ export function projectGroupTextboxes(
     );
     const boxCx = Math.round(place.extent.cx * place.scaleX);
     const boxCy = Math.round(place.extent.cy * place.scaleY);
-    // Vertical text lays out across the box, with the sides swapped about its centre, and
-    // turns a quarter: clockwise for top-to-bottom lines, counterclockwise for bottom-to-top.
-    const flowTurn = verticalFlowTurn(child);
-    const [cx, cy] = flowTurn === 0 ? [boxCx, boxCy] : [boxCy, boxCx];
-    const story = projectWspTextboxStory(
+    const placed = projectMemberStory(
       child,
-      { cx, cy },
+      { cx: boxCx, cy: boxCy },
+      place,
+      turnGroupTextAngle(space, rotationDegrees),
       resolveSchemeColor,
-      resolveStyleMatrixReference
+      resolveStyleMatrixReference,
+      netGroupFlips(space)
     );
-    if (!story) continue;
+    if (!placed) continue;
+    const { cx, cy, story } = placed;
     // The box keeps its size under a turn; its centre moves where the turns take it.
     const centre = turnGroupPoint(space, {
       x: place.offset.x + boxCx / 2,
@@ -275,20 +369,12 @@ export function projectGroupTextboxes(
           cx,
           cy,
         }),
-        story: Object.freeze({
-          ...story,
-          insetsEmu: Object.freeze(turnedInsets(story.insetsEmu, flowTurn)),
-        }),
-        // Group flips and turns carry the shape's turn; the vertical flow turns after them, so
-        // top-to-bottom text stays top-to-bottom in a flipped group. Upright text keeps only
-        // its flow turn.
-        rotationDegrees: textStaysUpright(child)
-          ? flowTurn
-          : (turnGroupTextAngle(space, rotationDegrees) + flowTurn) % 360,
+        story,
+        rotationDegrees: placed.rotationDegrees,
       })
     );
   }
-  if (members.length === 0 || !(groupPaints || onlyUnpaintedText)) return null;
+  if (members.length === 0) return null;
   return Object.freeze(members);
 }
 
@@ -296,7 +382,7 @@ export function projectGroupTextboxes(
 export function groupTextboxesField(
   anchor: OoxmlElement,
   extent: Readonly<{ cx: number; cy: number }>,
-  painted: Pick<DrawingProjection, 'picture' | 'groupPicture' | 'vectorShape'>,
+  painted: Pick<DrawingProjection, 'picture'>,
   ctx: Readonly<{
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
@@ -306,7 +392,6 @@ export function groupTextboxesField(
   const groupTextboxes = projectGroupTextboxes(
     anchor,
     extent,
-    painted.groupPicture !== null || painted.vectorShape !== null,
     ctx.resolveSchemeColor,
     ctx.resolveStyleMatrixReference
   );
