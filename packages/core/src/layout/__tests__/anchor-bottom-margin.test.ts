@@ -77,6 +77,14 @@ describe('modern modes: a wrapping object that cannot end at the bottom margin',
     }
   });
 
+  test('moves the line when the lifted object would reach into that line', () => {
+    // The paragraph starts at 560, so its first 14pt line ends at 574. Lifted to end at 648, an
+    // 80pt object at offset 12 starts at 568: below the line top but above the line bottom.
+    const layout = render(filler() + linesParagraph(anchor({ y: 12, height: 80, x: 368 }), 1, 3));
+    expect(lineAt(layout, 'Line 1')).toEqual({ page: 1, y: 0 });
+    expect(drawings(layout)).toEqual([{ page: 1, y: 12 }]);
+  });
+
   test('moves the line when the lifted object would rise above that line', () => {
     // Lifted to end at 648, a 110pt object starts at 538: below the paragraph top (518) but
     // above its own line (574).
@@ -129,6 +137,13 @@ describe('modern modes: a wrapping object that can end at the bottom margin', ()
     expect(drawings(render(filler() + withText))).toEqual([{ page: 0, y: 608 }]);
     const line = `<w:p>${anchor({ y: 120, height: 40, frame: 'line' })}</w:p>`;
     expect(drawings(render(filler() + line))).toEqual([{ page: 0, y: 608 }]);
+  });
+
+  test('keeps the line when the lifted object starts at the line bottom', () => {
+    // A 74pt object at offset 20 lifts to start at 574, the bottom of its 14pt line at 560.
+    const layout = render(filler() + linesParagraph(anchor({ y: 20, height: 74, x: 368 }), 1, 3));
+    expect(lineAt(layout, 'Line 1')).toEqual({ page: 0, y: 560 });
+    expect(drawings(layout)).toEqual([{ page: 0, y: 574 }]);
   });
 
   test('keeps a later line when the lifted object stays below it', () => {
@@ -237,6 +252,17 @@ describe('the page-fit rule follows what publishes', () => {
     const layout = render(filler(546) + heading + body);
     expect(lineAt(layout, 'Heading')).toEqual({ page: 1, y: 0 });
     expect(lineAt(layout, 'Body')!.page).toBe(1);
+  });
+
+  test('moves a keep-with-next heading when the lifted object would reach into its line', () => {
+    // The body line at 560 ends at 574; its 80pt object at offset 12 cannot lift below it.
+    const heading =
+      '<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/></w:pPr>' +
+      '<w:r><w:t>Heading</w:t></w:r></w:p>';
+    const body = linesParagraph(anchor({ y: 12, height: 80, x: 368 }), 1, 1);
+    const layout = render(filler(546) + heading + body);
+    expect(lineAt(layout, 'Heading')).toEqual({ page: 1, y: 0 });
+    expect(lineAt(layout, 'Line 1')!.page).toBe(1);
   });
 
   test('publishes an object that fits with its own line and moves a later one with its line', () => {

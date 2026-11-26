@@ -206,8 +206,8 @@ export function createOwnAnchorPageFit(
 /**
  * The paragraph's lines with each line's height raised to the room its own objects need below
  * its top, for `w:keepNext` pricing. A line fits with an object of height `h` when the object
- * ends above the margin where it is, or when `h` fits below the line top (the object then moves
- * up). `opening` gives the space and top border above the first line, which a paragraph-relative
+ * ends above the margin where it is, or when `h` fits below the line's bottom (the object then
+ * moves up, and starts at or below that bottom). `opening` gives the space and top border above the first line, which a paragraph-relative
  * offset counts from. Modern modes only (`modern`); other modes return the lines unchanged.
  */
 export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
@@ -229,7 +229,7 @@ export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
       // A first-line frame starts at the paragraph top, above the opening space and border.
       const belowLine = anchor.frame === 'line' && index > 0 ? offset : offset - lineTop;
       const height = measureInlineDrawing(anchor.projection).height;
-      need = Math.max(need, Math.min(height, belowLine + height));
+      need = Math.max(need, Math.min(line.height + height, belowLine + height));
     }
     return need === line.height ? line : { ...line, height: need };
   });
