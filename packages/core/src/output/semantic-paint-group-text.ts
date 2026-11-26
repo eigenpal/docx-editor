@@ -9,6 +9,7 @@ import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawi
 import type { LayoutBox } from '../layout/semantic-records.ts';
 import { regionCutClipBox } from '../layout/drawing-group-picture-layers.ts';
 import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
+import { automaticTextColor } from '../layout/ooxml-shading.ts';
 
 /** A length, in points, past which no member of a drawing paints. */
 const FAR = 100_000;
@@ -78,6 +79,10 @@ export function paintGroupTextboxStories(
     // line that holds an inline box, which carries its paragraph mark's face.
     content.style.fontWeight = 'normal';
     content.style.fontStyle = 'normal';
+    // Automatic text (17.3.2.6 color, CT_Color) takes its colour from the member's own fill
+    // (20.1.8.54 solidFill), not from shading around the group: white on a dark fill, black
+    // on a light fill or none.
+    content.style.color = automaticTextColor(story.fillHex) ? '#FFFFFF' : '#000000';
     const turn = member.rotationDegrees;
     if (turn !== 0 && Number.isFinite(turn)) {
       // The member turns about its box center, which sits here in content-box coordinates.

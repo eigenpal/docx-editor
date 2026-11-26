@@ -178,9 +178,54 @@ test('a white text box inside a dark-shaded cell paints automatic text black', (
   expect(BLACK.filter((color) => color !== 'inherited black')).toContain(colorOf(run!));
 });
 
-// Word paints automatic text in an unfilled box black even over a dark cell: the box's text
+// Automatic text in an unfilled box paints black even over a dark cell: the box's text
 // follows the box, not the shading around it.
 test('an unfilled text box inside a dark-shaded cell paints automatic text black', () => {
   const [run] = paintedTextboxRuns(inlineBoxInDarkCellXml('<a:noFill/>'));
+  expect(BLACK.filter((color) => color !== 'inherited black')).toContain(colorOf(run!));
+});
+
+// An inline group with one text box member, in a dark-shaded body cell or in the body.
+function groupXml(memberFill: string, inDarkCell: boolean): string {
+  const group =
+    '<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+    '<wp:extent cx="2743200" cy="406400"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    '<wp:docPr id="1" name="Group 1"/>' +
+    '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">' +
+    '<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/>' +
+    '<a:ext cx="2743200" cy="406400"/><a:chOff x="0" y="0"/><a:chExt cx="2743200" cy="406400"/>' +
+    '</a:xfrm></wpg:grpSpPr>' +
+    '<wps:wsp><wps:cNvPr id="2" name="Member"/><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm>' +
+    '<a:off x="0" y="0"/><a:ext cx="2743200" cy="406400"/></a:xfrm>' +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${memberFill}<a:ln><a:noFill/></a:ln></wps:spPr>` +
+    '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Answer</w:t></w:r></w:p></w:txbxContent></wps:txbx>' +
+    '<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"><a:noAutofit/></wps:bodyPr></wps:wsp>' +
+    '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+  const body = inDarkCell
+    ? '<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc>' +
+      '<w:tcPr><w:tcW w:w="6000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="990033"/></w:tcPr>' +
+      `${group}</w:tc></w:tr></w:tbl><w:p/>`
+    : group;
+  const ns = `${NS} xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"`;
+  return `<w:document ${ns}><w:body>${body}</w:body></w:document>`;
+}
+
+test('automatic text in a group member with a dark fill paints white', () => {
+  const [run] = paintedTextboxRuns(
+    groupXml('<a:solidFill><a:srgbClr val="990033"/></a:solidFill>', false)
+  );
+  expect(WHITE).toContain(colorOf(run!));
+});
+
+test('a white group member inside a dark-shaded cell paints automatic text black', () => {
+  const [run] = paintedTextboxRuns(
+    groupXml('<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>', true)
+  );
+  expect(BLACK.filter((color) => color !== 'inherited black')).toContain(colorOf(run!));
+});
+
+test('an unfilled group member inside a dark-shaded cell paints automatic text black', () => {
+  const [run] = paintedTextboxRuns(groupXml('<a:noFill/>', true));
   expect(BLACK.filter((color) => color !== 'inherited black')).toContain(colorOf(run!));
 });
