@@ -82,7 +82,8 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 - Lists that share one `w:abstractNum` count on one number per level.
 - A `w:startOverride` restarts that number once, at the first item of its list, on the overridden level only. Other lists continue from the restarted number. When the same `w:lvlOverride` replaces the level, its `w:start` takes precedence.
 - In a centered or right-aligned paragraph, the marker moves with the first line's text. In a table cell, the marker takes the table style's run formatting.
-- A marker in a face that rises above the text grows the first line by the difference. Automatic line spacing scales only the text, not that difference.
+- A marker in a face that rises above the text grows the first line by the difference. Automatic line spacing scales only the text, not that difference. In an empty list paragraph, it scales the marker too.
+- In a right-to-left paragraph (`w:bidi`), the marker takes its size, bold, and italic from the complex-script properties (`w:szCs`, `w:bCs`, `w:iCs`) and keeps its Latin face. `w:cs` on the level also selects the complex-script face.
 - Header and footer lists share one count that the body and notes do not join. The count runs over each section's referenced parts, in order. Hidden parts still count, and each explicit reference counts again. An inherited part reuses the earlier section's numbers.
 
 ### Tables
