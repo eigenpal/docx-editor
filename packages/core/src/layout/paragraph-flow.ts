@@ -820,11 +820,12 @@ export function breakParagraph(
     // text's alone. Only the paragraph's first line carries a marker.
     const firstLine = opensFirstLine();
     if (firstLine && firstLineOffset !== 0) line.firstLineOffset = firstLineOffset;
+    let markerRise = 0;
     if (firstLine && markerAscent > line.baseline) {
-      const raised = markerAscent - line.baseline;
+      markerRise = markerAscent - line.baseline;
       line.baseline = markerAscent;
-      line.height += raised;
-      glyphBaseline += raised;
+      line.height += markerRise;
+      glyphBaseline += markerRise;
     }
     borders.closeLine(line);
     markSyntheticBoldSpans(line, measurer);
@@ -843,7 +844,9 @@ export function breakParagraph(
     const equationBand = band?.equation ? band : undefined;
     const spacingBase = band?.height ?? naturalHeight;
     const bandBaseline = band?.baseline ?? line.baseline;
-    const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer);
+    const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer, {
+      unscaledRise: band ? 0 : markerRise,
+    });
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     else if (equationBand) line.baseline += spaced.baseline - bandBaseline;
     const floored = firstLine && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;

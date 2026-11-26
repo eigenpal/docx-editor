@@ -1,4 +1,5 @@
-// Auto multiple line spacing on a line that holds raised or lowered (`w:position`) text.
+// Auto multiple line spacing on a line that holds raised or lowered (`w:position`) text, or a list
+// marker whose face rises above the text.
 
 import { applyLineSpacing, type ParagraphLineSpacing } from './paragraph-style.ts';
 import { isHeightlessWhitespace, lineBandText } from './pending-line.ts';
@@ -46,14 +47,41 @@ export function withPositionedRunSpacing(
   return { ...spaced, height: naturalHeight + band * (spacing.value / 240 - 1) };
 }
 
-/** {@link applyLineSpacing} for a laid-out line, with {@link withPositionedRunSpacing} applied. */
+/**
+ * Apply an auto multiple above single to a line that a list marker's taller face raised by
+ * `rise`: the multiple scales the text band, and the rise adds once. A 22pt bullet on 11pt text
+ * at 1.5 spacing grows the line by half of the 11pt band plus the bullet's extra ascent.
+ */
+function withUnscaledRise(
+  spaced: ReturnType<typeof applyLineSpacing>,
+  spacing: ParagraphLineSpacing,
+  rise: number
+): ReturnType<typeof applyLineSpacing> {
+  if (!(rise > 0) || spacing.rule !== 'auto' || spacing.gridPitch !== undefined) return spaced;
+  const extra = rise * (spacing.value / 240 - 1);
+  if (!(extra > 0)) return spaced;
+  return {
+    ...spaced,
+    height: spaced.height - extra,
+    baseline: spacing.descentAnchored ? spaced.baseline - extra : spaced.baseline,
+  };
+}
+
+/**
+ * {@link applyLineSpacing} for a laid-out line, with {@link withPositionedRunSpacing} applied,
+ * or else the list marker's `unscaledRise`.
+ */
 export function spacedLine(
   spacing: ParagraphLineSpacing,
   naturalHeight: number,
   naturalBaseline: number,
   spans: Parameters<typeof withPositionedRunSpacing>[3],
-  measurer: Pick<TextMeasurer, 'lineMetrics'>
+  measurer: Pick<TextMeasurer, 'lineMetrics'>,
+  options: { readonly unscaledRise?: number } = {}
 ): ReturnType<typeof applyLineSpacing> {
   const spaced = applyLineSpacing(spacing, naturalHeight, naturalBaseline);
-  return withPositionedRunSpacing(spaced, spacing, naturalHeight, spans, measurer);
+  const positioned = withPositionedRunSpacing(spaced, spacing, naturalHeight, spans, measurer);
+  // A positioned line's band already leaves the marker out of the multiple.
+  if (positioned !== spaced) return positioned;
+  return withUnscaledRise(spaced, spacing, options.unscaledRise ?? 0);
 }
