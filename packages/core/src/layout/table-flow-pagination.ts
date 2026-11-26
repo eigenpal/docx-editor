@@ -478,13 +478,18 @@ export function* paginateTableInFlowSteps(
   let vMerge: RowVMergeLayoutOptions | undefined;
   let naturalHeight = 0;
   let baselineBodyHeight = 0;
-  const admitSpans = (bodyRowIndex: number, probeRow?: SemanticTableRow): void => {
+  /** `continued`: the row placed a fragment already, so its merge decisions stay. */
+  const admitSpans = (
+    bodyRowIndex: number,
+    probeRow?: SemanticTableRow,
+    continued = false
+  ): void => {
     const row = probeRow ?? bodyRows[bodyRowIndex]!;
     if (rows.length === 0) fragmentFirstRows.add(row.id);
     else fragmentFirstRows.delete(row.id);
     vMerge =
       fragmentCarry.current?.optionsAt(bodyRowIndex, flow.cursorY, contentHeight()) ??
-      admitVMergeSpansAt(vMergePlan, bodyRowIndex, flow.cursorY, contentHeight());
+      admitVMergeSpansAt(vMergePlan, bodyRowIndex, flow.cursorY, contentHeight(), continued);
     // Keep ordinary admission separate from the repeated border override, and
     // remeasure at the current Y after moving through wrapping exclusions.
     baselineBodyHeight =
@@ -767,7 +772,7 @@ export function* paginateTableInFlowSteps(
         }
         breakForContinuation(admitsRepeatedHeaders);
         movedToFreshPage = true;
-        admitSpans(bodyRowIndex, row);
+        admitSpans(bodyRowIndex, row, isContinuation);
         continue;
       }
 
@@ -924,7 +929,7 @@ export function* paginateTableInFlowSteps(
       if (!placed.fitted && flow.cursorY > 0 && !movedToFreshPage) {
         breakForContinuation(admitsRepeatedHeaders);
         movedToFreshPage = true;
-        admitSpans(bodyRowIndex, row);
+        admitSpans(bodyRowIndex, row, isContinuation);
         continue;
       }
 
@@ -940,7 +945,7 @@ export function* paginateTableInFlowSteps(
       ) {
         breakForContinuation(admitsRepeatedHeaders);
         movedToFreshPage = true;
-        admitSpans(bodyRowIndex, row);
+        admitSpans(bodyRowIndex, row, isContinuation);
         continue;
       }
 

@@ -127,7 +127,7 @@ The callback runs before a strict font refusal. Conversion does not await return
 - Installed fonts resolve by their internal family name. Machines with different fonts can produce different PDFs.
 - The converter builds its installed-font index once per process. It caches up to 128 MiB of font files per process and reloads a file that changes.
 - A semicolon stays part of a font family name, so `Georgia;Verdana` requests one family.
-- Missing bold or italic faces draw with synthesized styles. Supply all four files for designed variants.
+- Missing bold or italic faces draw with synthesized styles. A synthesized face does not count as coverage, so the family is partial and strict font policy refuses it. Supply all four files for designed variants.
 - Complete coverage can include substitutes. It does not prove original font selection.
 - The CJK package code uses Apache 2.0, and its font uses the SIL Open Font License 1.1. Include its license files when you distribute it. The converter uses the EigenPal Pro License.
 

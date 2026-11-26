@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A merge restart that no row continued counted as an ordinary cell. A row of continuations beside bottom-to-top text cells took the tallest end-of-cell paragraph of its cells. A first bottom-to-top cell gave no spacing before.",
+  "after": "That restart counts as a merge head, so its row takes the first-cell floor. A row of continuations and bottom-to-top cells takes its first cell's end-of-cell paragraph, or only its atLeast minimum when it has one. A first bottom-to-top cell counts its spacing before.",
+  "reason": "The change is in table row layout and layout reuse only. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-merged-row-first-cell.test.ts",
+    "packages/core/src/layout/__tests__/table-row-geometry-reuse.test.ts"
+  ],
+  "changeset": "merged-row-edge-cases",
+  "migration": null
+}

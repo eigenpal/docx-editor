@@ -218,6 +218,31 @@ describe('the paragraphs on either side of the field codes', () => {
     ]);
   });
 
+  test('show no result for a field nested in the field codes', () => {
+    // The nested field is part of the instruction, on either side of the paragraph marks.
+    const quote = (value: string) =>
+      `${fldChar('begin')}${instr(`QUOTE "${value}"`)}${fldChar('separate')}${text(value)}${fldChar('end')}`;
+    const body =
+      para(
+        `${text('before ')}${fldChar('begin')}${instr('IF ')}${quote('A')}${instr(' = "A" "')}`
+      ) +
+      para(instr('Clause')) +
+      para(
+        `${instr('" "')}${quote('B')}${instr('"')}${fldChar('separate')}${text('Result')}${fldChar('end')}${text(' after')}`
+      );
+    expect(lineTexts(body)).toEqual(['before Result after']);
+  });
+
+  test('keep a run that mixes field codes with displayed text', () => {
+    const body =
+      para(
+        `${text('before ')}<w:r><w:t xml:space="preserve">x </w:t><w:fldChar w:fldCharType="begin"/></w:r>${instr('IF "A" = "A" "')}`
+      ) +
+      para(instr('Clause')) +
+      para(`${instr('" ""')}${fldChar('separate')}${text('Result')}${fldChar('end')}`);
+    expect(lineTexts(body)).toEqual(['before x Result']);
+  });
+
   test('keep their own lines when another field crosses on from the last paragraph', () => {
     const body =
       field('', '').slice(0, -'</w:p>'.length) +

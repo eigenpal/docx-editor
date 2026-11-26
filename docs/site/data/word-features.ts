@@ -1048,7 +1048,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page fields, and `=` formulas that wrap one, calculate page numbers and totals in the body, headers, and footers. Supported number formats follow section settings or field switches. Unsupported switches keep saved results, and wider calculated values do not move following text.',
+      'Page fields, and `=` formulas with arithmetic over them, calculate page numbers and totals in the body, headers, and footers. Supported number formats follow section settings or field switches. Unsupported switches and formula terms keep saved results, and wider values do not move following text.',
   },
   {
     id: 'fields.toc',

@@ -45,6 +45,7 @@ import {
   simpleFieldInstructionMaySynthesizeGlyph,
 } from '../layout/field-form.ts';
 import { parseSymbolInstruction } from '../layout/field-symbol.ts';
+import { isInsideOpenFieldInstruction } from '../layout/field-instruction-scope.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import { noteIdOf, noteTypeOf, type NoteKind } from '../store/package/note-nodes.ts';
 import { hasLegacyFormFieldData } from '../store/package/field-nodes.ts';
@@ -684,6 +685,8 @@ function collectParagraphSynthesizedFieldGlyphIds(
   let instructionOverflow = false;
   let hadSeparate = false;
   let pageField = false;
+  /** A page field or formula live in the outermost field's result (`{ QUOTE {= {PAGE}} }`). */
+  let nestedPageField = false;
   let hasLegacyFormData = false;
   let resultVisibility = 0;
   const stack: Array<{
@@ -737,6 +740,7 @@ function collectParagraphSynthesizedFieldGlyphIds(
           instructionOverflow = false;
           hadSeparate = false;
           pageField = false;
+          nestedPageField = false;
           hasLegacyFormData = hasLegacyFormFieldData(node);
           resultVisibility = 0;
         }
@@ -751,6 +755,15 @@ function collectParagraphSynthesizedFieldGlyphIds(
           instructionOverflow = effective.overflow || state.nestingOverflow;
           separateRunId = runId;
           hadSeparate = true;
+        } else if (
+          pageMatch !== null &&
+          state.phase === 'result' &&
+          !state.nestingOverflow &&
+          !isInsideOpenFieldInstruction(state)
+        ) {
+          // Layout paints a nested page field's value into the outermost field's atom, in that
+          // atom's face, as it does for a page field at level 1.
+          nestedPageField = true;
         }
       } else if (kind === 'end') {
         if (state.nesting === 1) {
@@ -762,7 +775,7 @@ function collectParagraphSynthesizedFieldGlyphIds(
           const allowPageFields = context === 'body' || context === 'furniture';
           const synthesizes =
             !instructionOverflow &&
-            ((pageField && allowPageFields) ||
+            (((pageField || nestedPageField) && allowPageFields) ||
               complexFieldInstructionMaySynthesizeGlyph(instruction, {
                 hasSeparate: hadSeparate,
                 hasLegacyFormData,

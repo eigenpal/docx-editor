@@ -128,8 +128,10 @@ export function resolvedFontMeasurement(
       fallback: fallback.measurer,
     }
   );
-  // A synthesized stand-in measures and paints, but its own face is not installed: a probe for
-  // an installed face must not count it, or a face that loads later looks loaded already.
+  // A synthesized stand-in measures and paints, but its own face is not installed: the probe
+  // for an installed face must not count it, or a face that loads later looks loaded already.
+  // Layout still measures it with real metrics, so `hasMeasurableFont` keeps the measurer's
+  // own answer (`measuresWithAdmittedFace`).
   const standIns = documentStandInFaces(fonts);
   const hasResolvedFont = measurer.hasResolvedFont;
   if (standIns.size > 0 && hasResolvedFont) {

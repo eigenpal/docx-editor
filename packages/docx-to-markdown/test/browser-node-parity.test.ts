@@ -267,9 +267,11 @@ test('a real 500-page shaped export holds a bounded live set on a default heap',
   expect(measurement.peakRssBytes).toBeLessThan(RESIDENT_BACKSTOP);
 }, 120_000);
 
-// The one-shot export releases the layout before measurement, so its live heap settles far
-// below the retained-layout case: 224 MiB on `main` and 230 MiB with the PDF export work, on
-// the same machine, against the 256 MiB ceiling asserted below. Its old-space cap only bounds
+// The one-shot export releases the layout and yields to a timer before it returns, so the
+// runtime can drop the `WeakRef` targets it keeps for the current job. Its live heap after two
+// consecutive exports settles near 63 MiB on Node 24 (macOS arm64), against the 256 MiB ceiling
+// asserted below. Without that yield, one export measured 256 MiB and two exceeded the 400 MiB
+// cap, because each pinned its whole disposed document. Its old-space cap only bounds
 // transient growth during the forced collections, and 364 MiB proved marginal for that on the
 // Linux runners, which aborted with SIGABRT on two consecutive runs while macOS passed. 400 MiB
 // keeps a hard bound well under the 512 MiB the retained case needs, for the same reason that
@@ -281,11 +283,12 @@ const RETAINED_LAYOUT_NODE_ARGUMENTS = [
   '--max-semi-space-size=8',
 ] as const;
 
-test('the one-shot 500-page export fits a constrained 400 MiB heap', () => {
+test('two consecutive one-shot 500-page exports fit a constrained 400 MiB heap', () => {
   const measurement = performanceMeasurement(ONE_SHOT_NODE_ARGUMENTS, 'one-shot-performance');
   expectProductionFixture(measurement, { inspectLayout: false });
   // The one-shot entry point returns markdown and drops the layout, so it settles well below the
-  // retained-layout ceiling. That gap is the point: it proves the export does not pin the layout.
+  // retained-layout ceiling. That gap is the point: it proves the export does not pin the layout,
+  // and the second export proves that the first one's document does not stay live.
   expect(measurement.liveHeapBytes).toBeLessThan(ONE_SHOT_LIVE_HEAP_CEILING);
   expect(measurement.externalBytes).toBeLessThan(EXTERNAL_MEMORY_CEILING);
 }, 120_000);

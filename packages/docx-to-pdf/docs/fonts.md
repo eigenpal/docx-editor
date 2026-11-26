@@ -120,7 +120,7 @@ Register bold, italic, and bold-italic files separately when the document needs 
 
 A shaping-limit rejection for an optional glyph fallback alone does not cause refusal. The report retains that rejection. Other source failures still cause refusal. An optional fallback family appears in the effective `glyphFallbacks` list. It is absent from the document's requested families and is not the configured default font.
 
-Complete coverage can include substitutions; it does not prove original font selection.
+Complete coverage can include substitutions; it does not prove original font selection. A face drawn as a synthesized style of another face of its family does not count as coverage, so the family is partial.
 
 `fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy. Missing glyphs still cause strict PDF fidelity to fail, even when font policy permits an optional fallback rejection.
 
