@@ -65,7 +65,14 @@ import {
 import { fallbackStackForFamily } from '../layout/canvas-measurer.ts';
 import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
-import { automaticTextCss, paintCellBackground } from './semantic-paint-automatic-text.ts';
+import {
+  applyAutomaticText,
+  automaticTextCss,
+  paintCellBackground,
+  withAutomaticText,
+  type AutomaticTextContext,
+  type AutomaticTextCss,
+} from './semantic-paint-automatic-text.ts';
 import { clipHangingMarkBlank, hangingMarkBlankAt } from './semantic-paint-hanging-mark.ts';
 import {
   revisionStyleContextKey,
@@ -388,14 +395,15 @@ export type { DrawingPaintStrings, PaintImageUrlPort } from './semantic-paint-dr
 
 type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
 
-type DrawingPaintHostContext = PaintContext & {
-  readonly drawingStrings?: DrawingPaintStrings;
-  readonly urlRegistry?: DrawingUrlRegistry | null;
-  readonly changeBars?: ChangeBarsMode;
-  readonly changeBarsToggle?: boolean;
-  /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
-  readonly paintInstance?: string;
-};
+type DrawingPaintHostContext = PaintContext &
+  AutomaticTextContext & {
+    readonly drawingStrings?: DrawingPaintStrings;
+    readonly urlRegistry?: DrawingUrlRegistry | null;
+    readonly changeBars?: ChangeBarsMode;
+    readonly changeBarsToggle?: boolean;
+    /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
+    readonly paintInstance?: string;
+  };
 
 interface ResolvedPaintContext extends DrawingPaintHostContext {
   readonly drawingStrings: DrawingPaintStrings;
@@ -430,9 +438,10 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
     paintStoryFragment: (
       document: Document,
       fragment: ParagraphFragmentRecord | TableFragmentRecord,
-      options?: { readonly readOnly?: boolean }
+      options?: { readonly readOnly?: boolean; readonly automaticText?: AutomaticTextCss }
     ) => {
-      const paintCtx = options?.readOnly ? { ...storyCtx, unbound: true } : storyCtx;
+      const own = options?.readOnly ? { ...storyCtx, unbound: true } : storyCtx;
+      const paintCtx = withAutomaticText(own, options?.automaticText ?? '#000000');
       return fragment.kind === 'table'
         ? paintTableFragment(document, fragment, paintCtx)
         : paintFragment(document, fragment, paintCtx);
@@ -1422,7 +1431,7 @@ function paintFragment(
   if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
     element.append(paintParagraphShading(document, fragment, scale));
     // Automatic text inherits white on dark paragraph shading.
-    element.style.color = automaticTextCss(fragment.shading);
+    applyAutomaticText(element, automaticTextCss(fragment.shading), ctx);
   }
   // List markers are layout furniture inside the hanging indent — never model text.
   if (fragment.marker) {
@@ -1757,18 +1766,20 @@ function paintTableCell(
   cellElement.style.border = 'none';
   const strokes = applyCellBorders(document, cellElement, cell.borders, scale);
 
-  paintCellBackground(cellElement, cell, {
-    markup: ctx.revisionMarkup,
-    styles: ctx.revisionStyles,
-    cellStyles: ctx.revisionCellStyles,
-  });
+  const automatic = paintCellBackground(
+    cellElement,
+    cell,
+    { markup: ctx.revisionMarkup, styles: ctx.revisionStyles, cellStyles: ctx.revisionCellStyles },
+    ctx
+  );
+  const blockCtx = automatic ? withAutomaticText(ctx, automatic) : ctx;
   const contentElement = tableCellContentHost(document, cell, scale, cellElement);
   const blocks: HTMLElement[] = [];
   for (const block of cell.blocks) {
     const painted =
       block.kind === 'table'
-        ? paintTableFragment(document, block, ctx)
-        : paintFragment(document, block, ctx);
+        ? paintTableFragment(document, block, blockCtx)
+        : paintFragment(document, block, blockCtx);
     painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
     painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
     contentElement.append(painted);

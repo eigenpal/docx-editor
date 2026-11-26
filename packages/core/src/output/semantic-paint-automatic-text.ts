@@ -13,9 +13,45 @@ import type {
 import { automaticTextColor } from '../layout/ooxml-shading.ts';
 import { reviewAuthorSlotColor, type RevisionStyleContext } from './revision-presentation.ts';
 
+/** A CSS colour automatic text paints in. */
+export type AutomaticTextCss = '#FFFFFF' | '#000000';
+
 /** The CSS colour of automatic text on a six-digit hex `background`: white on dark, else black. */
-export function automaticTextCss(background: string | null | undefined): '#FFFFFF' | '#000000' {
+export function automaticTextCss(background: string | null | undefined): AutomaticTextCss {
   return automaticTextColor(background) ? '#FFFFFF' : '#000000';
+}
+
+/** A paint context that knows the automatic text colour its elements inherit. */
+export interface AutomaticTextContext {
+  /** Inherited from the nearest painted background; absent means the page's black. */
+  readonly automaticText?: AutomaticTextCss;
+}
+
+/**
+ * Write `color` as the automatic text colour of `element`, unless the element inherits it
+ * already. Skipping the inherited value keeps paint from restyling every shaded paragraph.
+ */
+export function applyAutomaticText(
+  element: HTMLElement,
+  color: AutomaticTextCss,
+  ctx: AutomaticTextContext
+): void {
+  if (color !== (ctx.automaticText ?? '#000000')) element.style.color = color;
+}
+
+const contextsByColor = new WeakMap<object, Map<AutomaticTextCss, object>>();
+
+/** `ctx` for the content of an element whose automatic text is `color`; one copy per colour. */
+export function withAutomaticText<T extends AutomaticTextContext>(
+  ctx: T,
+  color: AutomaticTextCss
+): T {
+  if (color === (ctx.automaticText ?? '#000000')) return ctx;
+  let byColor = contextsByColor.get(ctx);
+  if (!byColor) contextsByColor.set(ctx, (byColor = new Map()));
+  let derived = byColor.get(color) as T | undefined;
+  if (!derived) byColor.set(color, (derived = { ...ctx, automaticText: color }));
+  return derived;
 }
 
 /**
@@ -60,15 +96,17 @@ export interface CellRevisionPaint {
 
 /**
  * Paint a cell's background, `w:shd` or the revision colour over it, and the automatic text
- * colour for the background that shows. A revision colour that paint cannot read as hex (an
- * author's ramp token or a host colour in another CSS form) takes black automatic text: the
- * default ramp is light enough for it.
+ * colour for the background that shows. Returns that colour, or null when the cell paints no
+ * background. A revision colour that paint cannot read as hex (an author's ramp token or a
+ * host colour in another CSS form) takes black automatic text: the default ramp is light
+ * enough for it.
  */
 export function paintCellBackground(
   element: HTMLElement,
   cell: Pick<TableCellFragmentRecord, 'shading' | 'revisionShading' | 'revisionShadingAuthor'>,
-  revision: CellRevisionPaint
-): void {
+  revision: CellRevisionPaint,
+  ctx: AutomaticTextContext
+): AutomaticTextCss | null {
   let backgroundHex: string | null = null;
   if (cell.shading && SHADING_HEX.test(cell.shading)) {
     element.style.backgroundColor = `#${cell.shading}`;
@@ -91,5 +129,8 @@ export function paintCellBackground(
     }
   }
   // Text over the cell takes the colour of the background that shows, over a text box's.
-  if (backgroundHex !== null) element.style.color = automaticTextCss(backgroundHex);
+  if (backgroundHex === null) return null;
+  const color = automaticTextCss(backgroundHex);
+  applyAutomaticText(element, color, ctx);
+  return color;
 }

@@ -242,7 +242,8 @@ export function paintTextboxStory(
   const chromeFill = story.chromeByVector
     ? drawing.vectorShape?.components.find((component) => !component.shadowOnly)?.fillHex
     : null;
-  content.style.color = automaticTextCss(story.fillHex ?? chromeFill);
+  const automaticText = automaticTextCss(story.fillHex ?? chromeFill);
+  content.style.color = automaticText;
   const turn = story.contentRotation;
   if (turn) {
     const originX = (turn.pivot.x - story.contentOffset.x) * scale;
@@ -251,7 +252,7 @@ export function paintTextboxStory(
     content.style.transform = `rotate(${turn.degrees}deg)`;
   }
   for (const fragment of story.fragments) {
-    content.append(ctx.paintStoryFragment!(document, fragment));
+    content.append(ctx.paintStoryFragment!(document, fragment, { automaticText }));
   }
   // Keep story bindings inert until the surface enters this textbox for editing.
   for (const bound of content.querySelectorAll<HTMLElement>('[data-paragraph-id]')) {

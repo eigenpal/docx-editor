@@ -82,7 +82,8 @@ export function paintGroupTextboxStories(
     // Automatic text (17.3.2.6 color, CT_Color) takes its colour from the member's own fill
     // (20.1.8.54 solidFill), not from shading around the group: white on a dark fill, black
     // on a light fill or none.
-    content.style.color = automaticTextCss(story.fillHex);
+    const automaticText = automaticTextCss(story.fillHex);
+    content.style.color = automaticText;
     const turn = member.rotationDegrees;
     if (turn !== 0 && Number.isFinite(turn)) {
       // The member turns about its box center, which sits here in content-box coordinates.
@@ -93,7 +94,7 @@ export function paintGroupTextboxStories(
     }
     for (const fragment of story.fragments) {
       // Painted read-only: no selection, editing, or drawing bindings at all.
-      content.append(ctx.paintStoryFragment(document, fragment, { readOnly: true }));
+      content.append(ctx.paintStoryFragment(document, fragment, { readOnly: true, automaticText }));
     }
     // Pictures and equations inside the story are inert too: no drawing selection target,
     // and no pointer target that would turn back on inside the inert layer.
