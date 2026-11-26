@@ -120,6 +120,8 @@ export interface TabContext {
   readonly positional: TabDestination | null;
   readonly pastMargin: boolean | undefined;
   readonly rtl: boolean;
+  /** Whether an exclusion zone shapes the line: the room after a tab then stays the zone's. */
+  readonly zonesActive: boolean;
   readonly segment: {
     readonly width: number;
     readonly decimalOffset: number;
@@ -179,6 +181,7 @@ export function tabContextFor(input: {
     positional,
     pastMargin: input.pastMargin,
     rtl: input.rtl,
+    zonesActive: input.zonesActive,
     segment,
   };
 }
@@ -259,16 +262,24 @@ function leftStopKeepsTab(context: TabContext, stopX: number): boolean {
  *
  * A custom left stop (`tab`, Custom Tab Stop, `CT_TabStop`, 17.3.1.37) that keeps its tab on the
  * line (see `leftStopKeepsTab`) never moves it. In mode 15 a stop past the margin does not keep it.
+ *
+ * The room after the tab is the room its text gets once the tab is placed (`roomAfterTab`), on
+ * this line and on the fresh line: after a custom stop past the right indent (`ind`, Paragraph
+ * Indentation, `CT_Ind`, 17.3.1.12), its text may run past that indent, to an aligned stop up to
+ * the margin. A right-aligned page number on such a stop in a table of contents fits, so its tab
+ * stays on the line.
  */
 export function tabCarriesItsWord(
   context: TabContext,
   word: WordAfterTab,
-  placed: { readonly width: number },
-  pen: { readonly stopX: number; readonly room: number },
+  placed: ReturnType<typeof tabPlacement>,
+  pen: { readonly x: number; readonly stopX: number; readonly room: number },
   fresh: { readonly x: number; readonly room: number; readonly chopsWord: boolean }
 ): boolean {
   const { width } = word;
-  if (width <= 0 || placed.width + width <= pen.room + OVERFLOW_TOLERANCE_PT) return false;
+  const fits = (at: { readonly width: number }, room: number) =>
+    at.width + width <= room + OVERFLOW_TOLERANCE_PT;
+  if (width <= 0 || fits(placed, roomAfterTab(context, placed, pen))) return false;
   if (leftStopKeepsTab(context, pen.stopX)) return false;
   const onFreshLine = tabPlacement(context, fresh.x, fresh.x, 0);
   // Left-to-right only: the caller passes plain tabs (`plainTab`), which excludes RTL paragraphs.
@@ -277,7 +288,21 @@ export function tabCarriesItsWord(
     word.choppable &&
     onFreshLine.destination.alignment === 'left' &&
     !leftStopKeepsTab(context, fresh.x);
-  return chopsAfterStop || onFreshLine.width + width <= fresh.room + OVERFLOW_TOLERANCE_PT;
+  return chopsAfterStop || fits(onFreshLine, roomAfterTab(context, onFreshLine, fresh));
+}
+
+/**
+ * The room ahead of the pen `at.x` once a tab is placed there: the line's own room, or up to the
+ * point its text may run to (`segmentRight`), as line placement extends the line after the tab.
+ * An exclusion zone keeps the line's own room.
+ */
+function roomAfterTab(
+  context: TabContext,
+  placed: ReturnType<typeof tabPlacement>,
+  at: { readonly x: number; readonly room: number }
+): number {
+  if (context.zonesActive) return at.room;
+  return Math.max(at.room, placed.destination.segmentRight - at.x);
 }
 
 /**
