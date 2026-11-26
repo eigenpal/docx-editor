@@ -229,3 +229,15 @@ test('an unfilled group member inside a dark-shaded cell paints automatic text b
   const [run] = paintedTextboxRuns(groupXml('<a:noFill/>', true));
   expect(BLACK.filter((color) => color !== 'inherited black')).toContain(colorOf(run!));
 });
+
+test('automatic text on a dark gradient text box fill paints white', () => {
+  const gradient =
+    '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="000000"/></a:gs>' +
+    '<a:gs pos="100000"><a:srgbClr val="202060"/></a:gs></a:gsLst><a:lin ang="0" scaled="0"/></a:gradFill>';
+  const xml = textboxXml('FFFFFF', '<w:p><w:r><w:t>Heading</w:t></w:r></w:p>').replace(
+    '<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>',
+    gradient
+  );
+  const [run] = paintedTextboxRuns(xml);
+  expect(WHITE).toContain(colorOf(run!));
+});

@@ -13,7 +13,7 @@ import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
 import { applyAccessibility, positionedBox } from './semantic-paint-drawing-box.ts';
 import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
 import { vectorShapeInkClip } from '../layout/vector-shape-ink.ts';
-import { automaticTextColor } from '../layout/ooxml-shading.ts';
+import { automaticTextCss } from './semantic-paint-automatic-text.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const n = (value: number) => String(Math.round(value * 1000) / 1000);
@@ -236,8 +236,13 @@ export function paintTextboxStory(
   content.style.fontWeight = 'normal';
   content.style.fontStyle = 'normal';
   // Automatic text (17.3.2.6 color, CT_Color) follows the box's own fill (20.1.8.54 solidFill),
-  // not shading around the box: white on a dark fill, black on a light fill or none.
-  content.style.color = automaticTextColor(story.fillHex) ? '#FFFFFF' : '#000000';
+  // not shading around the box: white on a dark fill, black on a light fill or none. A box
+  // whose shape paints as vector components has no story fill: its fill component's colour
+  // stands in, the mean of the stops for a gradient (20.1.8.33 gradFill).
+  const chromeFill = story.chromeByVector
+    ? drawing.vectorShape?.components.find((component) => !component.shadowOnly)?.fillHex
+    : null;
+  content.style.color = automaticTextCss(story.fillHex ?? chromeFill);
   const turn = story.contentRotation;
   if (turn) {
     const originX = (turn.pivot.x - story.contentOffset.x) * scale;
