@@ -89,6 +89,7 @@ import { createReviewOrderIndex } from './surface-review-order.ts';
 import { litReviewKeys } from './review-replacement-pairs.ts';
 import { bodyBlockCountOf, bodyBlockLimitAfter, bodyBlocksOf } from '../layout/body-block-limit.ts';
 import { snapshotLayoutSession } from '../layout/layout-session-snapshot.ts';
+import { sectionTextAreaTwips } from '../layout/page-margin-settings.ts';
 import { furnitureLaterSteps } from './surface-furniture-later.ts';
 import {
   createContentControlWidgetSessions,
@@ -4053,11 +4054,7 @@ export function mountPaginatedSurface(
     const beforeParagraphId = tocBlockAnchor(session.part(), hiddenMarks.lineFirst(selection.head));
     if (beforeParagraphId === null) return null;
     const section = structure.sectionPropertiesAt(selection.head.paragraphId);
-    const contentWidth =
-      section.pageSize.widthTwips -
-      section.margins.leftTwips -
-      section.margins.rightTwips -
-      section.margins.gutterTwips;
+    const contentWidth = sectionTextAreaTwips(section, session.settingsRoot()).widthTwips;
     // A section whose margins swallow the page still gets a usable table rather than a
     // refusal: the floor is the same minimum a column resize may drag to.
     const columnWidthTwips = Math.max(

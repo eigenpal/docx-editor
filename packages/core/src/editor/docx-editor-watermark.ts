@@ -16,6 +16,7 @@ import {
   type PackageWatermarkWrite,
 } from '../store/package/watermark-package.ts';
 import { enumerateDocumentSections, type SectionProperties } from '../layout/section-properties.ts';
+import { sectionTextAreaTwips } from '../layout/page-margin-settings.ts';
 import type { TextMeasurer } from '../layout/text-measurer.ts';
 import {
   DEFAULT_WATERMARK_FONT,
@@ -127,12 +128,9 @@ export function watermarkRefusal(watermark: unknown): string | null {
 }
 
 /** A section's text area in points: the page less its margins and gutter, as layout uses. */
-function sectionTextArea(section: SectionProperties): WatermarkSize {
-  const { pageSize, margins } = section;
-  const width =
-    (pageSize.widthTwips - margins.leftTwips - margins.rightTwips - margins.gutterTwips) / 20;
-  const height = (pageSize.heightTwips - margins.topTwips - margins.bottomTwips) / 20;
-  return { width: Math.max(72, width), height: Math.max(72, height) };
+function sectionTextArea(mounted: PaginatedSurface, section: SectionProperties): WatermarkSize {
+  const area = sectionTextAreaTwips(section, mounted.session.settingsRoot());
+  return { width: Math.max(72, area.widthTwips / 20), height: Math.max(72, area.heightTwips / 20) };
 }
 
 /**
@@ -148,7 +146,11 @@ function sectionSizes(
   const main = pkg.parts.get(pkg.mainDocumentPart);
   if (!main) return undefined;
   return enumerateDocumentSections(main).map((section) => {
-    const box = watermarkShapeBox(watermark, sectionTextArea(section.properties), measurer);
+    const box = watermarkShapeBox(
+      watermark,
+      sectionTextArea(mounted, section.properties),
+      measurer
+    );
     return box ? { widthPt: box.width, heightPt: box.height } : null;
   });
 }
@@ -159,6 +161,7 @@ export function watermarkWrite(
   watermark: Watermark
 ): PackageWatermarkWrite | null {
   const area = sectionTextArea(
+    mounted,
     mounted.sectionPropertiesAt(mounted.state().selection.head.paragraphId)
   );
   const measurer = mounted.textMeasurer?.();

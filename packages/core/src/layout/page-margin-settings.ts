@@ -75,3 +75,23 @@ export function documentHasFacingPages(
 ): boolean {
   return evenAndOddHeaders || document?.mirrorMargins === true;
 }
+
+/**
+ * A section's text area in twips: the page less its margins and its gutter. The gutter
+ * (`w:pgMar/@w:gutter`, CT_PageMar, ECMA-376 Part 1 §17.6.11) narrows the text area, or
+ * shortens it when the document sets `w:gutterAtTop` (CT_OnOff, §17.15.1.50). The values are
+ * not clamped: a caller applies its own minimum.
+ */
+export function sectionTextAreaTwips(
+  section: SectionProperties,
+  settingsRoot: OoxmlElement | null | undefined
+): { readonly widthTwips: number; readonly heightTwips: number } {
+  const { pageSize, margins } = section;
+  const atTop = pageMarginSettingsFrom(settingsRoot)?.gutterAtTop === true;
+  const gutter = Math.max(0, margins.gutterTwips);
+  return {
+    widthTwips: pageSize.widthTwips - margins.leftTwips - margins.rightTwips - (atTop ? 0 : gutter),
+    heightTwips:
+      pageSize.heightTwips - margins.topTwips - margins.bottomTwips - (atTop ? gutter : 0),
+  };
+}

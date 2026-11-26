@@ -740,6 +740,10 @@ function enumerateSectionsUncached(
  *
  * Top and bottom keep the authored sign of `w:pgMar`: a negative value is an exact inset that
  * header and footer height never moves. Read them through `page-body-margins.ts`.
+ *
+ * Without `settings` the result is the odd-page geometry with the gutter on a side. Pass
+ * `pageMarginSettingsFrom(settingsRoot)` with the document's `w:evenAndOddHeaders` state to
+ * get the geometry the layout uses, and read one page through `geometryOnPage`.
  */
 export function geometryOfSection(
   section: SectionProperties,

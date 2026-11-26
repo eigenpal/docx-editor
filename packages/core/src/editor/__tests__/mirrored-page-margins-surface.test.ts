@@ -97,6 +97,23 @@ describe('mirrored side margins on the surface', () => {
     expect(contentLefts(surface)).toEqual([180, 36, 180]);
   });
 
+  test('an inserted table fills the text width when the gutter is at the top', () => {
+    // `w:gutterAtTop` (CT_OnOff, §17.15.1.50): the gutter shortens the text area and does not
+    // narrow it, so the new table spans the 6in between the side margins.
+    const widthOfInsertedTable = (settings: string) => {
+      const { surface } = mount(settings);
+      expect(surface.insertTable(1, 2)).toBe(true);
+      const table = surface
+        .layout()
+        .pages.flatMap((page) => page.fragments)
+        .find((fragment) => fragment.kind === 'table');
+      if (!table || table.kind !== 'table') throw new Error('no table');
+      return Math.round(table.columnEdges.at(-1)! - table.columnEdges[0]!);
+    };
+    expect(widthOfInsertedTable('<w:gutterAtTop/>')).toBe(432);
+    expect(widthOfInsertedTable('')).toBe(396);
+  });
+
   test('the export session lays the same pages out', async () => {
     const opened = openDocumentForExport(docx('<w:mirrorMargins/>'));
     if (!opened.ok) throw new Error(opened.reason);
