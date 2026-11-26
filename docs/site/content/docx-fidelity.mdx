@@ -67,7 +67,10 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 - `w:keepNext` paragraphs form one group, of any length. Explicit page breaks and section boundaries end the group.
 - With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the whole following paragraph with the group when the group fits.
-- In left-to-right text, an opening word wraps within the space after leading left tabs, without a blank line.
+- In left-to-right text, an opening word wraps within the space after one leading left tab, without a blank line. With more leading tabs, the last tab moves to the next line with a word that overflows after it.
+- In left-to-right text, a left tab moves to the next line with a word that overflows after it. The word starts at the stop there and breaks at the right edge. At a center, right, or decimal stop, the tab moves only when the word fits after it.
+- The word cannot break after the stop when the page has a floating object or the paragraph has an anchor. It also cannot break when it holds a field or mark that cannot break. The tab then moves only when the word fits after the stop.
+- A custom left stop after the right indent, up to the margin, keeps its tab on the line. In compatibility mode 15, the word after the tab then starts the next line. In [legacy mode](#compatibility-mode-differences), a stop at or past the right indent keeps the tab, and the word can run past the margin.
 - A left tab whose next stop lies past the right edge starts the next line, also in table cells and text frames, even with no text after it.
 - Distributed paragraphs (`w:jc="distribute"`) stretch their last line, also in cells and beside floating objects.
 - For text frames, see [Text frames](#text-frames). For East Asian spacing, see [East Asian text](#east-asian-text).
