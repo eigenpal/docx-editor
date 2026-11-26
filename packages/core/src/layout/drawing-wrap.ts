@@ -351,6 +351,14 @@ export function minkowskiExcludedIntervalsAtY(
   const right = finite(insets.right);
   const yMin = y - bottom;
   const yMax = y + top;
+  // Without a vertical distance the slab is the scanline itself: no boundary can split it.
+  if (!(yMax > yMin)) {
+    return mergeScanlineIntervals(
+      sourceIntervalsAtY(polygon, clipPolygon, y, fillRule).map((interval) =>
+        Object.freeze({ start: interval.start - left, end: interval.end + right })
+      )
+    );
+  }
   const boundaries = collectSlabBoundaries(
     clipPolygon && clipPolygon.length >= 3 ? [polygon, clipPolygon] : [polygon],
     yMin,
