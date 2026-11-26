@@ -147,3 +147,67 @@ test('live replicas carry merged text over fixed rows to the next page', async (
   harness.expectConverged(alice, cold);
   expectCarried(cold, settled);
 });
+
+/**
+ * For each merged cell on the second page, the gap between its last line and its bottom.
+ * `w:vAlign` (`CT_VerticalJc`, 17.4.83) aligns the text there, where its first line is placed.
+ */
+function bottomGaps(peer: Peer): number[] {
+  const part = peer.store.bodyStore().part;
+  const layout = layoutSemanticDocument(part, peer.store.bodyStore().revision, {
+    geometry,
+    measurer,
+  });
+  return layout.pages[1]!.fragments.flatMap((fragment) =>
+    fragment.kind === 'table'
+      ? fragment.rows.flatMap((row) =>
+          row.cells
+            .filter((cell) =>
+              cell.blocks.some(
+                (block) =>
+                  block.kind === 'paragraph' &&
+                  block.lines.some((line) =>
+                    /^(SHORT|LONG)/.test(line.spans.map((span) => span.text).join(''))
+                  )
+              )
+            )
+            .map(
+              (cell) =>
+                cell.box.y +
+                cell.box.height -
+                Math.max(...cell.blocks.map((block) => block.box.y + block.box.height))
+            )
+        )
+      : []
+  );
+}
+
+test('live replicas keep the alignment of merged text that moves to the next page', async () => {
+  const aligned = body.replaceAll('</w:tcPr>', '<w:vAlign w:val="bottom"/></w:tcPr>');
+  const { alice, bob, pause, resume } = await harness.pair(zipDocument(aligned));
+  const expectBottom = (peer: Peer) => {
+    const gaps = bottomGaps(peer);
+    expect(gaps.length).toBe(2);
+    for (const gap of gaps) expect(gap).toBeCloseTo(0, 3);
+  };
+  expectBottom(alice);
+  expectBottom(bob);
+
+  pause();
+  harness.apply(alice, [{ op: 'deleteBlock', blockId: paragraph(alice, 'SHORT-1').id }]);
+  harness.apply(bob, [
+    { op: 'insertText', paragraphId: paragraph(bob, 'SHORT-2').id, offset: 7, text: 'b' },
+  ]);
+  resume();
+  harness.expectConverged(alice, bob);
+  expectCarried(alice, ['SHORT-2b', 'SHORT-3', 'LONG']);
+  expectBottom(alice);
+  expectBottom(bob);
+
+  expect(alice.room.session.undo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expectBottom(bob);
+  expect(alice.room.session.redo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expectBottom(bob);
+});
