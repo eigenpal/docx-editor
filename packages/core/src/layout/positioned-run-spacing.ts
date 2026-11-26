@@ -48,6 +48,21 @@ export function withPositionedRunSpacing(
 }
 
 /**
+ * Raise a first line whose list marker ascends above its text: the baseline moves down to the
+ * marker's ascent and the line grows by the same amount. Returns that rise, or 0.
+ */
+export function raiseLineToMarker(
+  line: { height: number; baseline: number },
+  markerAscent: number
+): number {
+  const rise = markerAscent - line.baseline;
+  if (!(rise > 0)) return 0;
+  line.baseline = markerAscent;
+  line.height += rise;
+  return rise;
+}
+
+/**
  * Apply an auto multiple to a line that a list marker's taller face raised by `rise`: the
  * multiple scales the text band, and the rise adds once, above or below single. A 22pt bullet on
  * 11pt text at 1.5 spacing grows the line by half of the 11pt band plus the bullet's extra

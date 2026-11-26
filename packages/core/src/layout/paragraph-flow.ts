@@ -42,7 +42,7 @@ import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { graphemeContinuationWidth } from './grapheme-continuation-width.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
-import { spacedLine } from './positioned-run-spacing.ts';
+import { raiseLineToMarker, spacedLine } from './positioned-run-spacing.ts';
 import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
 import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
 import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
@@ -823,13 +823,8 @@ export function breakParagraph(
     // text's alone. Only the paragraph's first line carries a marker.
     const firstLine = opensFirstLine();
     if (firstLine && firstLineOffset !== 0) line.firstLineOffset = firstLineOffset;
-    let markerRise = 0;
-    if (firstLine && markerAscent > line.baseline) {
-      markerRise = markerAscent - line.baseline;
-      line.baseline = markerAscent;
-      line.height += markerRise;
-      glyphBaseline += markerRise;
-    }
+    const markerRise = firstLine ? raiseLineToMarker(line, markerAscent) : 0;
+    glyphBaseline += markerRise;
     borders.closeLine(line);
     markSyntheticBoldSpans(line, measurer);
     syncPendingDrawingBaselines(line, pageBreaksIgnored);
