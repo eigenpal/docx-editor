@@ -326,7 +326,9 @@ export function layoutHeaderFooterStory(
         : '') +
       fieldPageContextToken(effectiveCtx, needs) +
       (inlineDrawingLayout ? `|pn:${pageNumber}|tm:${topMarginOrigin ?? ''}` : '') +
-      (effectiveCtx?.marginLeft !== undefined ? `|sm:${effectiveCtx.marginLeft}` : '') +
+      (effectiveCtx?.marginLeft !== undefined
+        ? `|sm:${effectiveCtx.marginLeft},${effectiveCtx.marginRight}`
+        : '') +
       anchorPageToken +
       (effectiveCtx?.characterStyleValues
         ? `|cs:${characterStyleValuesToken(effectiveCtx.characterStyleValues)}`
