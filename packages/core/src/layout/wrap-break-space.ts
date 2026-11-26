@@ -47,6 +47,10 @@ export interface WrapBreakSpace {
  * `wrapRight` stops at its right edge. The near bound also reaches a hanging first line, which
  * starts before the measure in that space.
  *
+ * A negative indent or a hanging first line (`w:ind`, `CT_Ind`, 17.3.1.12) places the text past
+ * the story's content box, for example a table cell or a header. The bounds reach as far as the
+ * text, so the passages beside a float keep that reach.
+ *
  * `largestTieLeft` breaks a tie of square wrapping on the largest side to the physical left
  * (compatibility mode 15 and later). The tie is physical, so it is set on each zone before the
  * zone is mirrored.
@@ -62,7 +66,9 @@ export function wrapBreakSpace(
     readonly largestTieLeft?: boolean;
   }
 ): WrapBreakSpace {
-  const { contentLeft, wrapRight } = edges;
+  const reach = lineLeft + (rightToLeft ? 0 : Math.min(0, edges.firstLineOffset));
+  const contentLeft = Math.min(edges.contentLeft, reach);
+  const wrapRight = Math.max(edges.wrapRight, lineLeft + width);
   const tieLeft = edges.largestTieLeft === true;
   if (!rightToLeft && !tieLeft) {
     return {
