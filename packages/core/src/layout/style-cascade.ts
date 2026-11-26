@@ -34,6 +34,7 @@ import {
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { defaultParagraphStyleIdOf } from '../store/package/default-paragraph-style.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
+import { rowEndMarkToken } from './row-end-mark-style.ts';
 import {
   cjkTypographyFromSettings,
   defaultsTypography,
@@ -581,6 +582,7 @@ export function buildStyleCascadeTable(
     defP: defaultParagraphStyleId,
     defC: defaultCharacterStyleId,
     defT: defaultTableStyleId,
+    ...rowEndMarkToken(styles.values(), defaultParagraphStyleId),
     // Retheming changes the face every theme-fonted run measures in while no style
     // material moves, so a break cached under the old theme must not be reused.
     theme,

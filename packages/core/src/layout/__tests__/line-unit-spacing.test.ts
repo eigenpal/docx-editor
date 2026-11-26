@@ -117,8 +117,9 @@ test.each([false, true])(
     const layout = layoutSemanticDocument(documentWithGrid(240, cell, true), 1, {
       measurer: createFixedMeasurer(6, 14),
     });
-    // A body ending with the cell's table reads an empty paragraph after it, with no space.
-    expect(paragraphMargins(layout.pages)).toEqual(cell ? [0, 12, 0] : [0, 12]);
+    // The last cell paragraph compares with the row end mark, which is in the same implicit
+    // style. A body ending with the cell's table reads an empty paragraph after it, with no space.
+    expect(paragraphMargins(layout.pages)).toEqual(cell ? [0, 0, 0] : [0, 12]);
   }
 );
 

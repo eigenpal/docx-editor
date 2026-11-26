@@ -4,8 +4,9 @@
 //
 // - the last paragraph of the previous cell in the row, or the first paragraph of the next;
 // - the row end mark (17.4.78 `w:tr`) before a row's first cell and after its last cell,
-//   which is in the default paragraph style (17.7.4.17 `w:default`);
-// - the paragraph before the table, before the first cell of a body table's first row.
+//   which is in the paragraph style named "Normal": the default paragraph style
+//   (17.7.4.17 `w:default`) of most documents;
+// - the block before the table, before the first cell of a table's first row.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -156,8 +157,13 @@ describe('contextual spacing at the start and end of a row compares with the row
     ]);
   });
 
-  test('with no default paragraph style there is nothing to match', () => {
+  test('with no default paragraph style, a paragraph that names no style matches the mark', () => {
+    // No style is named "Normal" either: the mark and the paragraph share the implicit style.
     expect(extra(column([N(AFTER + CS)]), { defaultStyle: false })).toEqual([
+      [0, 0],
+      [0, 0],
+    ]);
+    expect(extra(column([O(AFTER + CS)]), { defaultStyle: false })).toEqual([
       [0, 10],
       [0, 10],
     ]);

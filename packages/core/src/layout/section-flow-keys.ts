@@ -69,7 +69,7 @@ export function sectionFlowKeys(input: SectionFlowKeyInputs): {
       input.leadingBreakFlowKeys(
         listAutoSpacingFlowKeys(
           paragraphFrameFlowKeys(
-            anchorFlowKeys(tableLeadFlowKeys(input.keys, prepared), input.positioned),
+            anchorFlowKeys(tableLeadFlowKeys(input.keys, prepared, styleCascade), input.positioned),
             prepared
           ),
           prepared

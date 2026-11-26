@@ -2,7 +2,7 @@
 // where it is: its vertical offset counts from the top of its anchor paragraph's box, above that
 // paragraph's space before (17.3.1.33) and top border. The space after the paragraph above stays
 // whole instead of collapsing with the anchor's space before, contextual spacing (17.3.1.9)
-// still joins the paragraphs around the table, and the anchor no longer opens the section, so
+// compares across the edges of the table, and the anchor no longer opens the section, so
 // at the top of a page it loses its space before. When the table covers its own anchor, the
 // anchor keeps its space before below the table. Before mode 15, an anchor at the top of a page
 // also keeps it when its own table only stands beside it, if that table covers the page top.
@@ -75,7 +75,7 @@ test('the space after above the table stays whole beside the anchor space before
   expect(placed.TWO).toBeCloseTo(16 + OFFSET, 1);
 });
 
-test('contextual spacing joins the paragraphs around the table', () => {
+test('contextual spacing compares across the edges of the table', () => {
   const ctx = '<w:contextualSpacing/>';
   const body =
     p('Lead', spacing(0, 160, ctx)) + float(600) + p('MID', spacing(160, 0, ctx)) + p('END', plain);
