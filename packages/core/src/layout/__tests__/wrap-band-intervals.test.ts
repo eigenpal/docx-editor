@@ -68,3 +68,51 @@ describe('availableTextIntervalsOverBand', () => {
     );
   });
 });
+
+/** A U outline 0..200 wide and 0..100 tall whose notch, 50..150 wide, opens at the top. */
+const U_OUTLINE = [
+  { x: 0, y: 0 },
+  { x: 0, y: 100 },
+  { x: 200, y: 100 },
+  { x: 200, y: 0 },
+  { x: 150, y: 0 },
+  { x: 150, y: 60 },
+  { x: 50, y: 60 },
+  { x: 50, y: 0 },
+];
+
+describe('a scanline through contour vertices', () => {
+  test('counts each edge below a top vertex once', () => {
+    const through = Object.freeze({ ...tightWrap(U_OUTLINE), mode: 'through' as const });
+    expect(excludedIntervalsOnScanline(0, through)).toEqual([
+      { start: 0, end: 50 },
+      { start: 150, end: 200 },
+    ]);
+  });
+
+  test('closes the interval at a bottom vertex', () => {
+    const v = tightWrap([
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 100, y: 100 },
+    ]);
+    expect(excludedIntervalsOnScanline(100, v).length).toBeLessThanOrEqual(1);
+    expect(excludedIntervalsOnScanline(50, v)).toEqual([{ start: 50, end: 150 }]);
+  });
+});
+
+describe('tight and through wrap inside a concave outline', () => {
+  test('tight wrap leaves no passage inside the notch', () => {
+    expect(availableTextIntervalsOverBand(20, 34, tightWrap(U_OUTLINE))).toEqual([
+      { start: 200, end: 400 },
+    ]);
+  });
+
+  test('through wrap keeps the passage inside the notch', () => {
+    const through = Object.freeze({ ...tightWrap(U_OUTLINE), mode: 'through' as const });
+    expect(availableTextIntervalsOverBand(20, 34, through)).toEqual([
+      { start: 50, end: 150 },
+      { start: 200, end: 400 },
+    ]);
+  });
+});

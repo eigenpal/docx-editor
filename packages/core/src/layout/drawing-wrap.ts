@@ -149,9 +149,9 @@ function edgeCrossingsAtY(
     if (y0 === y1) continue;
     const minY = Math.min(y0, y1);
     const maxY = Math.max(y0, y1);
-    if (y < minY || y > maxY) continue;
-    if (y === maxY && y1 > y0) continue;
-    if (y === minY && y1 < y0) continue;
+    // Each edge owns its top end and not its bottom end, in either direction, so a scanline
+    // through a vertex counts every edge that continues below it exactly once.
+    if (y < minY || y >= maxY) continue;
     const t = (y - y0) / (y1 - y0);
     const x = current.x + t * (next.x - current.x);
     if (Number.isFinite(x)) {
@@ -474,7 +474,22 @@ export function excludedIntervalsOnScanline(
   const fillRule = input.mode === 'through' ? 'evenodd' : 'nonzero';
   const insets = combinedInsets(wrapDistances, effectInsets);
   const excluded = minkowskiExcludedIntervalsAtY(polygon, y, insets, fillRule, input.clipPolygon);
-  return clampIntervalsToContent(excluded, contentLeft, contentRight);
+  return clampIntervalsToContent(tightSpan(input, excluded), contentLeft, contentRight);
+}
+
+/**
+ * Tight wrap (20.4.2.19 wrapTight) keeps text out of the whole span between the contour's
+ * leftmost and rightmost points on a line, so a concave outline leaves no passage inside it.
+ * Through wrap (20.4.2.18 wrapThrough) keeps those inner passages.
+ */
+function tightSpan(
+  input: WrapExclusionInput,
+  excluded: readonly ScanlineInterval[]
+): readonly ScanlineInterval[] {
+  if (input.mode !== 'tight' || excluded.length < 2) return excluded;
+  return Object.freeze([
+    Object.freeze({ start: excluded[0]!.start, end: excluded[excluded.length - 1]!.end }),
+  ]);
 }
 
 function exclusionSpan(
@@ -597,8 +612,9 @@ export function availableTextIntervalsOverBand(
   const cached = cache?.get(key);
   if (cached) return cached;
   const probes = polygonBandProbes(top, foot, input);
-  const excluded = mergeScanlineIntervals(
-    probes.flatMap((probe) => excludedIntervalsOnScanline(probe, input))
+  const excluded = tightSpan(
+    input,
+    mergeScanlineIntervals(probes.flatMap((probe) => excludedIntervalsOnScanline(probe, input)))
   );
   const available = filterByTextSide(
     invertIntervals(excluded, input.contentLeft, input.contentRight),
