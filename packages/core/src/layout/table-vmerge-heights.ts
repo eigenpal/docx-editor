@@ -121,8 +121,10 @@
 // by the paginator, so only the merge head itself costs one extra probe.
 //
 // The leading `w:tblHeader` rows are planned as their own row list, once for each place the
-// group is laid out (`table-header-vmerge.ts`). A merge that runs from a header row into the
-// body rows is planned by neither list, so its head keeps sizing its own row.
+// group is laid out (`table-header-vmerge.ts`). A merge from a header row that goes on into the
+// body rows extends that group through its last row (`table-header-merged-rows.ts`), so it is
+// planned with the header rows. Only a merge headed in such a covered body row that ends below
+// the group is planned by neither list, so its head keeps sizing its own row.
 
 import type {
   SemanticTableCell,

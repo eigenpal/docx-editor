@@ -249,6 +249,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 | Vertical merges | Shared rows count once. A row of merged cells takes the height of its first cell's end paragraph, or its taller minimum. Content that does not fit is clipped at the last row. |
 | Merges clipped at the first row | Some nested or overlapping merges. |
 | Merges over fixed-height rows at a page break | Merged text continues in the part of the merge on the next page. Text with line breaks, drawings, or tables is clipped at the first row. |
+| Merges from header rows into body rows | The covered body rows join the header rows. They move together and repeat on each continuation page. |
 | Legacy unsplittable row taller than a page, with a nested table | Splits, although it should stay whole. This is a known difference. |
 | Legacy unsplittable row taller than a page, with footnotes | The page keeps the first line of the first footnote. The rest continues on the next page. |
 
