@@ -298,6 +298,7 @@
       "OoxmlPackage",
       "OoxmlPart",
       "OoxmlProperty",
+      "PageFieldMarker",
       "PageFieldNumberFormat",
       "PageNoteStream",
       "PageRefHit",

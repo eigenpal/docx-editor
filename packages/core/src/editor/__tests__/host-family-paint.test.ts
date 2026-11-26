@@ -41,9 +41,9 @@ const source = (request: Face, bytes: Uint8Array): FontSource => ({
 });
 
 /** A swiss family in a document whose serif default makes its class fallback Arial. */
-function swissFamilyDocument(): Uint8Array {
-  const run = (text: string, italic = false) =>
-    `<w:p><w:r><w:rPr><w:rFonts w:ascii="Brand Light" w:hAnsi="Brand Light"/>${italic ? '<w:i/>' : ''}</w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+function swissFamilyDocument(bold = false): Uint8Array {
+  const run = (text: string, italic = false, boldRun = bold && !italic) =>
+    `<w:p><w:r><w:rPr><w:rFonts w:ascii="Brand Light" w:hAnsi="Brand Light"/>${italic ? '<w:i/>' : ''}${boldRun ? '<w:b/>' : ''}</w:rPr><w:t>${text}</w:t></w:r></w:p>`;
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
@@ -55,7 +55,7 @@ function swissFamilyDocument(): Uint8Array {
       `<Relationships xmlns="${REL}"><Relationship Id="f" Type="${OD}/fontTable" Target="fontTable.xml"/><Relationship Id="s" Type="${OD}/styles" Target="styles.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body>${run('Regular text')}${run('Italic text', true)}</w:body></w:document>`
+      `<w:document xmlns:w="${W}"><w:body>${run('Regular text')}${run('Italic text', true)}${bold ? run('Both text', true, true) : ''}</w:body></w:document>`
     ),
     'word/fontTable.xml': strToU8(
       `<w:fonts xmlns:w="${W}"><w:font w:name="Brand Light"><w:family w:val="swiss"/></w:font><w:font w:name="Times New Roman"><w:family w:val="roman"/></w:font></w:fonts>`
@@ -274,8 +274,88 @@ test('a family the host supplies under its own name stands in through its own fa
       ...container.querySelectorAll<HTMLElement>('[data-paragraph-id] .layout-run-text'),
     ].find((run) => run.textContent?.startsWith('Italic'));
     expect(paintedItalic?.style.fontFamily.split(',')[0]?.replace(/"/g, '').trim()).toBe(own);
-    // The stand-in is the family's own face, so layout can measure the italic through it.
-    expect(measurer()?.hasResolvedFont?.(italic)).toBe(true);
+    // Layout measures the italic through the family's own regular face, but no italic face
+    // of its own is installed.
+    expect(measurer()?.hasMeasurableFont?.(italic)).toBe(true);
+    expect(measurer()?.hasResolvedFont?.(italic)).toBe(false);
+  } finally {
+    editor.destroy();
+    spy.mockRestore();
+  }
+});
+
+test('a face that the host substitutes for a family with its own faces paints in that face', async () => {
+  const configurations: LayoutFontConfiguration[] = [];
+  const createLayoutShaping = fontConfiguration.createLayoutShaping;
+  const spy = spyOn(fontConfiguration, 'createLayoutShaping').mockImplementation(
+    async (configuration, instrumentation) => {
+      configurations.push(configuration);
+      return createLayoutShaping(configuration, instrumentation);
+    }
+  );
+  const container = document.createElement('div');
+  const editor = createDocxEditor({
+    container,
+    // The first paragraph is bold, the second italic, and the third bold italic.
+    document: swissFamilyDocument(true),
+    fonts: () => ({
+      // The family's own regular face, and a bold face that the host serves from another family.
+      sources: [
+        source(face('Brand Light', 400, 'normal'), regularBytes),
+        source(face('Stand In', 700, 'normal'), boldBytes),
+      ],
+      substitutions: [
+        { from: face('Brand Light', 700, 'normal'), to: face('Stand In', 700, 'normal') },
+      ],
+    }),
+  });
+  try {
+    await until(
+      () => editor.fontMeasurement().measurer === 'shaped' && !editor.fontMeasurement().resolving,
+      'faces installed'
+    );
+    // Measurement: the bold text uses the host's bold face.
+    const final = configurations.at(-1)!;
+    expect(
+      final.substitutions?.find(
+        ({ from }) =>
+          from.family === 'Brand Light' && from.weight === 700 && from.style === 'normal'
+      )?.to
+    ).toEqual(face('Stand In', 700, 'normal'));
+    // Paint: the bold run's alias holds that face as its bold face, beside the family's own
+    // regular face, so the browser draws the same bold face.
+    const painted = [
+      ...container.querySelectorAll<HTMLElement>('[data-paragraph-id] .layout-run-text'),
+    ].find((run) => run.textContent?.startsWith('Regular'));
+    const alias = painted?.style.fontFamily.split(',')[0]?.replace(/"/g, '').trim();
+    const faces = [...fontSet.faces]
+      .filter((registered) => registered.family === alias)
+      .map(({ bytes, descriptors }) => `${bytes.byteLength} ${descriptors.weight}`)
+      .sort();
+    expect(faces).toEqual([`${boldBytes.byteLength} 700`, `${regularBytes.byteLength} 400`].sort());
+    // The italic stands in through the family's own regular face in both, as before.
+    const paintedItalic = [
+      ...container.querySelectorAll<HTMLElement>('[data-paragraph-id] .layout-run-text'),
+    ].find((run) => run.textContent?.startsWith('Italic'));
+    expect(paintedItalic?.style.fontFamily.split(',')[0]?.replace(/"/g, '').trim()).toBe(alias);
+    expect(
+      final.substitutions?.find(
+        ({ from }) =>
+          from.family === 'Brand Light' && from.weight === 400 && from.style === 'italic'
+      )?.to
+    ).toEqual(face('Brand Light', 400, 'normal'));
+    // The bold italic stands in through the host's bold face, the nearest face of the alias,
+    // which CSS font matching also picks for it.
+    expect(
+      final.substitutions?.find(
+        ({ from }) =>
+          from.family === 'Brand Light' && from.weight === 700 && from.style === 'italic'
+      )?.to
+    ).toEqual(face('Stand In', 700, 'normal'));
+    const paintedBoth = [
+      ...container.querySelectorAll<HTMLElement>('[data-paragraph-id] .layout-run-text'),
+    ].find((run) => run.textContent?.startsWith('Both'));
+    expect(paintedBoth?.style.fontFamily.split(',')[0]?.replace(/"/g, '').trim()).toBe(alias);
   } finally {
     editor.destroy();
     spy.mockRestore();

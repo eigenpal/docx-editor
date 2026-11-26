@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Merged text over fixed-height rows disappeared when the table broke across pages near the merge head.",
+  "after": "The merged text shows in the part of the merge on each page and continues on the next page.",
+  "reason": "Only derived layout geometry changes. Shared operations and stored document content remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-same-head-row-page-break.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vmerge-fixed-rows-page-break.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vmerge-fragment-carry.test.ts"
+  ],
+  "changeset": "merged-text-fixed-rows-page-break",
+  "migration": null
+}

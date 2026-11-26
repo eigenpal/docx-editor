@@ -29,13 +29,22 @@ import {
   pageFieldMarker,
   pageFieldMeasuredText,
   PAGE_FIELD_PLACEHOLDER,
-  projectPageFieldValue,
+  pageFieldText,
   type BodyPageFieldContext,
   type FieldPageContext,
+  type PageFieldMarker,
 } from './field-page-furniture.ts';
-import type { AllowlistedPageFieldMatch, ComplexFieldParseState } from './field-instruction.ts';
+import {
+  effectiveFieldInstruction,
+  trackedDeletionLeavesNoInstruction,
+  type AllowlistedPageFieldMatch,
+  type ComplexFieldParseState,
+} from './field-instruction.ts';
+import { captureInstructionSpecs } from './field-form.ts';
+import { revisionsAreDeletion, type RevisionDisplayMode } from './revision-projection.ts';
 import { instrTextValue, isDeletedInstrText } from '../store/package/field-nodes.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
+import { deferredSegmentsMarker } from './field-nested-page.ts';
 import {
   listNumFieldValue,
   type PageRefFieldProjection,
@@ -54,7 +63,7 @@ export interface AtomicFieldSynthesis {
    * document finalize substitutes the real value for this kind. The caller carries the marker onto
    * the span. Absent for the live header/footer value and every other synthesis.
    */
-  readonly pageField?: AllowlistedPageFieldMatch;
+  readonly pageField?: PageFieldMarker;
   /**
    * Present when this is a BODY `PAGEREF`: {@link text} is the cached result (or the
    * placeholder digit for an empty cache) and document finalize substitutes the number of
@@ -117,13 +126,12 @@ export function synthesizeAtomicField(
   const pageKind = formulaOperandIsNumber(pending.pageSwitches, sectionFormat)
     ? pending.kind
     : null;
-  if (pageKind && ctx.pageContext) {
-    return {
-      text: projectPageFieldValue(pageKind, ctx.pageContext, pending.pageSwitches),
-      props: pending.props,
-      style: pending.style,
-    };
-  }
+  // A formula with no value on this page (a division by zero, say) keeps its saved result.
+  const liveText =
+    pageKind && ctx.pageContext
+      ? pageFieldText({ ...pending.pageSwitches, kind: pageKind }, ctx.pageContext)
+      : null;
+  if (liveText !== null) return { text: liveText, props: pending.props, style: pending.style };
   // A BODY page field (no page context) paints the page it lands on, whatever the file cached:
   // the value is a property of pagination, so a saved result is stale as soon as the layout
   // moves. Paint a placeholder now and record the kind so document finalize substitutes the
@@ -138,15 +146,19 @@ export function synthesizeAtomicField(
     // The marker records the switches the placeholder was measured through, so finalize
     // renders the value the same way. The switches do not depend on the section format; a
     // PAGE field without switches measures in it.
+    const measured = pageFieldMeasuredText(
+      pending.pageSwitches,
+      pending.cachedText,
+      pageKind === 'PAGE' ? ctx.bodyPageFields.format : undefined
+    );
+    // A formula with no value on its page paints its saved result only where that result is
+    // what the field was measured at; otherwise it would paint over the text that follows.
+    const savedResult = measured === pending.cachedText ? pending.cachedText : '';
     return {
-      text: pageFieldMeasuredText(
-        pending.pageSwitches,
-        pending.cachedText,
-        pageKind === 'PAGE' ? ctx.bodyPageFields.format : undefined
-      ),
+      text: measured,
       props: pending.props,
       style: pending.style,
-      pageField: pageFieldMarker(pageKind, pending.pageSwitches),
+      pageField: pageFieldMarker(pageKind, pending.pageSwitches, savedResult),
     };
   }
   // A REF resolves live from its bookmark target and the resolved numbering — the cached
@@ -215,9 +227,21 @@ export function synthesizeAtomicField(
         )
       : null;
   if (dateText !== null) return { text: dateText, props: pending.props, style: pending.style };
-  // A non-empty cached result is what Word last painted; it wins over synthesis.
+  // A non-empty cached result is what the producer last painted; it wins over synthesis. In
+  // the body, page fields nested in it get a marker, so document finalize fills each page's
+  // value in place.
   if (pending.cachedText.length > 0) {
-    return { text: pending.cachedText, props: pending.props, style: pending.style };
+    const segments = pending.nestedPageSegments;
+    const pageField =
+      ctx.bodyPageFields && segments && segments.length > 0 && !pending.formField
+        ? deferredSegmentsMarker(pending.cachedText, segments)
+        : null;
+    return {
+      text: pending.cachedText,
+      props: pending.props,
+      style: pending.style,
+      ...(pageField ? { pageField } : {}),
+    };
   }
   // Empty cache: synthesize. A result that existed but was hidden stays hidden.
   if (!pending.sawResultContent) {
@@ -231,6 +255,44 @@ export function synthesizeAtomicField(
     }
   }
   return null;
+}
+
+/**
+ * Capture what the outermost `separate` of `pending` decides, while the machine still holds the
+ * instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
+ *
+ * The allowlisted page-field match is captured whether or not a page context is present. With
+ * one (header/footer) the flush projects the live value; without one (body) it paints a
+ * placeholder the kind marks, and document finalize substitutes the page's value. The `\#`
+ * picture and `\*` number format ride along: they decide how it renders. Any other field
+ * captures its SYMBOL / HYPERLINK / form-field spec. Nesting overflow refuses exactly as PAGE
+ * projection does: a >4-deep hostile field must not synthesize output from whatever outer
+ * fragments the buffer kept.
+ *
+ * A tracked deletion that leaves a page field with no code shows nothing
+ * ({@link trackedDeletionLeavesNoInstruction}), unless the whole field is a tracked deletion or
+ * the view shows the original document, where the field keeps its earlier behavior.
+ */
+export function captureSeparatedInstruction(
+  pending: PendingFieldProjection,
+  field: ComplexFieldParseState,
+  match: AllowlistedPageFieldMatch | null,
+  displayMode: RevisionDisplayMode
+): void {
+  // The original view rejects the deletion. A field with no live code element then evaluates
+  // its deleted code; one with an empty live element, or a deleted `=` beside live operands,
+  // keeps its saved result there.
+  const codeDeleted =
+    displayMode !== 'original' &&
+    !revisionsAreDeletion(pending.resultRevisions) &&
+    trackedDeletionLeavesNoInstruction(field);
+  pending.kind = codeDeleted ? null : (match?.kind ?? null);
+  pending.pageSwitches = match ?? {};
+  const effective = effectiveFieldInstruction(field);
+  if (!pending.kind && !effective.overflow && !field.nestingOverflow) {
+    captureInstructionSpecs(pending, effective.instruction);
+  }
+  if (codeDeleted) pending.hidesResult = true;
 }
 
 /**

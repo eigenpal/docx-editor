@@ -63,19 +63,24 @@ import {
   onFldCharEnd,
   onFldCharSeparate,
   matchAllowlistedPageField,
-  type AllowlistedPageFieldMatch,
   type FieldScanBudget,
 } from './field-instruction.ts';
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
-import { createNestedPageTracker } from './field-nested-page.ts';
 import {
-  formulaOperandIsNumber,
+  createNestedPageTracker,
+  deferredSegmentsMarker,
+  nestedPageArming,
+  noteDeferredPage,
+  type DeferredPageSegment,
+} from './field-nested-page.ts';
+import {
   PAGE_FIELD_PLACEHOLDER,
   pageFieldMarker,
   pageFieldMeasuredText,
   projectPageFieldValue,
   type BodyPageFieldContext,
   type FieldPageContext,
+  type PageFieldMarker,
 } from './field-page-furniture.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import {
@@ -106,6 +111,8 @@ export interface SimpleFieldDisplay {
    * count: the mode resolved it away, and synthesis must be free to fill that view.
    */
   readonly sawResultContent: boolean;
+  /** Body page fields nested in the saved result, which document finalize fills. */
+  readonly nestedPageSegments: readonly DeferredPageSegment[];
 }
 
 /**
@@ -125,6 +132,8 @@ export function collectSimpleFieldDisplay(args: {
   readonly inheritedRunProperties: readonly OoxmlProperty[];
   readonly cascadeRuns?: SimpleFieldRunCascader;
   readonly themeFonts?: ThemeFonts;
+  /** In BODY flow, nested page fields defer to document finalize. */
+  readonly bodyPageFields?: BodyPageFieldContext | false;
 }): SimpleFieldDisplay {
   const {
     simple,
@@ -143,6 +152,7 @@ export function collectSimpleFieldDisplay(args: {
   let resultStyle: ResolvedRunStyle | undefined;
   let resultStyleIsDirectional = false;
   let sawResultContent = false;
+  const nestedPageSegments: DeferredPageSegment[] = [];
 
   const nested = createFieldParseState();
   // Level-aware live evaluation of an allowlisted page field nested in the cache (shared with
@@ -206,18 +216,19 @@ export function collectSimpleFieldDisplay(args: {
             if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
               // A field inside an enclosing instruction never arms: its value feeds that
               // instruction and is not displayed.
-              // A formula without a numeric operand keeps its cached result.
               const shown = displayed() && !isInsideOpenFieldInstruction(nested);
-              const live =
-                pageContext && shown && match && formulaOperandIsNumber(match, pageContext.format);
-              tracker.onSeparate(live ? match : null, separateLevel);
+              const arming = nestedPageArming(match, shown, pageContext, args.bodyPageFields);
+              tracker.onSeparate(arming, separateLevel);
             }
             continue;
           }
           if (isFldChar(grand, 'end')) {
             scope?.consume(grand);
             const appendedLive = tracker.onEnd(nested.nesting, pageContext);
-            if (appendedLive !== null) text += appendedLive;
+            if (appendedLive !== null) {
+              noteDeferredPage(nestedPageSegments, tracker.takeDeferred(), text, appendedLive);
+              text += appendedLive;
+            }
             onFldCharEnd(nested);
             continue;
           }
@@ -261,7 +272,7 @@ export function collectSimpleFieldDisplay(args: {
           if (!revisionSuppressed) sawResultContent = true;
           const suppressed = style.hidden || revisionSuppressed;
           if (tracker.active) {
-            tracker.noteResult(!suppressed);
+            tracker.noteResult(!suppressed, value);
             if (!suppressed) captureStyle(props, style, value);
             continue;
           }
@@ -320,12 +331,29 @@ export function collectSimpleFieldDisplay(args: {
       text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField);
       return;
     }
+    if (simplePageField && args.bodyPageFields) {
+      // In the body, the saved result measures the width and finalize fills each page's value.
+      if (!revisionsVisible(local, displayMode, args.authorFilter)) return;
+      const beforeLen = text.length;
+      collect(child, nodeDepth + 1, local);
+      const saved = text.slice(beforeLen);
+      const width = saved.length > 0 ? saved : PAGE_FIELD_PLACEHOLDER;
+      text = text.slice(0, beforeLen);
+      noteDeferredPage(
+        nestedPageSegments,
+        pageFieldMarker(simplePageField.kind, simplePageField),
+        text,
+        width
+      );
+      text += width;
+      return;
+    }
     collect(child, nodeDepth + 1, local);
   };
 
   collect(simple, depth, revisions);
 
-  return { text, resultProps, resultStyle, sawResultContent };
+  return { text, resultProps, resultStyle, sawResultContent, nestedPageSegments };
 }
 
 /** The one projected piece a `w:fldSimple` paints over its reserved model unit. */
@@ -339,7 +367,7 @@ export interface SimpleFieldProjection {
    * Present when this is a BODY page-field placeholder (no page context): {@link text} is the
    * measurement digit and document finalize substitutes the real value for this kind.
    */
-  readonly pageField?: AllowlistedPageFieldMatch;
+  readonly pageField?: PageFieldMarker;
   /**
    * Present when this is a BODY `PAGEREF`: the cached display paints now and document
    * finalize substitutes the number of the page the resolved target lands on.
@@ -550,5 +578,10 @@ function projectSimpleFieldDisplay(
   // to inherited properties the same way a top-level simple PAGE does.
   const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
   if (style.hidden) return null;
-  return { text: display.text, props, style };
+  // In the body, page fields nested in the saved result get a marker for document finalize.
+  const segmented =
+    args.bodyPageFields && display.nestedPageSegments.length > 0
+      ? deferredSegmentsMarker(display.text, display.nestedPageSegments)
+      : null;
+  return { text: display.text, props, style, ...(segmented ? { pageField: segmented } : {}) };
 }

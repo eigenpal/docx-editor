@@ -372,9 +372,8 @@ export function applyDocumentFontSubstitutions(
           // paint still draws that face from the family's own alias.
           if (supply(from)) continue;
           const own = served.ownNearestFace(family, from);
-          // Not a `documentStandInFaces` entry: the stand-in is the family's own face, which
-          // layout can measure, so a probe for a measurable face keeps answering true for it.
-          if (own) push(own);
+          if (own && push(own) && (own.to.weight !== weight || own.to.style !== style))
+            standIns.add(fontRequestKey(from));
           continue;
         }
         if (servingName === undefined) {
@@ -427,11 +426,12 @@ const standInFacesOf = new WeakMap<FontConfiguration, ReadonlySet<string>>();
 const NO_STAND_INS: ReadonlySet<string> = new Set();
 
 /**
- * The faces (`fontRequestKey`) of served families that `applyDocumentFontSubstitutions` gave a
- * synthesized stand-in from the family that serves them when it built `configuration`. They
- * measure and paint, but no face of their own is installed: a probe for an installed face
- * (`TextMeasurer.hasResolvedFont`) must not count them, or a face that loads later looks loaded
- * already. A stand-in through a family's own faces is not listed.
+ * The faces (`fontRequestKey`) that `applyDocumentFontSubstitutions` gave a synthesized stand-in
+ * when it built `configuration`: another weight or style of the family that serves them, or of
+ * the family's own faces. They measure and paint, so layout measures them with real metrics
+ * (`TextMeasurer.hasMeasurableFont`). But no face of their own is installed: the probe for an
+ * installed face (`TextMeasurer.hasResolvedFont`) must not count them, or a face that loads
+ * later looks loaded already.
  */
 export function documentStandInFaces(configuration: FontConfiguration): ReadonlySet<string> {
   return standInFacesOf.get(configuration) ?? NO_STAND_INS;
