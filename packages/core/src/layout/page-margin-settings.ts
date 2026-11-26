@@ -5,7 +5,12 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { settingsOnOff } from '../store/package/settings-onoff.ts';
-import type { PageMarginSettings } from './section-properties.ts';
+import type { PageGeometry } from './page-geometry.ts';
+import {
+  geometryOfSection,
+  type PageMarginSettings,
+  type SectionProperties,
+} from './section-properties.ts';
 
 type DocumentMarginSettings = Pick<PageMarginSettings, 'mirrorMargins' | 'gutterAtTop'>;
 
@@ -22,7 +27,7 @@ const MIRROR_AT_TOP: DocumentMarginSettings = Object.freeze({
  */
 export function pageMarginSettingsFrom(
   settingsRoot: OoxmlElement | null | undefined
-): DocumentMarginSettings | undefined {
+): Pick<PageMarginSettings, 'mirrorMargins' | 'gutterAtTop'> | undefined {
   if (!settingsRoot) return undefined;
   const mirror = settingsOnOff(settingsRoot, 'mirrorMargins');
   const atTop = settingsOnOff(settingsRoot, 'gutterAtTop');
@@ -37,6 +42,25 @@ export function sectionMarginSettings(
 ): PageMarginSettings | undefined {
   if (!evenAndOddHeaders) return document;
   return { ...document, evenAndOddHeaders: true };
+}
+
+/**
+ * A section's geometry under the layout options of a single-section pass. Without the
+ * document's `evenAndOddHeaders` value the section's furniture carries the flag.
+ */
+export function geometryForLayout(
+  section: SectionProperties,
+  options: {
+    readonly pageMarginSettings?: DocumentMarginSettings;
+    readonly evenAndOddHeaders?: boolean;
+  },
+  furniture: { readonly evenAndOddHeaders: boolean } | undefined
+): PageGeometry {
+  const evenAndOddHeaders = options.evenAndOddHeaders ?? furniture?.evenAndOddHeaders;
+  return geometryOfSection(
+    section,
+    sectionMarginSettings(options.pageMarginSettings, evenAndOddHeaders)
+  );
 }
 
 /**

@@ -175,13 +175,12 @@ import { contentControlContextToken } from './content-control-boundary-layout.ts
 import {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSectionsFromBlocks,
-  geometryOfSection,
   paragraphSectionNode,
   sectionLineGridPt,
 } from './section-properties.ts';
 import { pageBreakBeforeRules } from './page-break-before.ts';
 import { geometryOnPage } from './page-geometry.ts';
-import { sectionMarginSettings } from './page-margin-settings.ts';
+import { geometryForLayout } from './page-margin-settings.ts';
 import { previousBodyLayout } from './previous-body-pages.ts';
 import { columnBoxAt, columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
@@ -364,13 +363,9 @@ function* layoutInModeSteps(
 
     const section = roundSections[0];
     const furniture = furnitureForSection(opts, 0, roundSections.length) ?? opts.furniture;
-    const sides = sectionMarginSettings(
-      opts.pageMarginSettings,
-      opts.evenAndOddHeaders ?? furniture?.evenAndOddHeaders
-    );
     const geometry =
       opts.geometry ??
-      (section ? geometryOfSection(section.properties, sides) : DEFAULT_PAGE_GEOMETRY);
+      (section ? geometryForLayout(section.properties, opts, furniture) : DEFAULT_PAGE_GEOMETRY);
     const sectionNumbering = section?.properties.pageNumbering;
     const interim = {
       revision,
@@ -529,13 +524,19 @@ function* layoutBlocksPass(
   const lineCounterStart = options.lineCounterStart ?? 0;
   const furniturePageNumberStart =
     options.furniturePageNumberStart ?? (options.pageIndexStart ?? 0) + 1;
+  const hostNumber = options.continuedPageFurniture?.pageFieldSource?.pageNumber;
   const furnitureContext =
     furnitureLayoutContext(furniture, headerDistance, footerDistance) +
     (furniture?.evenAndOddHeaders || geometry.evenPageMargin
-      ? `|fp:${furniturePageNumberStart & 1}`
+      ? `|fp:${furniturePageNumberStart & 1}${hostNumber === undefined ? '' : hostNumber & 1}`
       : '');
-  // A page's side margins follow its displayed number (`PageGeometry.evenPageMargin`).
-  const geometryAt = (index: number) => geometryOnPage(geometry, furniturePageNumberStart + index);
+  // The side follows the displayed number (`PageGeometry.evenPageMargin`). Local page 0 of a
+  // continued section is the host sheet, which keeps the side of its own number.
+  const geometryAt = (index: number) =>
+    geometryOnPage(
+      geometry,
+      (index === 0 ? hostNumber : undefined) ?? furniturePageNumberStart + index
+    );
   const flowStartY = options.flowStartY ?? 0;
   const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
   // Physical sheet position remains separate from displayed header/footer numbering.

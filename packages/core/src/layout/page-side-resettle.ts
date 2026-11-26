@@ -12,7 +12,13 @@
 // to the text, not to the sheet: the body pass resolved it against the earlier side.
 
 import type { OverflowPageShell } from './page-furniture-insets.ts';
-import type { LayoutBox, NoteAreaRecord, PageRecord } from './semantic-records.ts';
+import { strippedStoryProjections } from './published-story-projections.ts';
+import type {
+  HeaderFooterStoryRecord,
+  LayoutBox,
+  NoteAreaRecord,
+  PageRecord,
+} from './semantic-records.ts';
 
 /** Points; well under any visible step, well over float error from offset sums. */
 const SIDE_TOLERANCE = 0.001;
@@ -36,6 +42,39 @@ function moveNoteArea(area: NoteAreaRecord, dx: number): NoteAreaRecord {
 }
 
 /**
+ * `story` on the side `shell` resolves, `dx` points from where it is.
+ *
+ * The shell lays the same variant out again for the page's new side and number, so its
+ * record is the story to show: content positioned from the page edge is resolved against
+ * the new side, and its page fields project the new number. A page that keeps another
+ * variant than the shell resolves moves that story sideways, with the projector that
+ * finalize reads for it (`strippedStoryProjections`).
+ */
+function storyOnSide(
+  story: HeaderFooterStoryRecord | undefined,
+  shellStory: HeaderFooterStoryRecord | undefined,
+  dx: number
+): HeaderFooterStoryRecord | undefined {
+  if (!story) return undefined;
+  if (shellStory?.variant === story.variant && shellStory.partName === story.partName)
+    return shellStory;
+  const move = (record: HeaderFooterStoryRecord): HeaderFooterStoryRecord => ({
+    ...record,
+    box: { ...record.box, x: record.box.x + dx },
+  });
+  const moved = move(story);
+  const live = story.pageFieldProjector;
+  if (live) return { ...moved, pageFieldProjector: (context) => move(live(context)) };
+  const retained = strippedStoryProjections.get(story);
+  if (retained)
+    strippedStoryProjections.set(moved, {
+      ...retained,
+      projector: (context) => move(retained.projector(context)),
+    });
+  return moved;
+}
+
+/**
  * `page` with its content box, header, footer, note areas and page borders on the side
  * `shell` resolves, or `page` itself when it is there already or the shell names no side.
  */
@@ -43,17 +82,15 @@ export function pageOnShellSide(page: PageRecord, shell: OverflowPageShell): Pag
   if (shell.contentLeft === undefined) return page;
   const dx = page.box.x + shell.contentLeft - page.contentBox.x;
   if (Math.abs(dx) <= SIDE_TOLERANCE) return page;
-  const { pageBorders: _, ...rest } = page;
+  const { pageBorders: _, header: _header, footer: _footer, ...rest } = page;
+  const header = storyOnSide(page.header, shell.header, dx);
+  const footer = storyOnSide(page.footer, shell.footer, dx);
   return {
     ...rest,
     contentBox: { ...page.contentBox, x: page.contentBox.x + dx },
     ...(shell.pageBorders ? { pageBorders: shell.pageBorders } : {}),
-    ...(page.header
-      ? { header: { ...page.header, box: { ...page.header.box, x: page.header.box.x + dx } } }
-      : {}),
-    ...(page.footer
-      ? { footer: { ...page.footer, box: { ...page.footer.box, x: page.footer.box.x + dx } } }
-      : {}),
+    ...(header ? { header } : {}),
+    ...(footer ? { footer } : {}),
     ...(page.footnotes ? { footnotes: moveNoteArea(page.footnotes, dx) } : {}),
     ...(page.endnotes ? { endnotes: moveNoteArea(page.endnotes, dx) } : {}),
   };

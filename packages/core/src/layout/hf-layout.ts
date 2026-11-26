@@ -81,6 +81,7 @@ import { layoutStoryWithTextFrames } from './story-text-frames.ts';
 import { createBoundedContextCache } from './bounded-context-cache.ts';
 import {
   pageContextOnSide,
+  storyHoldsPositionedContent,
   type HeaderFooterLayoutPageContext,
   type HeaderFooterPageContext,
 } from './hf-page-context.ts';
@@ -158,6 +159,8 @@ export interface HeaderFooterStoryLayout {
   readonly pageFieldNeeds: StoryPageFieldNeeds;
   /** Anchored drawings owned by this story, in story-relative coordinates. */
   readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
+  /** The story holds a text frame or a floating table (`storyHoldsPositionedContent`). */
+  readonly positionedContent?: true;
   /**
    * Re-layout this story under page-field and optional attached-page geometry context.
    *
@@ -262,6 +265,7 @@ export function layoutHeaderFooterStory(
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const pageFrame = readHeaderPageFrame(part);
   const positionedFrames = readPositionedHeaderFrames(part);
+  const positionedContent = storyHoldsPositionedContent(part) || undefined;
   const detected = detectStoryPageFields(part.root);
   // An `inside`/`outside` frame moves with the sheet's parity, so the story needs a page
   // context even when no page field is detected in it.
@@ -302,7 +306,8 @@ export function layoutHeaderFooterStory(
       storyNeedsPageFields(needs) ||
       positionedFrames ||
       inlineDrawingLayout ||
-      ctx?.characterStyleValues
+      ctx?.characterStyleValues ||
+      (positionedContent && ctx?.marginLeft !== undefined)
         ? ctx
         : undefined;
     const hfPageContext = pageContextOnSide(sectionPageContext, effectiveCtx);
@@ -730,10 +735,12 @@ export function layoutHeaderFooterStory(
       ...(pendingAnchoredDrawings.length > 0
         ? { anchoredDrawings: sortStoryDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
+      ...(positionedContent ? { positionedContent } : {}),
       withPageContext: (next) => {
         if (
           !storyNeedsPageFields(needs) &&
           !positionedFrames &&
+          !(positionedContent && next.marginLeft !== undefined) &&
           !story.anchoredDrawings?.length &&
           !next.characterStyleValues &&
           !effectiveCtx?.characterStyleValues

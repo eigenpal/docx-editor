@@ -729,7 +729,9 @@ function enumerateSectionsUncached(
  * extra space added to a margin, never taken out of the content width some other way. It is
  * on the left side, or on the right side with `w:rtlGutter` (CT_OnOff, §17.6.16). With
  * `w:gutterAtTop` (CT_OnOff, §17.15.1.50) it is added to the top margin instead, and the side
- * margins are the same on every page.
+ * margins are the same on every page. §17.15.1.50 says that the element shall not be used
+ * with `w:mirrorMargins`. A document that has both keeps the gutter at the top, and its side
+ * margins do not swap.
  *
  * Pages with an even displayed number differ in two cases, both in `evenPageMargin`:
  * - `w:mirrorMargins` (CT_OnOff, §17.15.1.57) swaps the left and right margins.
@@ -759,10 +761,10 @@ export function geometryOfSection(
   const even = mirrored
     ? sides(rightTwips, leftTwips, !gutterOnRight)
     : sides(leftTwips, rightTwips, facing ? !gutterOnRight : gutterOnRight);
-  // The gutter adds to the size of the top margin and keeps its sign (see below).
-  const top = twipsToPoints(
-    asTwips(atTop ? topTwips + (topTwips < 0 ? -gutterTwips : gutterTwips) : topTwips)
-  );
+  // The gutter adds to the size of the top margin and keeps its sign (see below). The gutter
+  // is unsigned (ST_TwipsMeasure): a negative value from a file adds nothing here.
+  const topGutter = atTop ? Math.max(0, gutterTwips) : 0;
+  const top = twipsToPoints(asTwips(topTwips + (topTwips < 0 ? -topGutter : topGutter)));
   const bottom = twipsToPoints(asTwips(section.margins.bottomTwips));
 
   // A page whose side margins exceed it has no content width at all. Fall back rather than

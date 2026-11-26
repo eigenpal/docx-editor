@@ -1,5 +1,6 @@
 // The page facts a header or footer story resolves anchored content against.
 
+import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import type { FieldPageContext } from './field-page-furniture.ts';
 
 /** Page geometry for header/footer anchored frame resolution (story-relative layout space). */
@@ -29,6 +30,7 @@ export interface HeaderFooterLayoutPageContext extends FieldPageContext {
    * its other edge (`w:pgMar/@w:gutter`, CT_PageMar, §17.6.11). Both are set together.
    */
   readonly marginLeft?: number;
+  /** The right margin of this page; set together with {@link marginLeft}. */
   readonly marginRight?: number;
 }
 
@@ -42,4 +44,27 @@ export function pageContextOnSide(
 ): HeaderFooterPageContext | undefined {
   if (!section || page?.marginLeft === undefined || page.marginRight === undefined) return section;
   return { ...section, marginLeft: page.marginLeft, marginRight: page.marginRight };
+}
+
+const positionedParts = new WeakMap<OoxmlPart, boolean>();
+
+/**
+ * Whether a header or footer part holds a text frame (`w:framePr`, CT_FramePr, ECMA-376
+ * Part 1 §17.3.1.11) or a floating table (`w:tblpPr`, CT_TblPPr, §17.4.57). Such content can
+ * be positioned from the page edge, so its story is laid out again for a page whose side
+ * margins differ ({@link HeaderFooterLayoutPageContext.marginLeft}).
+ */
+export function storyHoldsPositionedContent(part: OoxmlPart): boolean {
+  const known = positionedParts.get(part);
+  if (known !== undefined) return known;
+  let found = false;
+  // A loop over an explicit stack: the part's depth is file-controlled.
+  const pending: OoxmlNode[] = [part.root];
+  for (let node = pending.pop(); node && !found; node = pending.pop()) {
+    if (node.kind === 'textValue') continue;
+    found = node.localName === 'framePr' || node.localName === 'tblpPr';
+    for (const child of node.children ?? []) pending.push(child);
+  }
+  positionedParts.set(part, found);
+  return found;
 }

@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { readOoxmlPackage } from '@docx-editor.dev/core/store';
+import { readOoxmlPackage, readOoxmlPart } from '@docx-editor.dev/core/store';
 import { resolveNotesPart } from '../../store/package/note-references.ts';
 import {
   resolveEndnoteProperties,
@@ -15,6 +15,8 @@ import {
 } from '../../store/package/note-properties.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import type { PageFurniture } from '../page-furniture-insets.ts';
 import type { NotesLayoutInput } from '../note-pagination.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 
@@ -69,7 +71,33 @@ function documentWithEndnotes(endnoteLines: number): Uint8Array {
   });
 }
 
-function layoutOf(bytes: Uint8Array, mirrorMargins: boolean): SemanticLayout {
+/** A header that prints `H` and the page number, so a stale projection shows. */
+function numberedHeader(): PageFurniture {
+  const part = readOoxmlPart(
+    `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>H</w:t></w:r>` +
+      '<w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:hdr>',
+    {
+      name: '/word/header1.xml',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml',
+    }
+  );
+  if (!part.ok) throw new Error(part.reason);
+  const story = layoutHeaderFooterStory(part.part, 612 - 108 - 36, measurer, 'mirrored-notes');
+  return {
+    titlePage: false,
+    evenAndOddHeaders: false,
+    headers: new Map([['default', story]]),
+    footers: new Map(),
+  };
+}
+
+const headerText = (page: SemanticLayout['pages'][number]): string =>
+  (page.header?.fragments ?? [])
+    .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+    .flatMap((line) => line.spans.map((span) => span.text))
+    .join('');
+
+function layoutOf(bytes: Uint8Array, mirrorMargins: boolean, header = false): SemanticLayout {
   const loaded = readOoxmlPackage(bytes);
   if (!loaded.ok) throw new Error(loaded.reason);
   const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
@@ -90,13 +118,14 @@ function layoutOf(bytes: Uint8Array, mirrorMargins: boolean): SemanticLayout {
     notes,
     producer: 'mirrored-notes',
     ...(mirrorMargins ? { pageMarginSettings: { mirrorMargins: true } } : {}),
+    ...(header ? { sectionFurniture: [numberedHeader(), numberedHeader()] } : {}),
   });
 }
 
 /** A layout whose first section ends on `parity` overflow sheets (1 odd, 0 even, not none). */
-function overflowLayout(parity: 0 | 1, mirrorMargins = true): SemanticLayout {
+function overflowLayout(parity: 0 | 1, mirrorMargins = true, header = false): SemanticLayout {
   for (let endnoteLines = 6; endnoteLines < 80; endnoteLines += 3) {
-    const layout = layoutOf(documentWithEndnotes(endnoteLines), mirrorMargins);
+    const layout = layoutOf(documentWithEndnotes(endnoteLines), mirrorMargins, header);
     const sheets = layout.pages.filter((page) => page.noteStream === 'endnote-overflow').length;
     if (sheets > 0 && sheets % 2 === parity) return layout;
   }
@@ -123,6 +152,15 @@ describe('mirrored side margins after the notes pass', () => {
       });
     });
   }
+
+  test('a moved page shows its header on its side, with its own page number', () => {
+    const layout = overflowLayout(1, true, true);
+    layout.pages.forEach((page, index) => {
+      expect(page.header?.box.x).toBe(page.contentBox.x);
+      expect(page.contentBox.x - page.box.x).toBe(sideOf(index + 1));
+      expect(headerText(page)).toBe(`H${index + 1}`);
+    });
+  });
 
   test('without the setting no page moves', () => {
     const layout = overflowLayout(1, false);

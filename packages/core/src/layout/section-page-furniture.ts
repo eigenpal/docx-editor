@@ -235,10 +235,12 @@ export function createSectionPageFurniture(
       ...(geometryAt(index, sideShift) !== geometry ? { onEvenSide: true as const } : {}),
     };
     const needs = story.pageFieldNeeds;
-    // A per-page layout also gets the page's side margins (`onEvenSide`), so a drawing
-    // positioned from the page edge or from a margin band stays there on an even page.
+    // A per-page layout gets the page's side margins (`onEvenSide`), so a drawing, a text
+    // frame or a floating table positioned from the page edge stays there on an even page.
     const needsPerPageLayout =
-      storyNeedsPageFields(needs) || (story.anchoredDrawings?.length ?? 0) > 0;
+      storyNeedsPageFields(needs) ||
+      (story.anchoredDrawings?.length ?? 0) > 0 ||
+      (placement.onEvenSide === true && story.positionedContent === true);
     const laid = needsPerPageLayout ? layoutStoryForPage(placement, pageContext) : story;
     const placed = placeStory(placement, laid);
     if (storyNeedsPageFields(needs)) {

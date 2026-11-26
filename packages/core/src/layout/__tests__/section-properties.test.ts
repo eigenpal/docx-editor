@@ -209,7 +209,8 @@ describe('section properties become the geometry layout paginates against', () =
   });
 
   test('w:gutterAtTop adds the gutter to the top margin and leaves the sides alone', () => {
-    // §17.15.1.50: not used together with mirrored margins; the sides then do not swap.
+    // §17.15.1.50 says the element is not used with mirrored margins. A document that has
+    // both keeps the gutter at the top, and its sides do not swap.
     for (const settings of [
       { gutterAtTop: true },
       { gutterAtTop: true, mirrorMargins: true, evenAndOddHeaders: true },
@@ -221,6 +222,9 @@ describe('section properties become the geometry layout paginates against', () =
     // A negative top margin is an exact inset: the gutter adds to its size.
     const exact = { ...bound, margins: { ...bound.margins, topTwips: -1440 } };
     expect(geometryOfSection(exact, { gutterAtTop: true }).margin.top).toBe(-108);
+    // The gutter is unsigned: a negative value from a file does not shrink the top margin.
+    const negative = { ...bound, margins: { ...bound.margins, gutterTwips: -720 } };
+    expect(geometryOfSection(negative, { gutterAtTop: true }).margin.top).toBe(72);
   });
 
   test('w:rtlGutter is read as an on/off element', () => {
