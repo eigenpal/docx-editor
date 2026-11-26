@@ -536,8 +536,45 @@ export function availableTextIntervalsOnScanline(
 /** How far, in points, the foot of a line band may touch a contour and stay clear of it. */
 const BAND_FOOT_TOUCH_PT = 0.01;
 
-/** Most contour scanlines one line band probes; a denser outline is sampled in even steps. */
-const MAX_BAND_SCANLINES = 64;
+/** Contour vertices a line band probes one by one; a denser band is sampled. */
+const MAX_BAND_VERTEX_PROBES = 12;
+
+/**
+ * The scanlines that resolve a polygon wrap over the band from `top` to `foot`.
+ *
+ * The band's outer extents are exact: they lie on the band edges or at the vertex with the
+ * least or greatest x in the band. A band with more vertices than the limit also probes its
+ * most extreme vertices on each side and vertices in even steps, so inner gaps are sampled.
+ */
+function polygonBandProbes(top: number, foot: number, input: WrapExclusionInput): number[] {
+  const insetTop = (input.wrapDistances?.top ?? 0) + (input.effectInsets?.top ?? 0);
+  const insetBottom = (input.wrapDistances?.bottom ?? 0) + (input.effectInsets?.bottom ?? 0);
+  const inside: DrawingPoint[] = [];
+  for (const polygon of [input.polygon, input.clipPolygon]) {
+    for (const point of polygon ?? []) {
+      for (const y of [point.y - insetTop, point.y + insetBottom])
+        if (y > top && y < foot) inside.push({ x: point.x, y });
+    }
+  }
+  const probes = [top, foot];
+  if (inside.length <= MAX_BAND_VERTEX_PROBES) return [...probes, ...inside.map((at) => at.y)];
+  const quarter = MAX_BAND_VERTEX_PROBES / 4;
+  inside.sort((a, b) => a.x - b.x);
+  for (let index = 0; index < quarter; index += 1)
+    probes.push(inside[index]!.y, inside[inside.length - 1 - index]!.y);
+  inside.sort((a, b) => a.y - b.y);
+  const step = inside.length / (MAX_BAND_VERTEX_PROBES - 2 * quarter);
+  for (let index = 0; index < inside.length; index += step)
+    probes.push(inside[Math.floor(index)]!.y);
+  return probes;
+}
+
+/** Bands already resolved per wrap input. Line placement asks again for each candidate. */
+const bandIntervalCache = new WeakMap<
+  WrapExclusionInput,
+  Map<string, readonly ScanlineInterval[]>
+>();
+const BAND_CACHE_ENTRIES = 512;
 
 /**
  * The text passages beside a wrap for a line band from `top` to `bottom`.
@@ -555,22 +592,15 @@ export function availableTextIntervalsOverBand(
   const foot = bottom - BAND_FOOT_TOUCH_PT;
   if ((input.mode !== 'tight' && input.mode !== 'through') || !(foot > top))
     return availableTextIntervalsOnScanline(top, input);
-  const insetTop = (input.wrapDistances?.top ?? 0) + (input.effectInsets?.top ?? 0);
-  const insetBottom = (input.wrapDistances?.bottom ?? 0) + (input.effectInsets?.bottom ?? 0);
-  const inside: number[] = [];
-  for (const polygon of [input.polygon, input.clipPolygon]) {
-    for (const point of polygon ?? []) {
-      for (const event of [point.y - insetTop, point.y + insetBottom])
-        if (event > top && event < foot) inside.push(event);
-    }
-  }
-  const step = Math.max(1, Math.ceil(inside.length / MAX_BAND_SCANLINES));
-  const probes = [top, foot];
-  for (let index = 0; index < inside.length; index += step) probes.push(inside[index]!);
+  let cache = bandIntervalCache.get(input);
+  const key = `${top}:${foot}`;
+  const cached = cache?.get(key);
+  if (cached) return cached;
+  const probes = polygonBandProbes(top, foot, input);
   const excluded = mergeScanlineIntervals(
     probes.flatMap((probe) => excludedIntervalsOnScanline(probe, input))
   );
-  return filterByTextSide(
+  const available = filterByTextSide(
     invertIntervals(excluded, input.contentLeft, input.contentRight),
     excluded,
     input.textSide,
@@ -578,6 +608,12 @@ export function availableTextIntervalsOverBand(
     input.contentRight,
     input.largestTie
   );
+  if (!cache || cache.size >= BAND_CACHE_ENTRIES) {
+    cache = new Map();
+    bandIntervalCache.set(input, cache);
+  }
+  cache.set(key, available);
+  return available;
 }
 
 /** Point-in effect-expanded clipped shape via exact scanline Minkowski region at `y`. */
