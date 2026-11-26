@@ -47,6 +47,11 @@ export interface WrapExclusionInput {
    * mode 15 and later (`largestWrapTieLeft`).
    */
   readonly largestTie?: 'left' | 'right';
+  /**
+   * The bottom of a polygon wrap whose contour meets the object's bottom edge, with its bottom
+   * distance and effect extent. A line whose top meets it still wraps (`CONTOUR_FOOT_REACH_PT`).
+   */
+  readonly contourFoot?: number;
   readonly contentLeft: number;
   readonly contentRight: number;
 }
@@ -473,7 +478,11 @@ export function excludedIntervalsOnScanline(
       : boundedRectanglePolygon(input.contentBounds);
   const fillRule = input.mode === 'through' ? 'evenodd' : 'nonzero';
   const insets = combinedInsets(wrapDistances, effectInsets);
-  const excluded = minkowskiExcludedIntervalsAtY(polygon, y, insets, fillRule, input.clipPolygon);
+  const foot = input.contourFoot;
+  // A scanline in the reach below the contour's foot reads its bottom row.
+  const atY =
+    foot !== undefined && y >= foot && y <= foot + CONTOUR_FOOT_REACH_PT ? foot - FOOT_ROW_PT : y;
+  const excluded = minkowskiExcludedIntervalsAtY(polygon, atY, insets, fillRule, input.clipPolygon);
   return clampIntervalsToContent(tightSpan(input, excluded), contentLeft, contentRight);
 }
 
@@ -558,8 +567,9 @@ const MAX_BAND_VERTEX_PROBES = 12;
  * The scanlines that resolve a polygon wrap over the band from `top` to `foot`.
  *
  * The band's outer extents are exact: they lie on the band edges or at the vertex with the
- * least or greatest x in the band. A band with more vertices than the limit also probes its
- * most extreme vertices on each side and vertices in even steps, so inner gaps are sampled.
+ * least or greatest x in the band, and tight wrap needs no more. Through wrap also probes the
+ * vertices inside the band for its inner passages; past the limit it keeps the most extreme
+ * vertices on each side and samples the rest in even steps.
  */
 function polygonBandProbes(top: number, foot: number, input: WrapExclusionInput): number[] {
   const insetTop = (input.wrapDistances?.top ?? 0) + (input.effectInsets?.top ?? 0);
@@ -572,6 +582,16 @@ function polygonBandProbes(top: number, foot: number, input: WrapExclusionInput)
     }
   }
   const probes = [top, foot];
+  // Tight wrap keeps only the span between the outer extents, which those probes give exactly.
+  if (input.mode === 'tight') {
+    let least: DrawingPoint | undefined;
+    let most: DrawingPoint | undefined;
+    for (const at of inside) {
+      if (!least || at.x < least.x) least = at;
+      if (!most || at.x > most.x) most = at;
+    }
+    return least && most ? [...probes, least.y, most.y] : probes;
+  }
   if (inside.length <= MAX_BAND_VERTEX_PROBES) return [...probes, ...inside.map((at) => at.y)];
   const quarter = MAX_BAND_VERTEX_PROBES / 4;
   inside.sort((a, b) => a.x - b.x);
@@ -632,6 +652,32 @@ export function availableTextIntervalsOverBand(
   return available;
 }
 
+/**
+ * The vertical extent a wrap excludes, across the whole column. A polygon wrap reaches from its
+ * contour or its box, whichever extends further, plus distances and effect extents, and past a
+ * `contourFoot` by `CONTOUR_FOOT_REACH_PT`.
+ */
+export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
+  if (input.mode === 'topAndBottom' || input.mode === 'square') {
+    return squareExclusionBounds(input.contentBounds, input.effectInsets, input.wrapDistances);
+  }
+  const ys = [input.contentBounds.y, input.contentBounds.y + input.contentBounds.height];
+  if (input.polygon) {
+    for (const point of input.polygon) ys.push(point.y);
+  }
+  const top = Math.min(...ys) - input.effectInsets.top - input.wrapDistances.top;
+  const bottom = Math.max(
+    Math.max(...ys) + input.effectInsets.bottom + input.wrapDistances.bottom,
+    input.contourFoot === undefined ? -Infinity : input.contourFoot + CONTOUR_FOOT_REACH_PT
+  );
+  return Object.freeze({
+    x: input.contentLeft,
+    y: top,
+    width: Math.max(0, input.contentRight - input.contentLeft),
+    height: Math.max(0, bottom - top),
+  });
+}
+
 /** Point-in effect-expanded clipped shape via exact scanline Minkowski region at `y`. */
 export function pointInEffectExpandedClip(
   x: number,
@@ -684,7 +730,8 @@ export function expandPolygonAnisotropic(
 
 /**
  * How far, in points, a polygon wrap (20.4.2.19 wrapTight, 20.4.2.18 wrapThrough) reaches below
- * the object when its contour meets the object's bottom edge, as the default rectangle does.
+ * its `contourFoot`: the bottom of a contour that meets the object's bottom edge, as the default
+ * rectangle does. A scanline in that reach reads the contour's bottom row.
  *
  * A line whose top meets that bottom edge wraps beside the object, unlike a line that touches a
  * square wrap or any other edge of a contour (`WRAP_EDGE_TOUCH_PT`, 0.01 pt). The reach is past
@@ -692,6 +739,9 @@ export function expandPolygonAnisotropic(
  * the bottom edge by 0.01 pt stays full width.
  */
 const CONTOUR_FOOT_REACH_PT = 0.015;
+
+/** How far above the contour's foot its bottom row is read. */
+const FOOT_ROW_PT = 0.000_1;
 
 export function wrapExclusionFromProjection(options: {
   readonly mode: 'square' | 'tight' | 'through' | 'topAndBottom';
@@ -719,19 +769,20 @@ export function wrapExclusionFromProjection(options: {
           transform: options.transform,
         })
       : null;
-  const bounds = options.contentBounds;
-  const reachesFoot =
-    polygon !== null &&
-    (polygon.length < 3 ||
-      Math.max(...polygon.map((point) => point.y)) >= bounds.y + bounds.height - 0.000_1);
   const wrapDistances: DrawingInsets = Object.freeze({
     top: finite(options.wrapDistancesEmu.top / EMU_PER_POINT),
     right: finite(options.wrapDistancesEmu.right / EMU_PER_POINT),
-    bottom:
-      finite(options.wrapDistancesEmu.bottom / EMU_PER_POINT) +
-      (reachesFoot ? CONTOUR_FOOT_REACH_PT : 0),
+    bottom: finite(options.wrapDistancesEmu.bottom / EMU_PER_POINT),
     left: finite(options.wrapDistancesEmu.left / EMU_PER_POINT),
   });
+  const bounds = options.contentBounds;
+  const boxBottom = bounds.y + bounds.height;
+  const polygonBottom =
+    polygon === null ? null : polygon.length < 3 ? boxBottom : Math.max(...polygon.map((p) => p.y));
+  const contourFoot =
+    polygonBottom !== null && polygonBottom >= boxBottom - 0.000_1
+      ? polygonBottom + wrapDistances.bottom + finite(options.geometry.effectInsets?.bottom ?? 0)
+      : undefined;
   return Object.freeze({
     mode: options.mode,
     contentBounds: options.contentBounds,
@@ -740,6 +791,7 @@ export function wrapExclusionFromProjection(options: {
     wrapDistances,
     effectInsets: options.geometry.effectInsets,
     textSide: options.textSide,
+    ...(contourFoot === undefined ? {} : { contourFoot }),
     contentLeft: options.contentLeft,
     contentRight: options.contentRight,
   });

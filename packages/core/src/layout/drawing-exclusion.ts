@@ -30,7 +30,7 @@ import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingGeometry } from './drawing-geometry.ts';
 import {
   availableTextIntervalsOverBand,
-  squareExclusionBounds,
+  verticalBandOfExclusion,
   type ScanlineInterval,
   type WrapExclusionInput,
   wrapExclusionFromProjection,
@@ -261,23 +261,7 @@ export function wrapExclusionInputForProjection(options: {
   });
 }
 
-export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
-  if (input.mode === 'topAndBottom' || input.mode === 'square') {
-    return squareExclusionBounds(input.contentBounds, input.effectInsets, input.wrapDistances);
-  }
-  const ys = [input.contentBounds.y, input.contentBounds.y + input.contentBounds.height];
-  if (input.polygon) {
-    for (const point of input.polygon) ys.push(point.y);
-  }
-  const top = Math.min(...ys) - input.effectInsets.top - input.wrapDistances.top;
-  const bottom = Math.max(...ys) + input.effectInsets.bottom + input.wrapDistances.bottom;
-  return Object.freeze({
-    x: input.contentLeft,
-    y: top,
-    width: Math.max(0, input.contentRight - input.contentLeft),
-    height: Math.max(0, bottom - top),
-  });
-}
+export { verticalBandOfExclusion };
 
 /** Vertical frames whose resolved origin does not depend on where the anchor flows. */
 export function pageFramedVertically(frame: AnchoredDrawingRecord['verticalFrame']): boolean {
