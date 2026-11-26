@@ -160,9 +160,16 @@ export interface OwnAnchorPageFit {
    * Placement already moved up every object that can end at the margin
    * (`wrappedParagraphAnchorBottomTop`), so a crossing object cannot end there without rising
    * above its line: the line moves to the next page, and an object that still crosses the
-   * margin there ends the page.
+   * margin there ends the page. `opening` is the space and top border between `lineY` and
+   * the line's text, which a first line's frame starts above: the line still ends below them.
    */
-  crosses(line: AnchorLine, lastLine: boolean, paragraphY: () => number, lineY: number): boolean;
+  crosses(
+    line: AnchorLine,
+    lastLine: boolean,
+    paragraphY: () => number,
+    lineY: number,
+    opening?: number
+  ): boolean;
 }
 
 /** The page-fit test for one body paragraph, in modern modes only. */
@@ -176,7 +183,7 @@ export function createOwnAnchorPageFit(
   const anchors = ownPageFitAnchors(paragraph, scope);
   if (anchors.length === 0) return { crosses: () => false };
   return {
-    crosses(line, lastLine, paragraphY, lineY) {
+    crosses(line, lastLine, paragraphY, lineY, opening = 0) {
       if (!anchors.some((anchor) => onLine(anchor.start, line, lastLine))) return false;
       const frameBase = scope.frameBase();
       if (frameBase.wrappedParagraphAnchorBottom !== 'margin') return false;
@@ -188,7 +195,7 @@ export function createOwnAnchorPageFit(
         const resolved = resolveAnchoredDrawingPosition(anchor.projection, {
           ...frameBase,
           paragraphBox: box(top),
-          anchorLineBox: box(lineY),
+          anchorLineBox: { ...box(lineY), height: line.height + opening },
           anchorCharacterX: x,
           columnBox: box(top),
           cellBox: null,

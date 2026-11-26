@@ -2221,7 +2221,8 @@ function* layoutBlocksPass(
         );
       // An own object that cannot end at the bottom margin takes the paragraph along.
       const ownY = () => cursorY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
-      const anchorMoves = !!lines[0] && pageFit.crosses(lines[0], lines.length <= 1, ownY, cursorY);
+      const anchorMoves =
+        !!lines[0] && pageFit.crosses(lines[0], lines.length <= 1, ownY, cursorY, lead + topExtent);
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {
         const need = keepChains.need(index, previousSpaceAfter, {
@@ -2570,7 +2571,8 @@ function* layoutBlocksPass(
           pendingLine,
           isLastLine,
           () => anchorParagraphY(pending.length > 0 ? undefined : skipBefore),
-          cursorY + skipBefore - (pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent)
+          cursorY + skipBefore - (pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent),
+          pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent
         );
       // An intrinsically oversized line cannot fit another empty sheet; publish it once.
       const overflowsPage =
@@ -2708,8 +2710,12 @@ function* layoutBlocksPass(
       pending.push(record);
       cursorY += pendingLine.height;
       // An own object that still crosses the bottom margin here ends the page after its line.
-      const lineY = record.box.y - (pending.length > 1 ? 0 : fragmentBefore + fragmentTopExtent);
-      if (!frame && pageFit.crosses(pendingLine, isLastLine, () => anchorParagraphY(), lineY))
+      const opening = pending.length > 1 ? 0 : fragmentBefore + fragmentTopExtent;
+      const lineY = record.box.y - opening;
+      if (
+        !frame &&
+        pageFit.crosses(pendingLine, isLastLine, () => anchorParagraphY(), lineY, opening)
+      )
         cursorY = Math.max(cursorY, contentHeight());
       if (pendingLine.columnBreakAfter) {
         const priorColumnWidth = columnWidth();
