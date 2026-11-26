@@ -46,7 +46,8 @@ import {
   type LayoutRowBoundedResult,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import type { CellContentInsets } from './table-cell-geometry.ts';
+import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { resolveVMergeSpans } from './table-vmerge.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
@@ -145,6 +146,8 @@ interface Head {
   readonly cell: SemanticTableCell;
   cursor: CellPlaceCursor | null;
   complete: boolean;
+  /** An earlier fragment placed a line of this text. */
+  started?: true;
 }
 
 interface Group {
@@ -478,6 +481,8 @@ export function createVMergeFragmentCarry(
       );
       const cell = placed.record.cells[0]!;
       blocks = cell.blocks;
+      if (blocks.some((block) => block.kind !== 'paragraph' || block.lines.length > 0))
+        head.started = true;
       head.complete = placed.remainder === null;
       head.cursor = placed.remainder?.[0] ?? null;
       if (!head.complete && !head.cursor)
@@ -641,9 +646,13 @@ export function createVMergeFragmentCarry(
     };
   }
 
-  /** Align merged text against the lowest line of the other cells in a split last row. */
+  /**
+   * Align the merged text of `aligned` (heads of `group`) against the lowest line of the other
+   * cells in a split last row.
+   */
   function alignAboveSplitRow(
     group: Group,
+    aligned: readonly Head[],
     last: TableRowFragmentRecord,
     placed: Map<string, TableCellFragmentRecord>
   ): void {
@@ -653,7 +662,7 @@ export function createVMergeFragmentCarry(
       if (headIds.has(cell.id)) continue;
       for (const block of cell.blocks) lineBottom = Math.max(lineBottom, blockBottom(block));
     }
-    for (const head of group.heads) {
+    for (const head of aligned) {
       const cell = placed.get(head.cell.id);
       if (!cell || head.cell.vAlign === 'top' || cell.blocks.length === 0) continue;
       const room = lineBottom - Math.max(...cell.blocks.map(blockBottom));
@@ -663,6 +672,47 @@ export function createVMergeFragmentCarry(
           blocks: shiftBlocks(cell.blocks, cellAlignmentShift(head.cell.vAlign, room)),
         });
     }
+  }
+
+  /**
+   * The content insets of the head cells of `group` in a fragment that a page break cuts,
+   * where the merge's first and last rows in the fragment are `first` and `last`. A carried
+   * fragment's first row does not hold the head cells, so their insets start from the shared
+   * ones there.
+   *
+   * The merged cell closes the fragment with that row, so its bottom inset is the one its
+   * own cell in that row uses, as the cells beside it do. A merge that reaches the table's
+   * last row reserves the table's outer bottom rule (`w:bottom`, ECMA-376 Part 1 §17.4.4;
+   * `CT_Border`, §17.3.4), but a fragment that the merge continues past does not close the
+   * table. Without this, the merged cell's closing rule sits one rule width above theirs.
+   * When `last` is the head row, the head cell is that own cell: it then reserves what a cell
+   * that does not close the table reserves, unless the row splits and its placement reserved
+   * the inside rule at the cut (`cutRowContentDeps`).
+   * Only the bottom inset changes. The other sides keep what the head row's placement gave.
+   */
+  function cutInsets(
+    group: Group,
+    first: TableRowFragmentRecord,
+    last: TableRowFragmentRecord,
+    insets: ReadonlyMap<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>
+  ): ReadonlyMap<string, CellContentInsets> | undefined {
+    if (structure.cellSpacingPt > 0) return undefined;
+    const lastRow = rows[rowIndex.get(last.id)!]!;
+    const cut = new Map<string, CellContentInsets>();
+    for (const { cell } of group.heads) {
+      const closing = lastRow.cells.find((other) => other.gridColumn === cell.gridColumn);
+      if (!closing) continue;
+      const own = insets.get(last)?.get(closing.id);
+      const bottom =
+        closing.id !== cell.id
+          ? (own ?? sharedCellContentInsets(closing, true)).bottom
+          : last.hasContinuation && own
+            ? own.bottom
+            : cellContentInsets({ ...cell, contentBottomIsOuter: false }, true).bottom;
+      const before = insets.get(first)?.get(cell.id) ?? sharedCellContentInsets(cell, true);
+      if (before.bottom !== bottom) cut.set(cell.id, { ...before, bottom });
+    }
+    return cut.size > 0 ? cut : undefined;
   }
 
   /** For each active merge, the indexes of its rows' records. A repeated header row is none. */
@@ -689,7 +739,8 @@ export function createVMergeFragmentCarry(
     records: readonly TableRowFragmentRecord[],
     indexes: readonly number[],
     x: number,
-    edits: HeadRowEdits
+    edits: HeadRowEdits,
+    insets: ReadonlyMap<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>
   ): void {
     const firstIndex = indexes[0]!;
     const first = records[firstIndex]!;
@@ -706,36 +757,43 @@ export function createVMergeFragmentCarry(
     }
     const bottom = last.box.y + last.box.height;
     const final = rowIndex.get(last.id) === group.last && !last.hasContinuation;
+    // `w:vAlign` (`CT_VerticalJc`, ECMA-376 Part 1 §17.4.83): "This element specifies the
+    // vertical alignment for text within the current table cell." The merged text keeps its
+    // alignment in the fragment where its first line is placed: the fragment that holds the
+    // head row, or a later one when no line fits beside the head row. This holds also when the
+    // text goes on to the next page. A fragment that continues text placed on an earlier page
+    // fills from the top. The specification does not define alignment for a cell that breaks
+    // across pages, so this split is a layout rule.
+    const startedBefore = new Set(
+      group.heads.filter((head) => head.started).map((head) => head.cell.id)
+    );
     const placed = new Map(
       group.heads.map((head) => [head.cell.id, placeHead(group, head, first, bottom, x, final)])
     );
     group.fragmentStart = undefined;
-    // `w:vAlign` places the merged text only in the fragment that holds the head row. A
-    // fragment that continues the text from an earlier page fills from the top.
-    // ECMA-376 Part 1 §17.4.83: "This element specifies the vertical alignment for text
-    // within the current table cell." The specification does not define alignment for a
-    // cell that breaks across pages, so this split is a layout rule.
-    const continued = !holdsHeadRow || first.isContinuation === true;
     // When the last row splits while the text goes on, that row ends at its lowest line,
-    // not at the page bottom. The text is aligned here against that line instead.
+    // not at the page bottom. Text that starts here is aligned against that line instead.
     const splitTail =
-      !continued && last.hasContinuation === true && group.heads.some((head) => !head.complete);
-    if (splitTail) alignAboveSplitRow(group, last, placed);
+      last.hasContinuation === true && group.heads.some((head) => !head.complete)
+        ? group.heads.filter((head) => !startedBefore.has(head.cell.id))
+        : [];
+    if (splitTail.length > 0) alignAboveSplitRow(group, splitTail, last, placed);
+    const topAligned = new Set([...startedBefore, ...splitTail.map((head) => head.cell.id)]);
 
     const kind: HeadRowKind = holdsHeadRow ? 'placed' : 'carried';
     const previous = edits.current(kind, firstIndex, group.source.id);
     const base =
       previous?.record ?? (holdsHeadRow ? first : carriedHeadRow(group.headRecord, first, x));
     const source = previous?.source ?? group.source;
-    const headIds = new Set(group.heads.map((head) => head.cell.id));
     edits.publish(
       kind,
       firstIndex,
       {
         record: withCells(base, placed),
-        source: continued || splitTail ? withTopAlignedCells(source, headIds) : source,
+        source: topAligned.size > 0 ? withTopAlignedCells(source, topAligned) : source,
       },
-      previous
+      previous,
+      final ? undefined : cutInsets(group, first, last, insets)
     );
 
     if (
@@ -832,7 +890,7 @@ export function createVMergeFragmentCarry(
       const covered = coveredRecords(records);
       for (const group of groups) {
         const indexes = covered.get(group);
-        if (group.active && indexes) publishGroup(group, records, indexes, x, edits);
+        if (group.active && indexes) publishGroup(group, records, indexes, x, edits, insets);
       }
       return edits.assemble(sources);
     },

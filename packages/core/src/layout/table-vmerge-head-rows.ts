@@ -32,8 +32,17 @@ export interface HeadRowEdits {
    * `carried` rows inserted before `index`.
    */
   current(kind: HeadRowKind, index: number, sourceId: string): HeadRowEdit | undefined;
-  /** Publish `edit` as this head row, in place of `previous` when an earlier merge made one. */
-  publish(kind: HeadRowKind, index: number, edit: HeadRowEdit, previous?: HeadRowEdit): void;
+  /**
+   * Publish `edit` as this head row, in place of `previous` when an earlier merge made one.
+   * `insetsFor` gives the content insets of merged cells that differ from the row's own.
+   */
+  publish(
+    kind: HeadRowKind,
+    index: number,
+    edit: HeadRowEdit,
+    previous?: HeadRowEdit,
+    insetsFor?: ReadonlyMap<string, CellContentInsets>
+  ): void;
   /** The rows and sources with every published head row in place. */
   assemble(sources: readonly SemanticTableRow[]): {
     rows: TableRowFragmentRecord[];
@@ -56,20 +65,22 @@ export function createHeadRowEdits(
         ? placed.get(index)
         : carried.get(index)?.find((edit) => edit.source.id === sourceId);
     },
-    publish(kind, index, edit, previous) {
-      if (kind === 'placed') {
-        placed.set(index, edit);
-        return;
-      }
-      const edits = carried.get(index) ?? [];
-      const at = previous ? edits.indexOf(previous) : -1;
-      if (at >= 0) edits[at] = edit;
-      else edits.push(edit);
-      carried.set(index, edits);
+    publish(kind, index, edit, previous, insetsFor) {
       // A carried row takes the cell insets of the row it continues. A placed row takes the
       // insets of the authored record it replaces, which `assemble` still holds by key.
-      const rowInsets = insets.get(previous?.record ?? records[index]!);
-      if (rowInsets) insets.set(edit.record, rowInsets);
+      let key = records[index]!;
+      if (kind === 'placed') placed.set(index, edit);
+      else {
+        const edits = carried.get(index) ?? [];
+        const at = previous ? edits.indexOf(previous) : -1;
+        if (at >= 0) edits[at] = edit;
+        else edits.push(edit);
+        carried.set(index, edits);
+        const rowInsets = insets.get(previous?.record ?? key);
+        if (rowInsets) insets.set(edit.record, rowInsets);
+        key = edit.record;
+      }
+      if (insetsFor?.size) insets.set(key, new Map([...(insets.get(key) ?? []), ...insetsFor]));
     },
     assemble(sources) {
       const rows: TableRowFragmentRecord[] = [];
