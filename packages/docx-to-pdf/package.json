@@ -24,9 +24,7 @@
     "docs",
     "!dist/metafile-*.json",
     "LICENSE.md",
-    "THIRD_PARTY_NOTICES.md",
-    "assets",
-    "licenses"
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "node ../../scripts/check-built-siblings.mjs && tsup",

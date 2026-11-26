@@ -111,6 +111,7 @@ export interface DocumentExportShapingOptions extends DocumentExportFontResoluti
   readonly glyphFallbacks?: readonly FontRequest[];
   /** Origins composed after the document-embedded font origin. */
   readonly lastResortFonts?: readonly FontOrigin[];
+  readonly reportsStandIn?: (family: string, sourceFamily: string) => boolean;
   readonly signal?: AbortSignal;
   /** Maximum time for font origins and shaping initialization. Default: 60 seconds. */
   readonly timeoutMs?: number;
@@ -159,6 +160,12 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
    * `resolvedFaces`, so a stand-in it offers cannot shadow a face the document carries.
    */
   readonly lastResortFonts?: FontOrigin | readonly FontOrigin[];
+  /**
+   * Tells a substitution that is a stand-in with another font's widths, such as a generic
+   * face for a family that no origin supplies. The report counts such a family as uncovered,
+   * so a strict font policy refuses it. Absent: a substitution covers its family.
+   */
+  readonly reportsStandIn?: (family: string, sourceFamily: string) => boolean;
   /** Font provisioning deadline; defaults to `resourceTimeoutMs`, then 60 seconds. */
   readonly fontResolutionTimeoutMs?: number;
   /** Ordered admitted faces used when a complete text span lacks glyph coverage. Maximum 16. */
@@ -260,6 +267,7 @@ export async function openFontBackedDocumentForExport(
   const {
     fonts,
     lastResortFonts,
+    reportsStandIn,
     fontResolutionTimeoutMs,
     fontPolicy,
     onFontResolution,
@@ -286,6 +294,7 @@ export async function openFontBackedDocumentForExport(
       documentLigatures,
       fontShaping,
       lastResortFonts: lastResort,
+      reportsStandIn,
       onFontResolution: (report) => {
         fontResolution = report;
         return onFontResolution?.(report);
@@ -449,7 +458,12 @@ export async function acquireDocumentExportShaping(
         throwIfAborted(controller.signal);
         const composed = composeFontConfiguration(resolved ?? {});
         const configuration = applyDocumentFontSubstitutions(composed, documentFonts);
-        const standIns = hostChainedDocumentFallbacks(composed, configuration, documentFonts);
+        const standIns = new Set(
+          hostChainedDocumentFallbacks(composed, configuration, documentFonts)
+        );
+        for (const { from, to } of configuration.substitutions ?? [])
+          if (options.reportsStandIn?.(from.family, to.family))
+            standIns.add(from.family.trim().toLowerCase());
         const synthesized = synthesizedServedFaces(composed, configuration);
         if (configuration.sources.length === 0) {
           const report = fontResolutionReport(

@@ -217,6 +217,13 @@ export interface CacheProvenance extends OperationSnapshot {
 }
 
 // @public
+export function canonicalFontFamily(family: string): {
+    readonly bold: boolean;
+    readonly family: string;
+    readonly italic: boolean;
+};
+
+// @public
 export interface CanvasMeasurerOptions {
     readonly context?: CanvasTextContext | null;
     // (undocumented)
@@ -398,6 +405,12 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
 
 // @public
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
+
+// @public
+export const CJK_FALLBACK_FAMILY = "Noto Sans CJK JP";
+
+// @public
+export const CJK_SUBSTITUTED_FAMILIES: readonly string[];
 
 // @public
 export interface CjkTypographySettings {
@@ -1246,6 +1259,32 @@ export function expandLvlText(lvlText: string, counters: readonly number[], form
 export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null;
 
 // @public
+export const FALLBACK_FACE_FAMILIES: readonly string[];
+
+// @public
+export type FallbackFaceReader = (families: ReadonlySet<string>, signal: AbortSignal | undefined,
+faces?: readonly FontRequest[]) => Promise<readonly FontSource[]>;
+
+// @public
+export type FallbackFontResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<FallbackFontsAnswer>>;
+
+// @public
+export interface FallbackFontsAnswer {
+    // (undocumented)
+    readonly sources: FontSource[];
+    // (undocumented)
+    readonly substitutions: FontSourceSubstitution[];
+}
+
+// @public
+export interface FallbackLineBox {
+    // (undocumented)
+    readonly baselineEm: number;
+    // (undocumented)
+    readonly heightEm: number;
+}
+
+// @public
 export interface FieldAtomMarker {
     readonly fixedResult?: true;
     readonly formControl?: {
@@ -1312,6 +1351,46 @@ export type FixedPointRoundingMode = 'halfAwayFromZero' | 'halfToEven' | 'toward
 export type FontByteValidator = (bytes: Uint8Array, faceIndex: number) => FontValidationResult;
 
 // @public
+export interface FontConfiguration {
+    // (undocumented)
+    readonly defaultFont: {
+        readonly family: string;
+        readonly sizeHalfPoints: number;
+    };
+    // (undocumented)
+    readonly epoch: number;
+    // (undocumented)
+    readonly language?: string;
+    // (undocumented)
+    readonly maxFontBytes: number;
+    // (undocumented)
+    readonly sources: readonly FontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
+}
+
+// @public
+export interface FontConfigurationFragment {
+    readonly deferred?: Promise<FontConfigurationFragment | undefined>;
+    // (undocumented)
+    readonly sources?: readonly FontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
+}
+
+// @public
+export interface FontFaceRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
+
+// @public
 export interface FontFingerprintInputs {
     // (undocumented)
     readonly byteLength: number;
@@ -1375,6 +1454,23 @@ export class FontResolutionError extends Error {
 export type FontResolutionErrorCode = 'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch';
 
 // @public
+export interface FontResolutionRequest {
+    readonly defaultFamily: string;
+    readonly faces?: readonly FontFaceRequest[];
+    readonly families: readonly string[];
+    readonly resolvedFaces?: readonly FontFaceRequest[];
+    readonly signal?: AbortSignal;
+}
+
+// @public
+export type FontResolver = (request: FontResolutionRequest) => FontConfiguration | FontConfigurationFragment | undefined | Promise<FontConfiguration | FontConfigurationFragment | undefined>;
+
+// @public
+export interface FontResolverMark {
+    readonly 'docx-editor.dev/font-resolver': true;
+}
+
+// @public
 export interface FontResourceDefinition {
     // (undocumented)
     readonly availability?: 'available' | 'forbidden';
@@ -1432,6 +1528,34 @@ export interface FontShapingOptions {
 
 // @public
 export type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
+
+// @public
+export interface FontSource {
+    // (undocumented)
+    readonly availability?: 'available' | 'forbidden';
+    // (undocumented)
+    readonly bytes: Uint8Array;
+    // (undocumented)
+    readonly faceIndex: number;
+    // (undocumented)
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly request: FontFaceRequest;
+}
+
+// @public
+export interface FontSourceSubstitution {
+    // (undocumented)
+    readonly from: FontFaceRequest;
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly to: FontFaceRequest;
+}
 
 // @public
 export interface FontSubstitution {
@@ -1508,7 +1632,16 @@ export function fragmentOwnsAtomOffset(fragment: ParagraphFragmentRecord, atomOf
 export function fragmentsOfParagraph(layout: SemanticLayout, paragraphId: string): ParagraphFragmentRecord[];
 
 // @public
+export function genericStandInFamily(family: string): string;
+
+// @public
 export function geometryOfSection(section: SectionProperties): PageGeometry;
+
+// @public
+export const GLYPH_FALLBACK_FACES: readonly FontRequest[];
+
+// @public
+export const GLYPH_FALLBACK_FAMILIES: readonly string[];
 
 // @public
 export interface GlyphOutline {
@@ -1843,6 +1976,9 @@ export const intlGraphemeBoundary: GraphemeBoundary;
 export function isCanvasMeasurementAvailable(context?: CanvasTextContext | null | undefined): boolean;
 
 // @public
+export function isCjkRuledFontFamily(canonical: string): boolean;
+
+// @public
 export function isContentControl(node: OoxmlNode): node is ContentControlLike;
 
 // @public
@@ -1853,6 +1989,9 @@ export function isCumulativeGeometryTrustedFromLineOrigin(run: ShapedRun, lineSt
 
 // @public
 export function isFurniturePoint(layout: SemanticLayout, point: HitPoint): boolean;
+
+// @public
+export function isGenericStandIn(family: string, sourceFamily: string): boolean;
 
 // @public
 export function isGeometryTrustedCaretOffset(run: ShapedRun, utf16Offset: number): boolean;
@@ -1868,6 +2007,9 @@ export function isIntlWordSegmenterAvailable(): boolean;
 
 // @public
 export function isMarkerOnlySeparatorNote(note: OoxmlNode, displayMode?: RevisionDisplayMode, revisionAuthorFilter?: RevisionAuthorFilter): boolean;
+
+// @public
+export function isRuledFontFamily(canonical: string): boolean;
 
 // @public (undocumented)
 export function isValidStyleId(raw: string | undefined): raw is string;
@@ -2235,7 +2377,13 @@ export interface ListMarkerRecord {
 export type ListSuffix = 'tab' | 'space' | 'nothing';
 
 // @public
+export const LOCALIZED_FONT_FAMILIES: ReadonlyMap<string, string>;
+
+// @public
 export function mapSymbolPuaText(text: string, fontFamily: string | null | undefined, isFamilyAvailable?: (family: string) => boolean): string;
+
+// @public
+export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
 
 // @public
 export function markRevisionRemovesMark(revision: RevisionAttribution): boolean;
@@ -2341,6 +2489,12 @@ export interface MoveCaretOptions {
     readonly measurer?: TextMeasurer;
     readonly stops?: readonly CaretGeometry[];
 }
+
+// @public
+export function namedFallbackFontResolver(read: FallbackFaceReader): FallbackFontResolver;
+
+// @public
+export function namedSubstituteFamily(family: string): string | undefined;
 
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
@@ -4599,6 +4753,12 @@ export function spansInSelection(layout: SemanticLayout, selection: SemanticSele
 order: readonly string[]): StyleSpanRecord[];
 
 // @public
+export function standInFontResolver(read: FallbackFaceReader): FallbackFontResolver;
+
+// @public
+export function standInLineBox(canonical: string, target: string): FallbackLineBox | undefined;
+
+// @public
 export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, styles?: StyleCascadeTable, numberingIndex?: NumberingIndex): OoxmlElement[];
 
 // @public
@@ -4758,6 +4918,12 @@ export interface StyleSpanRecord {
     readonly unsupported?: UnsupportedContentRecord;
     readonly wrapAdvanceBefore?: number;
 }
+
+// @public
+export function substitutionsToFallback(family: string, target: string): FontSourceSubstitution[];
+
+// @public
+export const SYMBOL_STAND_IN_FAMILY = "Noto Sans Symbols 2";
 
 // @public
 export const SYNTHETIC_BOLD_ADVANCE_EM: number;

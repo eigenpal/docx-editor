@@ -1,5 +1,5 @@
 // Bounded last-resort composition when no admitted face covers an entire run.
-import type { ResolvedFont } from '../layout/font-resource.ts';
+import type { ResolvedFont } from './font-resource.ts';
 import {
   createShapedRun,
   createShapingEnvironment,
@@ -10,18 +10,19 @@ import {
   type ShapedCluster,
   type ShapedFontSpan,
   type TextShaper,
-} from '../layout/shaped-run.ts';
-import { synthesizeExportSmallCaps } from './export-small-caps.ts';
-import { orderFallbackFacesForCluster } from './export-color-font.ts';
+} from './shaped-run.ts';
+import { synthesizeSmallCaps } from './synthetic-small-caps.ts';
+import { orderFallbackFacesForCluster } from './color-font-tables.ts';
 
 /** Keep fragmented fallback work bounded independently of the original shaping limit. */
 const MAX_FALLBACK_CLUSTERS = 2048;
 
-export function shapeExportClusterFallback(
+export function shapeClusterGlyphFallback(
   shaper: TextShaper,
   input: ShapeInput,
   primary: ShapedRun,
-  fonts: readonly ResolvedFont[]
+  fonts: readonly ResolvedFont[],
+  smallCaps: typeof synthesizeSmallCaps = synthesizeSmallCaps
 ): ShapedRun | null {
   if (!primary.clusters.length || primary.clusters.length > MAX_FALLBACK_CLUSTERS) return null;
   const shape = (font: ResolvedFont, text: string) => {
@@ -33,7 +34,7 @@ export function shapeExportClusterFallback(
       text,
       environment: createShapingEnvironment({ ...input.environment, font }),
     };
-    return synthesizeExportSmallCaps(shaper, next, shaper.shape(next));
+    return smallCaps(shaper, next, shaper.shape(next));
   };
   const groups: { start: number; end: number; font: ResolvedFont }[] = [];
   const selected = new Map<string, ResolvedFont>();

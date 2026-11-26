@@ -7,7 +7,12 @@ import {
   resolveDefaultSurfaceMeasurer,
 } from '../layout/index.ts';
 import type { LayoutShapingOptions, ResolvedFont, ShapeInput } from '../layout/index.ts';
-import { markFacePreservingShaper, preservesShapingFace } from '../layout/shaped-run.ts';
+import {
+  markFacePreservingShaper,
+  markMissingGlyphFallbackShaper,
+  preservesShapingFace,
+  substitutesOnlyMissingGlyphs,
+} from '../layout/shaped-run.ts';
 import { documentStandInFaces } from '../layout/document-font-substitution.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { fontTableSerifHangulFace } from '../store/package/font-table-alternates.ts';
@@ -92,9 +97,13 @@ export function resolvedFontMeasurement(
     : shaping.shaper;
   // It only reports a refusal and rethrows it, so its runs are the wrapped shaper's.
   const shaper =
-    observed !== shaping.shaper && preservesShapingFace(shaping.shaper)
-      ? markFacePreservingShaper(observed)
-      : observed;
+    observed === shaping.shaper
+      ? observed
+      : preservesShapingFace(shaping.shaper)
+        ? markFacePreservingShaper(observed)
+        : substitutesOnlyMissingGlyphs(shaping.shaper)
+          ? markMissingGlyphFallbackShaper(observed)
+          : observed;
   const measurer = createLayoutShapedMeasurer(
     { ...shaping, shaper },
     {
