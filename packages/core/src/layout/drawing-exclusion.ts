@@ -29,7 +29,7 @@ import {
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingGeometry } from './drawing-geometry.ts';
 import {
-  availableTextIntervalsOverBand,
+  paragraphTextIntervalsOverBand,
   verticalBandOfExclusion,
   type ScanlineInterval,
   type WrapExclusionInput,
@@ -334,7 +334,13 @@ export function mergeAvailableIntervalsAtY(
     )
       continue;
     const probeY = banded ? Math.max(y, band.y) : y;
-    const atY = availableTextIntervalsOverBand(probeY, banded ? y + lineHeight : y, zone.input);
+    const atY = paragraphTextIntervalsOverBand(
+      probeY,
+      banded ? y + lineHeight : y,
+      zone.input,
+      contentLeft,
+      contentRight
+    );
     if (
       zone.sourceKind === 'table' &&
       !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)

@@ -703,6 +703,42 @@ export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
   });
 }
 
+/**
+ * {@link availableTextIntervalsOverBand} for a paragraph that spans `paragraphLeft` to
+ * `paragraphRight`. The float's passages stop at the edges of the column it was placed in. A
+ * paragraph with a negative left or right indent (`w:ind`, `CT_Ind`, 17.3.1.12) keeps that reach
+ * beside the float: a passage that starts at the column's left edge starts at the paragraph's
+ * left bound, and a passage that ends at the column's right edge ends at its right bound.
+ */
+export function paragraphTextIntervalsOverBand(
+  top: number,
+  bottom: number,
+  input: WrapExclusionInput,
+  paragraphLeft: number,
+  paragraphRight: number
+): readonly ScanlineInterval[] {
+  const available = availableTextIntervalsOverBand(top, bottom, input);
+  const reachesLeft = paragraphLeft < input.contentLeft;
+  const reachesRight = paragraphRight > input.contentRight;
+  if (!reachesLeft && !reachesRight) return available;
+  const leftEdge = input.contentLeft + 0.000_001;
+  const rightEdge = input.contentRight - 0.000_001;
+  let reached: ScanlineInterval[] | undefined;
+  for (let index = 0; index < available.length; index += 1) {
+    const interval = available[index]!;
+    const start = reachesLeft && interval.start <= leftEdge ? paragraphLeft : interval.start;
+    const end = reachesRight && interval.end >= rightEdge ? paragraphRight : interval.end;
+    if (start === interval.start && end === interval.end) {
+      reached?.push(interval);
+      continue;
+    }
+    // A fresh copy: the passages are short-lived scanline values, so it stays unfrozen.
+    reached ??= available.slice(0, index);
+    reached.push({ start, end });
+  }
+  return reached ?? available;
+}
+
 /** Point-in effect-expanded clipped shape via exact scanline Minkowski region at `y`. */
 export function pointInEffectExpandedClip(
   x: number,
