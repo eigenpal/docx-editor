@@ -276,6 +276,14 @@ const standInLineBoxes: Record<string, { readonly heightEm: number; readonly bas
   };
 
 /**
+ * The line box of any other missing symbol family that Noto Sans Symbols 2 stands in for: the
+ * box of the Symbol face, hhea ascender 2059 and descender 450 of a 2048-unit em, no line gap.
+ * The missing face's own metrics are unknown, and the stand-in's 1.7 em line would make every
+ * line with one `w:sym` character from such a family (`CT_Sym`, 17.3.3.30) a third taller.
+ */
+const SYMBOL_STAND_IN_LINE_BOX = { heightEm: 2509 / 2048, baselineEm: 2059 / 2048 } as const;
+
+/**
  * The families the generic stand-in must not touch: the ones this package answers for by
  * name, and the legacy symbol-encoded faces. A Symbol or Wingdings run draws private-use
  * codepoints that only those faces carry; a text face standing in has no glyph for them,
@@ -579,7 +587,9 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
       const { bold, italic } = canonicalFamily(family);
       const lineBox = Object.hasOwn(standInLineBoxes, canonical)
         ? { lineMetrics: standInLineBoxes[canonical]! }
-        : {};
+        : target === 'Noto Sans Symbols 2'
+          ? { lineMetrics: SYMBOL_STAND_IN_LINE_BOX }
+          : {};
       for (const [weight, style] of faces)
         substitutions.push({
           from: face(family, weight, style),
