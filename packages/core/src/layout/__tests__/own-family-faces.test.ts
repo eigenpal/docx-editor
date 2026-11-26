@@ -80,11 +80,25 @@ test('a localized name stands in through the faces of its English name', () => {
   ]);
 });
 
-test('an own-face stand-in still counts as a measurable face', () => {
+test('a localized name supplies the faces of its English name', () => {
+  expect(standIns('Meiryo', [source('メイリオ', 400, 'normal')]).faces).toEqual([
+    '400 italic > メイリオ 400 normal',
+    '400 normal > メイリオ 400 normal',
+    '700 italic > メイリオ 400 normal',
+    '700 normal > メイリオ 400 normal',
+  ]);
+});
+
+test('an own-face stand-in of another style is not an installed face', () => {
   const italic = fontRequestKey({ family: 'Brand', weight: 400, style: 'italic' });
   for (const id of ['Brand', 'embedded:/word/font1']) {
     const { faces, configuration } = standIns('Brand', [source('Brand', 400, 'normal', id)]);
     expect(faces).toContain('400 italic > Brand 400 normal');
-    expect(documentStandInFaces(configuration).has(italic)).toBe(false);
+    // Measurement still reads it through the regular face (`hasMeasurableFont`).
+    expect(documentStandInFaces(configuration).has(italic)).toBe(true);
   }
+  // The same face under another name of the font is the face itself.
+  const { configuration } = standIns('Meiryo', [source('メイリオ', 400, 'normal')]);
+  const regular = fontRequestKey({ family: 'Meiryo', weight: 400, style: 'normal' });
+  expect(documentStandInFaces(configuration).has(regular)).toBe(false);
 });

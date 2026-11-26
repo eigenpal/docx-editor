@@ -1260,9 +1260,12 @@ export interface FieldAtomMarker {
     };
     readonly formField: boolean;
     readonly pageField?: {
+        readonly formula?: PageFieldMarker['formula'];
         readonly kind: AllowlistedPageField;
         readonly numberFormat?: PageFieldNumberFormat;
         readonly picture?: string;
+        readonly savedResult?: string;
+        readonly segments?: PageFieldMarker['segments'];
     };
     readonly pageRef?: PageRefFieldProjection;
     readonly resultEnd?: number;
@@ -2341,6 +2344,9 @@ export interface MoveCaretOptions {
 
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
+
+// @internal
+export function nearestFaceOrder(weight: number, style: 'normal' | 'italic'): readonly (readonly [number, 'normal' | 'italic'])[];
 
 // @public
 export function nextTabDestination(tabs: ResolvedTabStops, currentX: number, rightEdge: number, forNumbering?: boolean): TabDestination;
@@ -4192,6 +4198,7 @@ export interface SemanticTableCell {
     };
     readonly noWrap?: true;
     readonly preferredWidth: PreferredWidth;
+    readonly restartsVerticalMerge?: true;
     // (undocumented)
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
     // (undocumented)
@@ -5144,6 +5151,8 @@ export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     // @internal
     faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
+    // @internal
+    hasMeasurableFont?(style: ResolvedRunStyle): boolean;
     hasResolvedFont?(style: ResolvedRunStyle): boolean;
     inkBounds?(text: string, style: ResolvedRunStyle): {
         left: number;

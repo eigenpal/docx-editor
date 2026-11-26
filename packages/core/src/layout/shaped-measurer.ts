@@ -369,6 +369,11 @@ export function createShapedMeasurer(
     hasResolvedFont(style) {
       return resolveFontCached(style) !== null;
     },
+    // The same answer: a host that tells installed faces from stand-ins narrows only
+    // `hasResolvedFont` (`resolved-font-measurement.ts`).
+    hasMeasurableFont(style) {
+      return resolveFontCached(style) !== null;
+    },
     syntheticBold(style) {
       const font = resolveFontCached(style);
       return font !== null && isSyntheticBold(style, font);

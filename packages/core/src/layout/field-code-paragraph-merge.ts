@@ -26,6 +26,12 @@
 // last paragraph can leave a gap in a list ("1." then "3."); that gap is what the document's
 // own numbering says.
 //
+// Content that stays inside the crossing field's codes is field code too, and displays nothing:
+// a field nested in the instruction (`IF { QUOTE "A" } = "A" "...`) shows no result. Each run
+// whose content lies wholly in those codes is hidden (`w:vanish`) in the merged copy. It keeps
+// its offsets, so the store and the merged line still count the same. A run that mixes field
+// code with displayed content keeps showing.
+//
 // The two halves join only where the result stays addressable. The field that crosses the
 // mark would close inside the merged paragraph and take one atomic offset there, while the
 // store counts each half on its own. So the crossing field's own characters and instruction
@@ -87,14 +93,30 @@ function withoutCrossingField(
   let inCodes = crossing;
   let removedAny = false;
   const drop = new Set<OoxmlNode>();
+  /** Runs whose content lies wholly in the crossing field's codes; hidden in the copy. */
+  const hide = new Set<OoxmlNode>();
+  let run: { node: OoxmlNode; codes: number; other: number } | null = null;
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
+    if (node.kind === 'run' && run === null) {
+      run = { node, codes: 0, other: 0 };
+      for (const child of node.children) {
+        if (child.kind === 'runProperties') continue;
+        if (crossing && inCodes) run.codes += 1;
+        else run.other += 1;
+        visit(child);
+      }
+      if (run.codes > 0 && run.other === 0) hide.add(node);
+      run = null;
+      return;
+    }
     const type = fldCharType(node);
     if (type === 'begin') {
       depth += 1;
       if (side === 'opens' && depth === 1) {
         // Any earlier top-level field closed already; this one is the new candidate.
         drop.clear();
+        hide.clear();
         crossing = true;
         inCodes = true;
         drop.add(node);
@@ -112,7 +134,10 @@ function withoutCrossingField(
       if (crossing && depth === 1) {
         // In the first paragraph, a field that closes there does not cross.
         if (side === 'closes') drop.add(node);
-        else drop.clear();
+        else {
+          drop.clear();
+          hide.clear();
+        }
         crossing = false;
         inCodes = false;
       }
@@ -142,10 +167,50 @@ function withoutCrossingField(
       if (next !== child) changed = true;
       if (next !== null) children.push(next);
     }
-    return changed ? ({ ...node, children } as OoxmlElement) : node;
+    const rebuilt = changed ? ({ ...node, children } as OoxmlElement) : node;
+    return hide.has(node) ? hiddenRun(rebuilt as OoxmlElement) : rebuilt;
   };
   const rebuilt = rebuild(paragraph) as OoxmlElement;
   return removedAny ? rebuilt : null;
+}
+
+/** `run` with a direct `w:vanish` (17.3.2.41) in its run properties, for the merged copy only. */
+function hiddenRun(run: OoxmlElement): OoxmlElement {
+  const vanish = {
+    id: `${run.id}~field-code-vanish`,
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'vanish',
+    prefix: run.prefix,
+    namespaceBindings: [],
+    attributes: [],
+    children: [],
+  } as unknown as OoxmlNode;
+  const index = run.children.findIndex((child) => child.kind === 'runProperties');
+  const properties = run.children[index] as OoxmlElement | undefined;
+  const children = properties
+    ? run.children.map((child, at) =>
+        at === index
+          ? ({
+              ...properties,
+              children: [...properties.children.filter((entry) => !isWml(entry, 'vanish')), vanish],
+            } as OoxmlElement)
+          : child
+      )
+    : [
+        {
+          id: `${run.id}~field-code-rPr`,
+          kind: 'runProperties',
+          namespaceUri: WML_NAMESPACE_URI,
+          localName: 'rPr',
+          prefix: run.prefix,
+          namespaceBindings: [],
+          attributes: [],
+          children: [vanish],
+        } as unknown as OoxmlNode,
+        ...run.children,
+      ];
+  return { ...run, children } as OoxmlElement;
 }
 
 function spacingOf(properties: OoxmlElement | undefined): OoxmlElement | undefined {

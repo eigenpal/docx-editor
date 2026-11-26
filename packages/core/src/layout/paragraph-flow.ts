@@ -20,6 +20,7 @@ import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts'
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import {
   cellTabReplayScope,
+  tabAllowsWordChop,
   tabCarriesItsWord,
   tabClosesLine,
   tabContextFor,
@@ -468,6 +469,8 @@ export function breakParagraph(
   let firstLineOpen = true;
   const opensFirstLine = (): boolean => firstLineOpen;
   const holdsContent = (): boolean => lineHoldsContent(line, pageBreaksIgnored);
+  const canChopAfterTabs = () =>
+    !flow?.pageExclusionZones?.length && !sameParagraphAnchorStarts.length;
   // Where the line being built starts, and how much room it has. Only the first differs.
   const lineOffset = (): number => (opensFirstLine() ? firstLineOffset : 0);
   const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
@@ -1231,12 +1234,13 @@ export function breakParagraph(
             tabWordBreaks,
             pageBreaksIgnored
           );
+        const chopsWord = canChopAfterTabs() && tabAllowsWordChop(piece);
         const fresh = { x: contentOriginX + indentLeft, room: available - borders.trailing };
-        const lineRoom = lineAvailable() - line.width;
+        const pen = { stopX: stopXAtPen(), room: lineAvailable() - line.width };
         if (
           plainTab &&
           holdsContent() &&
-          tabCarriesItsWord(tabContext, word(), placed, lineRoom, fresh)
+          tabCarriesItsWord(tabContext, word(), placed, pen, { ...fresh, chopsWord })
         ) {
           closeLine();
           placed = tabPlacement(tabContext, penX(), stopXAtPen(), alignedTabRight);
@@ -1452,8 +1456,7 @@ export function breakParagraph(
         canChopWord &&
         !paragraphRtl &&
         alignedTabRight === 0 &&
-        !flow?.pageExclusionZones?.length &&
-        sameParagraphAnchorStarts.length === 0 &&
+        canChopAfterTabs() &&
         wordFollowsOnlyTabs(line, wordStartSpan);
       if (
         (!opensWord && penLeftWord()) ||
