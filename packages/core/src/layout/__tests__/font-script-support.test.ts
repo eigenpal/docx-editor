@@ -1,14 +1,12 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import type { ResolvedFont } from '../../layout/font-resource.ts';
-import { fontDeclaresScript, orderFacesForScript } from '../export-script-support.ts';
+import type { ResolvedFont } from '../font-resource.ts';
+import { fontDeclaresScript, orderFacesForScript } from '../font-script-support.ts';
 
 const face = (bytes: Uint8Array, faceIndex = 0) =>
   ({ bytes, faceIndex }) as unknown as ResolvedFont;
 const dejaVu = face(
-  new Uint8Array(
-    readFileSync(new URL('../../layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url))
-  )
+  new Uint8Array(readFileSync(new URL('./fixtures/fonts/DejaVuSans.ttf', import.meta.url)))
 );
 
 test('reads the GSUB script list of a real face', () => {

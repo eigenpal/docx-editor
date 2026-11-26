@@ -42,7 +42,7 @@ import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { graphemeContinuationWidth } from './grapheme-continuation-width.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
-import { spacedLine } from './positioned-run-spacing.ts';
+import { raiseLineToMarker, spacedLine } from './positioned-run-spacing.ts';
 import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
 import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
 import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
@@ -823,12 +823,8 @@ export function breakParagraph(
     // text's alone. Only the paragraph's first line carries a marker.
     const firstLine = opensFirstLine();
     if (firstLine && firstLineOffset !== 0) line.firstLineOffset = firstLineOffset;
-    if (firstLine && markerAscent > line.baseline) {
-      const raised = markerAscent - line.baseline;
-      line.baseline = markerAscent;
-      line.height += raised;
-      glyphBaseline += raised;
-    }
+    const markerRise = firstLine ? raiseLineToMarker(line, markerAscent) : 0;
+    glyphBaseline += markerRise;
     borders.closeLine(line);
     markSyntheticBoldSpans(line, measurer);
     syncPendingDrawingBaselines(line, pageBreaksIgnored);
@@ -846,7 +842,9 @@ export function breakParagraph(
     const equationBand = band?.equation ? band : undefined;
     const spacingBase = band?.height ?? naturalHeight;
     const bandBaseline = band?.baseline ?? line.baseline;
-    const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer);
+    const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer, {
+      unscaledRise: band || empty ? 0 : markerRise,
+    });
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     else if (equationBand) line.baseline += spaced.baseline - bandBaseline;
     const floored = firstLine && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;

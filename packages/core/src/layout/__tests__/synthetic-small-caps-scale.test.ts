@@ -2,7 +2,7 @@
 // neighbouring run sizes can share one small-capital size.
 
 import { describe, expect, test } from 'bun:test';
-import { syntheticSmallCapsScale } from '../export-small-caps.ts';
+import { syntheticSmallCapsScale } from '../synthetic-small-caps.ts';
 
 const smallCapHalfPoints = (halfPoints: number): number =>
   Math.round(syntheticSmallCapsScale(halfPoints) * halfPoints * 1000) / 1000;

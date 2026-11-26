@@ -68,7 +68,7 @@ The result includes `bytes`, `pageCount`, `layoutRevision`, `displayMode`, `font
 
 Use `fonts` to provide font sources before the installed and packaged sources. Use `fallbackFonts` to add sources after the packaged fonts. The exporter also reads embedded fonts before using a generic substitute for an unresolved family. Use `lastResortFonts` after embedded fonts and before generic substitutes.
 
-`glyphFallbacks` specifies an ordered list of fonts for missing glyphs. The defaults cover symbols, Arabic, Hebrew, mathematics, and color emoji. They also cover CJK text when `@docx-editor.dev/fonts-cjk` is installed. Emoji from a COLR font retain their palette colors and extractable text.
+`glyphFallbacks` specifies an ordered list of fonts for missing glyphs. The defaults cover symbols, Arabic, Hebrew, mathematics, and color emoji. Their font files ship in `@docx-editor.dev/fonts`, and the editor uses the same fallback rules. They also cover CJK text when `@docx-editor.dev/fonts-cjk` is installed. Emoji from a COLR font retain their palette colors and extractable text.
 
 `fontPolicy` controls font-source failures and family coverage. `fidelityPolicy: 'strict'` rejects generic substitutions that can change pagination. `fidelityPolicy: 'best-effort'` uses those substitutes and reports them. Inspect `result.fontResolution` for selected faces and source failures.
 

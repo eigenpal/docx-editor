@@ -11,13 +11,13 @@ import {
   sha256FontBytes,
   FontResolutionError,
   HARFBUZZ_SHAPING_LIBRARY,
-} from '../../layout/index.ts';
-import { createShapingEnvironment, type ShapeInput } from '../../layout/shaped-run.ts';
-import { synthesizeExportSmallCaps, syntheticSmallCapsScale } from '../export-small-caps.ts';
+} from '../index.ts';
+import { createShapingEnvironment, type ShapeInput } from '../shaped-run.ts';
+import { synthesizeSmallCaps, syntheticSmallCapsScale } from '../synthetic-small-caps.ts';
 
 await initializeHarfBuzz();
 const bytes = new Uint8Array(
-  readFileSync(new URL('../../layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url))
+  readFileSync(new URL('./fixtures/fonts/DejaVuSans.ttf', import.meta.url))
 );
 const request = { family: 'A', weight: 400, style: 'normal' as const };
 const fonts = createFontResourceSnapshot({
@@ -57,7 +57,7 @@ function input(text: string, smcp: 0 | 1): ShapeInput {
 /** The draw scale of each glyph of `text` in synthesized small caps. */
 function scales(text: string): (number | undefined)[] {
   const smallCaps = input(text, 1);
-  const run = synthesizeExportSmallCaps(shaper, smallCaps, shaper.shape(smallCaps));
+  const run = synthesizeSmallCaps(shaper, smallCaps, shaper.shape(smallCaps));
   return run.glyphs.map((glyph) => glyph.drawScale);
 }
 

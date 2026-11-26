@@ -15,7 +15,7 @@ import { EmbeddedFace } from '../src/fonts.ts';
 // fonts share a CMap name, the later font decodes its text through the first font's
 // CMap, and every code past the first font's range prints as a missing glyph.
 const bytes = new Uint8Array(
-  readFileSync(new URL('../assets/NotoSansArabic-Regular.ttf', import.meta.url))
+  readFileSync(new URL('../../fonts/assets/NotoSansArabic-Regular.ttf', import.meta.url))
 );
 const original = create(Buffer.from(bytes)) as FontkitFont;
 const admitted = {

@@ -15,7 +15,7 @@ import { EmbeddedFace } from '../src/fonts.ts';
 // Arabic has short `loca` offsets, which address 131070 bytes of `glyf`; the face's own
 // `glyf` is 122 KB, so a copy of every glyph passes the limit. The offsets must not wrap.
 const bytes = new Uint8Array(
-  readFileSync(new URL('../assets/NotoSansArabic-Regular.ttf', import.meta.url))
+  readFileSync(new URL('../../fonts/assets/NotoSansArabic-Regular.ttf', import.meta.url))
 );
 const original = create(Buffer.from(bytes)) as FontkitFont;
 

@@ -38,7 +38,11 @@ import {
 } from '@docx-editor.dev/core/export';
 import {
   HARD_MAX_FONT_BYTES,
+  isGenericStandIn,
+  namedFallbackFontResolver,
   prepareLayoutFontConfiguration,
+  standInFontResolver,
+  type FallbackFaceReader,
   type LayoutFontConfiguration,
   type PreparedLayoutFontConfiguration,
 } from '@docx-editor.dev/core/layout';
@@ -222,6 +226,9 @@ const defaultFonts = createSuccessfulValueCache(async (signal): Promise<DefaultE
 
 const resolvePackagedFonts = packagedFonts({
   fetcher: packagedFileFetch,
+  // The converter has no glyph fallback chain, so it serves none of its faces. It lays text
+  // out as an editor does whose host passes the same option.
+  fallbackFaces: false,
   // Core reports returned fragment failures without discarding successfully loaded faces.
   onFailure() {},
 });
@@ -238,6 +245,24 @@ const packagedExportFonts = defineFontResolver(async (request) => {
     ),
   };
 });
+
+/**
+ * Reads the packaged fallback faces under their own family names, for the shared font fallback
+ * rules. The editor and PDF export apply the same rules, so a family that no source supplies
+ * takes the same fallback face in each of them.
+ */
+const readPackagedFallbackFaces: FallbackFaceReader = async (families, signal, faces) => {
+  const wanted = new Set([...families].map((family) => family.toLowerCase()));
+  const fragment = await resolvePackagedFonts({
+    families: [...families],
+    defaultFamily: 'Calibri',
+    ...(signal ? { signal } : {}),
+    ...(faces ? { faces } : {}),
+  });
+  return fragment.sources.filter((source) => wanted.has(source.request.family.toLowerCase()));
+};
+const namedFallbackFonts = namedFallbackFontResolver(readPackagedFallbackFaces);
+const standInFonts = standInFontResolver(readPackagedFallbackFaces);
 
 function isByteSource(source: ExportDocumentSource): source is Uint8Array {
   return ArrayBuffer.isView(source);
@@ -368,7 +393,11 @@ export async function openDocumentForExport(
     const opened = await openFontBackedDocumentForExport(source, {
       ...coreOptions,
       reuseAcrossRevisions: false,
-      fonts: [...callerFonts, packagedExportFonts, ...missingFonts],
+      fonts: [...callerFonts, packagedExportFonts, ...missingFonts, namedFallbackFonts],
+      // After the document's embedded fonts, so a stand-in never replaces one of them.
+      lastResortFonts: [standInFonts],
+      // A family in a generic stand-in face has another font's widths: report it uncovered.
+      reportsStandIn: isGenericStandIn,
       fontShaping,
       onFontResolution: options.onFontResolution,
     });

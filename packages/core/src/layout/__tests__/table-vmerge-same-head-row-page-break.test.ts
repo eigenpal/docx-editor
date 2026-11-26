@@ -191,10 +191,9 @@ test('the last row keeps the closing rule of the table below a carried merge', (
   expect(merged.box.height).toBeCloseTo(lastRow(false).box.height, 6);
 });
 
-test('a family with a line break in one head keeps the head row path', () => {
-  // A break (`w:br`, 17.3.3.1) is not plain text, so neither merge carries its text. The two
-  // merges stay together on the head row path, where the 6pt head row clips them at a break
-  // (a documented limit). Layout completes at every break position and paints no line twice.
+test('a family with a line break in one head carries its text across the break', () => {
+  // A break (`w:br`, 17.3.3.1) without a type stays in the line flow, so the merges carry their
+  // text as plain text does. Every merged line paints once wherever the page break falls.
   const broken = para('H0').replace('<w:t>', '<w:br/><w:t>');
   const xml = tableXml().replace(shortHead, broken + para('H1') + para('H2'));
   for (let preamble = 1; preamble <= 12; preamble++) {
@@ -202,11 +201,11 @@ test('a family with a line break in one head keeps the head row path', () => {
     const texts = textsOfAll(layout);
     for (const text of [...HEAD_LINES, 'L1', 'M01', 'M11', 'M21', 'K21']) {
       const count = texts.filter((t) => t === text).length;
-      expect({ preamble, text, once: count <= 1 }).toEqual({ preamble, text, once: true });
+      expect({ preamble, text, count }).toEqual({ preamble, text, count: 1 });
     }
-    // Below the head row, neither merge carries its text to the next page.
+    // Below the head row, both merges carry their text to the next page.
     if (preamble >= 9 && preamble <= 11)
-      expect(textsOn(layout, 1)).not.toEqual(expect.arrayContaining(['H11']));
+      expect(textsOn(layout, 1)).toEqual(expect.arrayContaining([...HEAD_LINES, 'L1']));
   }
 });
 

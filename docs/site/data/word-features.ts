@@ -192,7 +192,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Apply RGB colors or document theme colors to text. Saving preserves theme references so colors can follow the document theme.',
+      'Apply RGB colors or document theme colors to text. Saving preserves theme references so colors can follow the document theme. Automatic text paints white on a dark shading or shape fill and black on a light one.',
   },
   {
     id: 'text.highlight',
@@ -421,7 +421,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/toolbar#create-and-continue-lists',
     notes:
-      'Create bulleted lists, continue existing lists, and change levels with Tab or the indent controls. Switching between bullets and numbers preserves item indents. List changes support tracked changes.',
+      'Create bulleted lists, continue existing lists, and change levels with Tab or the indent controls. Switching between bullets and numbers preserves item indents, and list changes support tracked changes. Symbol and Wingdings bullets use Unicode fallbacks without the font.',
   },
   {
     id: 'lists.numbered',

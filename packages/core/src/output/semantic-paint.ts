@@ -1,3 +1,4 @@
+import { fontFamilyStack } from '../layout/glyph-fallback-aliases.ts';
 import {
   applySyntheticBoldSpacing,
   fieldAnchorStart,
@@ -65,10 +66,16 @@ import {
 import { fallbackStackForFamily } from '../layout/canvas-measurer.ts';
 import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
-import { automaticTextColor } from '../layout/ooxml-shading.ts';
+import {
+  applyAutomaticText,
+  automaticTextCss,
+  paintCellBackground,
+  withAutomaticText,
+  type AutomaticTextContext,
+  type AutomaticTextCss,
+} from './semantic-paint-automatic-text.ts';
 import { clipHangingMarkBlank, hangingMarkBlankAt } from './semantic-paint-hanging-mark.ts';
 import {
-  reviewAuthorSlotColor,
   revisionStyleContextKey,
   revisionStyleContextOf,
   type RevisionStyleContext,
@@ -389,14 +396,15 @@ export type { DrawingPaintStrings, PaintImageUrlPort } from './semantic-paint-dr
 
 type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
 
-type DrawingPaintHostContext = PaintContext & {
-  readonly drawingStrings?: DrawingPaintStrings;
-  readonly urlRegistry?: DrawingUrlRegistry | null;
-  readonly changeBars?: ChangeBarsMode;
-  readonly changeBarsToggle?: boolean;
-  /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
-  readonly paintInstance?: string;
-};
+type DrawingPaintHostContext = PaintContext &
+  AutomaticTextContext & {
+    readonly drawingStrings?: DrawingPaintStrings;
+    readonly urlRegistry?: DrawingUrlRegistry | null;
+    readonly changeBars?: ChangeBarsMode;
+    readonly changeBarsToggle?: boolean;
+    /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
+    readonly paintInstance?: string;
+  };
 
 interface ResolvedPaintContext extends DrawingPaintHostContext {
   readonly drawingStrings: DrawingPaintStrings;
@@ -431,9 +439,10 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
     paintStoryFragment: (
       document: Document,
       fragment: ParagraphFragmentRecord | TableFragmentRecord,
-      options?: { readonly readOnly?: boolean }
+      options?: { readonly readOnly?: boolean; readonly automaticText?: AutomaticTextCss }
     ) => {
-      const paintCtx = options?.readOnly ? { ...storyCtx, unbound: true } : storyCtx;
+      const own = options?.readOnly ? { ...storyCtx, unbound: true } : storyCtx;
+      const paintCtx = withAutomaticText(own, options?.automaticText ?? '#000000');
       return fragment.kind === 'table'
         ? paintTableFragment(document, fragment, paintCtx)
         : paintFragment(document, fragment, paintCtx);
@@ -692,7 +701,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     // The measurer's fallback stack trails the family so an unresolvable name falls
     // back to the SAME face measurement fell back to — not to the inherited font.
     const stack = fallbackStackForFamily(family, undefined, ctx.serifHangulFace);
-    css.fontFamily = alias ? `"${alias}", "${family}", ${stack}` : `"${family}", ${stack}`;
+    css.fontFamily = fontFamilyStack(ctx.fontAlias, alias, family, stack);
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT_COLOR_HEX.get(style.highlight) : undefined;
@@ -705,7 +714,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     // Highlight overrides character shading; only paint `w:shd` when no recognised highlight.
     css.backgroundColor = `#${style.shading}`;
     // Automatic text takes white on dark shading and black on light, over any paragraph's.
-    if (!css.color) css.color = automaticTextColor(style.shading) ? '#FFFFFF' : '#000000';
+    if (!css.color) css.color = automaticTextCss(style.shading);
   }
   if (style.caps) css.textTransform = 'uppercase';
   css.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
@@ -1423,7 +1432,7 @@ function paintFragment(
   if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
     element.append(paintParagraphShading(document, fragment, scale));
     // Automatic text inherits white on dark paragraph shading.
-    if (automaticTextColor(fragment.shading)) element.style.color = '#FFFFFF';
+    applyAutomaticText(element, automaticTextCss(fragment.shading), ctx);
   }
   // List markers are layout furniture inside the hanging indent — never model text.
   if (fragment.marker) {
@@ -1758,28 +1767,20 @@ function paintTableCell(
   cellElement.style.border = 'none';
   const strokes = applyCellBorders(document, cellElement, cell.borders, scale);
 
-  if (cell.shading && HEX.test(cell.shading)) {
-    cellElement.style.backgroundColor = `#${cell.shading}`;
-  }
-  if (cell.revisionShading && ctx.revisionMarkup) {
-    const color = ctx.revisionMarkup.cells[cell.revisionShading];
-    cellElement.dataset.revisionCell = cell.revisionShading;
-    if (color !== 'none') {
-      const author = cell.revisionShadingAuthor ?? '';
-      cellElement.style.backgroundColor =
-        color === 'byAuthor'
-          ? (ctx.revisionStyles?.styles.get(author)?.color ??
-            reviewAuthorSlotColor(ctx.revisionCellStyles?.authorSlots.get(author) ?? 0))
-          : `var(--doc-revision-color-${color})`;
-    }
-  }
+  const automatic = paintCellBackground(
+    cellElement,
+    cell,
+    { markup: ctx.revisionMarkup, styles: ctx.revisionStyles, cellStyles: ctx.revisionCellStyles },
+    ctx
+  );
+  const blockCtx = automatic ? withAutomaticText(ctx, automatic) : ctx;
   const contentElement = tableCellContentHost(document, cell, scale, cellElement);
   const blocks: HTMLElement[] = [];
   for (const block of cell.blocks) {
     const painted =
       block.kind === 'table'
-        ? paintTableFragment(document, block, ctx)
-        : paintFragment(document, block, ctx);
+        ? paintTableFragment(document, block, blockCtx)
+        : paintFragment(document, block, blockCtx);
     painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
     painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
     contentElement.append(painted);
