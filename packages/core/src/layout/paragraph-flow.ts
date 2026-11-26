@@ -1,4 +1,5 @@
 import {
+  growPendingLineForDrawing,
   positionedDrawingExtent,
   syncPendingDrawingBaselines,
   repositionPendingDrawings,
@@ -774,6 +775,8 @@ export function breakParagraph(
    * the text band of a line without text: never the paragraph's run cascade or its mark.
    */
   let pictureRunBand: { height: number; baseline: number } | undefined;
+  /** The largest run descent of this line's underlined inline objects (`w:u`, 17.3.2.40). */
+  let underlinedObjectDescent = 0;
   const growLineMetricsForDrawing = (
     style: ResolvedRunStyle,
     measure: ReturnType<typeof measureInlineDrawing>,
@@ -788,17 +791,12 @@ export function breakParagraph(
       measure,
       runPositionPt
     );
-    if (runPositionPt) {
-      growLineMetrics(line, { height: layout.lineHeight, baseline: layout.baseline });
-    } else if (line.height === 0) {
-      line.height = layout.lineHeight;
-      line.baseline = layout.baseline;
-    } else if (layout.lineHeight > line.height) {
-      line.height = layout.lineHeight;
-      line.baseline = Math.max(line.baseline, layout.baseline);
-    } else {
-      line.baseline = Math.max(line.baseline, layout.baseline);
-    }
+    if (style.underline)
+      underlinedObjectDescent = Math.max(
+        underlinedObjectDescent,
+        textMetrics.height - textMetrics.baseline
+      );
+    growPendingLineForDrawing(line, layout, runPositionPt !== 0, underlinedObjectDescent);
     return { extentTopY: layout.extentTopY };
   };
 
@@ -904,6 +902,7 @@ export function breakParagraph(
     wordStartWidth = 0;
     alignedTabRight = 0;
     pictureRunBand = undefined;
+    underlinedObjectDescent = 0;
     line = {
       spans: [],
       drawings: [],
