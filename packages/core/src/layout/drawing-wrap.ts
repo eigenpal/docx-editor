@@ -691,7 +691,7 @@ export function expandPolygonAnisotropic(
  * that margin plus the 0.001 pt line probe offset, and short of 0.02 pt, so a line that clears
  * the bottom edge by 0.01 pt stays full width.
  */
-export const CONTOUR_FOOT_REACH_PT = 0.015;
+const CONTOUR_FOOT_REACH_PT = 0.015;
 
 export function wrapExclusionFromProjection(options: {
   readonly mode: 'square' | 'tight' | 'through' | 'topAndBottom';
