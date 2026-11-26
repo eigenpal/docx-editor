@@ -683,8 +683,9 @@ export function createVMergeFragmentCarry(
    * The merged cell closes the fragment with that row, so its bottom inset is the one its
    * own cell in that row uses, as the cells beside it do. A merge that reaches the table's
    * last row reserves the table's outer bottom rule (`w:bottom`, ECMA-376 Part 1 §17.4.4;
-   * `CT_Border`, §17.3.4), but a fragment that the merge continues past does not close the
-   * table. Without this, the merged cell's closing rule sits one rule width above theirs.
+   * `CT_Border`, §17.3.4) inside its own box. A fragment that the merge continues past places
+   * that rule as the cells beside it do. Without this, the merged cell's closing rule sits one
+   * rule width above theirs.
    * When `last` is the head row, the head cell is that own cell: it then reserves what a cell
    * that does not close the table reserves, unless the row splits and its placement reserved
    * the inside rule at the cut (`cutRowContentDeps`).

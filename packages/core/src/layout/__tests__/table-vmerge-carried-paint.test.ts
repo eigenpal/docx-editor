@@ -129,8 +129,8 @@ test('merged text continued from an earlier page fills from the top', () => {
 
 // Seven lines leave rows 0 and 1 on the first page; nine lines leave only the head row. The
 // column 2 merge continues on the next page, and its fragment on the first page ends with the
-// other cells. The table's own bottom edge closes only the last page, so its style does not
-// matter here.
+// other cells. Whatever the style of the table's bottom edge, every cell closes the fragment
+// with the same rule at the same height.
 for (const [preamble, bottom] of [
   [7, 'single'],
   [9, 'single'],
