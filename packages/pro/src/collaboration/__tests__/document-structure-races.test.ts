@@ -20,7 +20,7 @@ import {
   zipDocument,
   type Peer,
 } from './document-peer-support.ts';
-import { readNodeShell } from '../document/schema.ts';
+import { NODE_CHILDREN_FIELD, PACKAGE_NODES_KEY, readNodeShell } from '../document/schema.ts';
 
 const harness = createPeerHarness('structure-races-room');
 
@@ -637,10 +637,12 @@ describe('paragraph races', () => {
     harness.apply(bob, [{ op: 'insertText', paragraphId: cell.id, offset: 0, text: 'cell text' }]);
     harness.apply(alice, [{ op: 'insertText', paragraphId: cell.id, offset: 4, text: '!' }]);
     harness.expectConverged(alice, bob);
-    const shared = bob.ydoc.getMap('docx-package-nodes-v1');
+    const shared = bob.ydoc.getMap(PACKAGE_NODES_KEY);
     const record = shared.get(cell.id) as Y.Map<unknown>;
     expect(record.get('inline')).toBeInstanceOf(Y.Text);
-    for (const child of (record.get('children') as Y.Array<string> | undefined)?.toArray() ?? []) {
+    for (const child of (
+      record.get(NODE_CHILDREN_FIELD) as Y.Array<string> | undefined
+    )?.toArray() ?? []) {
       expect(readNodeShell(shared.get(child) as Y.Map<unknown>).kind).not.toBe('run');
     }
     expect(nodeText(nodes(alice, 'p').find((paragraph) => paragraph.id === cell.id)!)).toBe(

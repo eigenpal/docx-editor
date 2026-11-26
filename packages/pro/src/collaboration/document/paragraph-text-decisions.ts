@@ -31,7 +31,7 @@ import { REVISION_PREFIX } from './paragraph-text-revisions.ts';
 import { changedKeysOf, formatKeepingEnds, mapEntry } from './yjs-items.ts';
 
 /** The shared map of the decisions, at the document root. */
-export const TEXT_DECISIONS_KEY = 'docx-text-decisions-v1';
+export const TEXT_DECISIONS_KEY = 'dx:tc';
 
 const KEY = /^a(\d{1,16}):(\d{1,16})$/;
 const RUN = /^(\d{1,16}):(\d{1,16}):(\d{1,16})$/;

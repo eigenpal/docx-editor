@@ -15,6 +15,7 @@ import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { DocumentRegistry, PackageMaterializer, MemoryBlobStore } from '../document/index.ts';
 import { createPeerHarness, walk } from './document-peer-support.ts';
 import { collaborationDocx } from './support.ts';
+import { NODE_CHILDREN_FIELD, PACKAGE_NODES_KEY, PACKAGE_PARTS_KEY } from '../document/schema.ts';
 
 const harness = createPeerHarness('hostile-shapes-room');
 
@@ -22,8 +23,8 @@ afterEach(() => {
   harness.cleanup();
 });
 
-const NODES = 'docx-package-nodes-v1';
-const PARTS = 'docx-package-parts-v1';
+const NODES = PACKAGE_NODES_KEY;
+const PARTS = PACKAGE_PARTS_KEY;
 
 /** Apply a hostile mutation on a doc mirroring the room, then deliver it to `target`. */
 function deliverHostile(source: Y.Doc, target: Y.Doc, mutate: (doc: Y.Doc) => void): void {
@@ -122,9 +123,9 @@ describe('hostile shared shapes on the receive path', () => {
         rogue.set('s', 'generic-rogue');
         const kids = new Y.Array<string>();
         kids.insert(0, [childId!]);
-        rogue.set('children', kids);
+        rogue.set(NODE_CHILDREN_FIELD, kids);
         nodes.set('rogue-parent', rogue);
-        const bodyChildren = nodes.get(bodyRootId)?.get('children');
+        const bodyChildren = nodes.get(bodyRootId)?.get(NODE_CHILDREN_FIELD);
         if (bodyChildren instanceof Y.Array)
           bodyChildren.insert(bodyChildren.length, ['rogue-parent']);
         nodes.set(childId!, 'not-a-map' as never);

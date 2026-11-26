@@ -15,18 +15,30 @@ import { createDocumentCollaboration } from '../document-session.ts';
 import { readCollaborationDocument } from '../document-read.ts';
 import { CollaborationSchemaError } from '../errors.ts';
 import { collaborationDocx } from './support.ts';
+import {
+  PACKAGE_ATTRIBUTES_KEY,
+  PACKAGE_BINARIES_KEY,
+  PACKAGE_BINDINGS_KEY,
+  PACKAGE_DEFAULTS_KEY,
+  PACKAGE_META_KEY,
+  PACKAGE_NODES_KEY,
+  PACKAGE_OVERRIDES_KEY,
+  PACKAGE_PARTS_KEY,
+  PACKAGE_RELS_KEY,
+} from '../document/schema.ts';
+import { SHARED_BLOBS_KEY } from '../shared-blob-store.ts';
 
 const SCHEMA_MAP_KEYS = [
-  'docx-package-nodes-v1',
-  'docx-package-parts-v1',
-  'docx-package-rels-v1',
-  'docx-package-overrides-v1',
-  'docx-package-defaults-v1',
-  'docx-package-binaries-v1',
-  'docx-package-attributes-v1',
-  'docx-package-bindings-v1',
-  'docx-package-meta-v1',
-  'docx-package-blobs-v1',
+  PACKAGE_NODES_KEY,
+  PACKAGE_PARTS_KEY,
+  PACKAGE_RELS_KEY,
+  PACKAGE_OVERRIDES_KEY,
+  PACKAGE_DEFAULTS_KEY,
+  PACKAGE_BINARIES_KEY,
+  PACKAGE_ATTRIBUTES_KEY,
+  PACKAGE_BINDINGS_KEY,
+  PACKAGE_META_KEY,
+  SHARED_BLOBS_KEY,
 ] as const;
 
 const SEED_RECORDS_KEY = 'docx-collaboration-seeds-v1';
@@ -113,8 +125,8 @@ describe('collaboration teardown', () => {
     // Delete a part-root node record so materialize refuses with `missing-root` and the
     // factory throws. (A malformed-but-present record no longer throws — the receive-path
     // hardening degrades it — so the failure has to come from an unmaterializable part.)
-    const nodes = host.ydoc.getMap<Y.Map<unknown>>('docx-package-nodes-v1');
-    const parts = host.ydoc.getMap<Y.Map<unknown>>('docx-package-parts-v1');
+    const nodes = host.ydoc.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
+    const parts = host.ydoc.getMap<Y.Map<unknown>>(PACKAGE_PARTS_KEY);
     let rootId: string | undefined;
     parts.forEach((entry) => {
       if (!rootId && entry instanceof Y.Map && typeof entry.get('rootId') === 'string') {

@@ -22,7 +22,7 @@ import { changedKeysOf, mapEntry } from './yjs-items.ts';
 import { parseClientClock } from './identity.ts';
 
 /** The shared map of the deletions, at the document root. */
-export const TEXT_DELETIONS_KEY = 'docx-text-deletions-v1';
+export const TEXT_DELETIONS_KEY = 'dx:td';
 
 const KEY = /^d(\d{1,16}):(\d{1,16})$/;
 const RUN = /^(\d{1,16}):(\d{1,16}):(\d{1,16})$/;

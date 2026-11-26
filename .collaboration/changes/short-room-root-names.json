@@ -1,0 +1,23 @@
+{
+  "impact": "migration-required",
+  "fields": ["sharedSchemaVersion"],
+  "before": "Node, part, relationship, content type, binary, namespace, attribute, binding, and paragraph text records were stored under root maps with names such as docx-package-attributes-v1, and each node record stored its child array under the field children. Yjs writes the root name into every entry of a root-level map, so these names made up 5% to 18% of a room. The room of a 75 KB document was 4.2 MiB.",
+  "after": "These records are stored under root maps named dx:n, dx:p, dx:r, dx:o, dx:d, dx:x, dx:s, dx:a, dx:b, dx:td, dx:tc, and dx:tm, and each node record stores its child array under the field c. The same document makes a room of 3.5 MiB. The format fields stay in docx-package-meta-v1, so every release still reads the format of any room and refuses one of another format before it reads records. Shared blobs and seed records keep their names.",
+  "reason": "A replica of shared schema version 5 looks for its records under the long names, so it reads a version 6 room as empty, and the reverse. sharedSchemaVersion increases to 6 (format docx-collaboration:1.6.6.1), so the two versions refuse to share a room before any update applies. An upgrade seeds the room again from its DOCX export, as for every format change, and reads nothing from the earlier roots.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/format-1661-migration.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-compatibility.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-schema-admission.test.ts",
+    "packages/pro/src/collaboration/__tests__/collaboration-teardown.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-hostile-shapes.test.ts"
+  ],
+  "supersedesTests": [
+    {
+      "path": "packages/pro/src/collaboration/__tests__/format-1561-migration.test.ts",
+      "by": "packages/pro/src/collaboration/__tests__/format-1661-migration.test.ts",
+      "reason": "Format 1.5.6.1 ships combined with this change as format 1.6.6.1, so the test checks the upgrade to the combined format."
+    }
+  ],
+  "changeset": "short-room-root-names",
+  "migration": "upgrade-rooms-to-format-1661"
+}
