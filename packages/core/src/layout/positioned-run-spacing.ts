@@ -74,7 +74,8 @@ function withUnscaledRise(
 
 /**
  * {@link applyLineSpacing} for a laid-out line, with {@link withPositionedRunSpacing} applied,
- * or else the list marker's `unscaledRise`.
+ * or else the list marker's `unscaledRise`. A caller passes no rise for a line without text:
+ * the marker is then the line's only band, and the multiple scales all of it.
  */
 export function spacedLine(
   spacing: ParagraphLineSpacing,

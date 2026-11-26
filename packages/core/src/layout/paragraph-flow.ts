@@ -845,7 +845,7 @@ export function breakParagraph(
     const spacingBase = band?.height ?? naturalHeight;
     const bandBaseline = band?.baseline ?? line.baseline;
     const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer, {
-      unscaledRise: band ? 0 : markerRise,
+      unscaledRise: band || empty ? 0 : markerRise,
     });
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     else if (equationBand) line.baseline += spaced.baseline - bandBaseline;
