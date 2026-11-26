@@ -8,6 +8,7 @@ import {
 } from './style-cascade.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
+import { measuresWithAdmittedFace } from './text-measurer.ts';
 import { applyLineSpacing, type ParagraphSpacing } from './paragraph-style.ts';
 import { hasShownRunContent } from './cell-end-paragraph-content.ts';
 import { cellHidesEndMark } from './table-cell-terminator.ts';
@@ -63,7 +64,7 @@ function endMarkBox(
   // The floor also stands under a cell with content, so it reads the mark WITHOUT its
   // character style (`paragraph-mark-run.ts`). An empty end paragraph's own line has it.
   const style = endMarkStyle(inputs, deps);
-  if (style.hidden || deps.measurer.hasResolvedFont?.(style) === false) return null;
+  if (style.hidden || measuresWithAdmittedFace(deps.measurer, style) === false) return null;
   const metrics = deps.measurer.lineMetrics(style);
   return {
     linePt: applyLineSpacing(inputs.lineSpacing, metrics.height, metrics.baseline).height,
@@ -220,7 +221,8 @@ export function mergedRowFirstCellHeight(
     const style = defaultParagraphRunStyle(deps);
     if (style.hidden) return 0;
     // A face that did not resolve cannot be measured: take the fallback line instead.
-    const measured = deps.measurer.hasResolvedFont?.(style) === false ? DEFAULT_RUN_STYLE : style;
+    const measured =
+      measuresWithAdmittedFace(deps.measurer, style) === false ? DEFAULT_RUN_STYLE : style;
     return deps.measurer.lineMetrics(measured).height;
   }
   const whole = cell.vMergeContinue || cell.textDirection === 'btLr';
