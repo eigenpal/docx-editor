@@ -27,7 +27,7 @@ const numberingIndex = buildNumberingIndex(
     `<w:numbering xmlns:w="${W}">${level(1, SIZES)}${level(2, `${SIZES}<w:rtl/>`)}` +
       `${level(3, `${SIZES}<w:cs/>`)}${level(4, '<w:b/>')}${level(5, '<w:bCs/>')}` +
       `${level(6, '<w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/>', 'bullet', '')}` +
-      `${level(7, `${SIZES}<w:cs w:val="0"/>`)}</w:numbering>`
+      `${level(7, `${SIZES}<w:cs w:val="0"/>`)}${level(8, '<w:i/>')}${level(9, '<w:iCs/>')}</w:numbering>`
   ).root
 );
 
@@ -99,11 +99,13 @@ describe('the script lane of a list marker', () => {
     expect(marker({ numId: 7, pPr: BIDI }).style.fontSizePt).toBe(14);
   });
 
-  test('a right-to-left paragraph takes w:bCs for the marker, not w:b', () => {
+  test('a right-to-left paragraph takes w:bCs and w:iCs for the marker, not w:b and w:i', () => {
     expect(marker({ numId: 4, pPr: BIDI }).style.bold).toBe(false);
     expect(marker({ numId: 5, pPr: BIDI }).style.bold).toBe(true);
     expect(marker({ numId: 4 }).style.bold).toBe(true);
     expect(marker({ numId: 5 }).style.bold).toBe(false);
+    expect(marker({ numId: 8, pPr: BIDI }).style.italic).toBe(false);
+    expect(marker({ numId: 9, pPr: BIDI }).style.italic).toBe(true);
   });
 
   test('a symbol bullet keeps its face in a right-to-left paragraph', () => {
