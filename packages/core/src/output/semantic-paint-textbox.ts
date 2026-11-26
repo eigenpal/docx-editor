@@ -13,6 +13,7 @@ import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
 import { applyAccessibility, positionedBox } from './semantic-paint-drawing-box.ts';
 import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
 import { vectorShapeInkClip } from '../layout/vector-shape-ink.ts';
+import { automaticTextColor } from '../layout/ooxml-shading.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const n = (value: number) => String(Math.round(value * 1000) / 1000);
@@ -234,6 +235,9 @@ export function paintTextboxStory(
   // line that holds an inline box, which carries its paragraph mark's face.
   content.style.fontWeight = 'normal';
   content.style.fontStyle = 'normal';
+  // Automatic text (17.3.2.6 color) follows the box's own fill (20.1.8.54 solidFill), not
+  // shading around the box: white on a dark fill, black on a light fill or none, as Word shows it.
+  content.style.color = automaticTextColor(story.fillHex) ? '#FFFFFF' : '#000000';
   const turn = story.contentRotation;
   if (turn) {
     const originX = (turn.pivot.x - story.contentOffset.x) * scale;

@@ -1423,7 +1423,7 @@ function paintFragment(
   if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
     element.append(paintParagraphShading(document, fragment, scale));
     // Automatic text inherits white on dark paragraph shading.
-    if (automaticTextColor(fragment.shading)) element.style.color = '#FFFFFF';
+    element.style.color = automaticTextColor(fragment.shading) ? '#FFFFFF' : '#000000';
   }
   // List markers are layout furniture inside the hanging indent — never model text.
   if (fragment.marker) {
@@ -1760,6 +1760,8 @@ function paintTableCell(
 
   if (cell.shading && HEX.test(cell.shading)) {
     cellElement.style.backgroundColor = `#${cell.shading}`;
+    // Automatic text takes white on dark cell shading and black on light, over a text box's.
+    cellElement.style.color = automaticTextColor(cell.shading) ? '#FFFFFF' : '#000000';
   }
   if (cell.revisionShading && ctx.revisionMarkup) {
     const color = ctx.revisionMarkup.cells[cell.revisionShading];
