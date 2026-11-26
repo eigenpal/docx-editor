@@ -48,9 +48,13 @@ export function withPositionedRunSpacing(
 }
 
 /**
- * Apply an auto multiple above single to a line that a list marker's taller face raised by
- * `rise`: the multiple scales the text band, and the rise adds once. A 22pt bullet on 11pt text
- * at 1.5 spacing grows the line by half of the 11pt band plus the bullet's extra ascent.
+ * Apply an auto multiple to a line that a list marker's taller face raised by `rise`: the
+ * multiple scales the text band, and the rise adds once, above or below single. A 22pt bullet on
+ * 11pt text at 1.5 spacing grows the line by half of the 11pt band plus the bullet's extra
+ * ascent; at 0.9 spacing it shrinks the 11pt band alone. Grid lines keep `spaced` as is.
+ *
+ * `w:spacing` (`CT_Spacing`, ECMA-376 Part 1 17.3.1.33) with `w:lineRule` `auto`
+ * (`ST_LineSpacingRule`, 17.18.48).
  */
 function withUnscaledRise(
   spaced: ReturnType<typeof applyLineSpacing>,
@@ -59,12 +63,13 @@ function withUnscaledRise(
 ): ReturnType<typeof applyLineSpacing> {
   if (!(rise > 0) || spacing.rule !== 'auto' || spacing.gridPitch !== undefined) return spaced;
   const extra = rise * (spacing.value / 240 - 1);
-  if (!(extra > 0)) return spaced;
-  return {
-    ...spaced,
-    height: spaced.height - extra,
-    baseline: spacing.descentAnchored ? spaced.baseline - extra : spaced.baseline,
-  };
+  if (extra === 0) return spaced;
+  const height = spaced.height - extra;
+  // Above single the baseline stays put unless the growth goes above the band. Below single
+  // `applyLineSpacing` scales the baseline, so the unscaled rise moves it back down.
+  const movesBaseline = spacing.descentAnchored || extra < 0;
+  const baseline = movesBaseline ? spaced.baseline - extra : spaced.baseline;
+  return { ...spaced, height, baseline: Math.max(0, Math.min(baseline, height)) };
 }
 
 /**

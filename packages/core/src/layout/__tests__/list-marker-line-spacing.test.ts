@@ -1,8 +1,8 @@
 // Auto line spacing scales a list line's text band, and the marker's extra ascent adds once.
 //
-// Measured against Word: a 22pt Symbol bullet on an 11pt Calibri list at 1.5 and at double
-// spacing grows each line by the marker's ascent over the text's, and the multiple applies to
-// the 11pt band alone (17.3.1.33 spacing; 17.18.48 ST_LineSpacingRule `auto`).
+// A 22pt bullet on an 11pt list at 0.9, 1.5, and double spacing grows each line by the
+// marker's ascent over the text's, and the multiple applies to the 11pt band alone
+// (`w:spacing`, `CT_Spacing`, 17.3.1.33; `ST_LineSpacingRule` `auto`, 17.18.48).
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -73,6 +73,18 @@ describe('a taller list marker under auto line spacing', () => {
       expect(listed[1]!.box.height).toBeCloseTo(plain[1]!.box.height, 9);
     });
   }
+
+  test('below single the multiple shrinks the text band, and the rise still adds once', () => {
+    const spacing = '<w:spacing w:line="216" w:lineRule="auto"/>';
+    const listed = firstLines(spacing, true);
+    const plain = firstLines(spacing, false);
+    const band = (TEXT_ASCENT + TEXT_DESCENT) * 0.9;
+    expect(plain[0]!.box.height).toBeCloseTo(band, 9);
+    expect(listed[0]!.box.height).toBeCloseTo(band + MARKER_RISE, 9);
+    // The text baseline scales with the band, and the marker's rise sits above it unscaled.
+    expect(listed[0]!.baseline).toBeCloseTo(TEXT_ASCENT * 0.9 + MARKER_RISE, 9);
+    expect(listed[1]!.box.height).toBeCloseTo(plain[1]!.box.height, 9);
+  });
 
   test('single spacing still grows the line by the rise', () => {
     const lines = firstLines('<w:spacing w:line="240" w:lineRule="auto"/>', true);
