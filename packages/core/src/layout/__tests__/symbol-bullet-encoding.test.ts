@@ -6,7 +6,12 @@ import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { resolveStoryListItems } from '../list-resolve.ts';
-import { hasSymbolPua, isSymbolEncodedFamily, mapSymbolPuaText } from '../symbol-encoding.ts';
+import {
+  hasSymbolPua,
+  isSymbolEncodedFamily,
+  mapSymbolPuaText,
+  symbolFaceByteOf,
+} from '../symbol-encoding.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -91,6 +96,26 @@ describe('symbol-font private-use mapping', () => {
     const index = numbering(NUMBERING.replace(SYMBOL_BULLET, SYMBOL_MINUS));
     const [item] = resolveStoryListItems(body.children, index, undefined).values();
     expect(item!.markerText).toBe('−');
+  });
+
+  test('every encoding of the Symbol minus resolves to the same glyph and face byte', () => {
+    const part = document(listParagraph('Dash item', '0'));
+    const body = part.root!.children.find((child) => child.localName === 'body')!;
+    // A bare byte in a bullet level is the same face glyph as its private-use code.
+    const bare = numbering(NUMBERING.replace(SYMBOL_BULLET, '-'));
+    const [item] = resolveStoryListItems(body.children, bare, undefined).values();
+    expect(item!.markerText).toBe('−');
+    expect(item!.markerStyle.fontFamily).toBe('Symbol');
+    // A face that is present keeps the authored code.
+    expect(mapSymbolPuaText('', 'Symbol', () => true)).toBe('');
+    // The twin keeps the advance of face byte 0x2D, and a text font is not mapped.
+    expect(symbolFaceByteOf(0x2212, 'Symbol')).toBe(0x2d);
+    expect(mapSymbolPuaText('', 'Calibri')).toBe('');
+    // A `w:sym` character (§17.3.3.30, CT_Sym) paints the same glyph.
+    const sym = document('<w:p><w:r><w:sym w:font="Symbol" w:char="F02D"/></w:r></w:p>');
+    const layout = layoutSemanticDocument(sym, 1, { measurer });
+    const spans = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines.flatMap((line) => line.spans);
+    expect(spans.map((span) => span.text)).toEqual(['−']);
   });
 
   test('leaves everything it cannot map exactly', () => {
