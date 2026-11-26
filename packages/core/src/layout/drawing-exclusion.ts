@@ -350,7 +350,7 @@ export function mergeAvailableIntervalsAtY(
     )
       continue;
     const probeY = rectangular ? Math.max(y, band.y) : y;
-    const atY = paragraphTextIntervalsOnScanline(probeY, zone.input, contentLeft);
+    const atY = paragraphTextIntervalsOnScanline(probeY, zone.input, contentLeft, contentRight);
     if (
       zone.sourceKind === 'table' &&
       !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)

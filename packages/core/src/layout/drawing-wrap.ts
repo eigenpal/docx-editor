@@ -534,23 +534,35 @@ export function availableTextIntervalsOnScanline(
 }
 
 /**
- * {@link availableTextIntervalsOnScanline} for a paragraph that starts at `paragraphLeft`. The
- * float's passages start at the left edge of the column it was placed in; a paragraph with a
- * negative left indent (17.3.1.12 ind) keeps that reach beside the float, so a passage that
- * starts at the column edge starts at the paragraph's own left bound instead.
+ * {@link availableTextIntervalsOnScanline} for a paragraph that spans `paragraphLeft` to
+ * `paragraphRight`. The float's passages stop at the edges of the column it was placed in. A
+ * paragraph with a negative left or right indent (`w:ind`, `CT_Ind`, 17.3.1.12) keeps that reach
+ * beside the float: a passage that starts at the column's left edge starts at the paragraph's
+ * left bound, and a passage that ends at the column's right edge ends at its right bound.
  */
 export function paragraphTextIntervalsOnScanline(
   y: number,
   input: WrapExclusionInput,
-  paragraphLeft: number
+  paragraphLeft: number,
+  paragraphRight: number
 ): readonly ScanlineInterval[] {
   const available = availableTextIntervalsOnScanline(y, input);
-  if (paragraphLeft >= input.contentLeft) return available;
-  return available.map((interval) =>
-    interval.start <= input.contentLeft + 0.000_001
-      ? Object.freeze({ start: paragraphLeft, end: interval.end })
-      : interval
-  );
+  const reachesLeft = paragraphLeft < input.contentLeft;
+  const reachesRight = paragraphRight > input.contentRight;
+  if (!reachesLeft && !reachesRight) return available;
+  return available.map((interval) => {
+    const start =
+      reachesLeft && interval.start <= input.contentLeft + 0.000_001
+        ? paragraphLeft
+        : interval.start;
+    const end =
+      reachesRight && interval.end >= input.contentRight - 0.000_001
+        ? paragraphRight
+        : interval.end;
+    return start === interval.start && end === interval.end
+      ? interval
+      : Object.freeze({ start, end });
+  });
 }
 
 /** Point-in effect-expanded clipped shape via exact scanline Minkowski region at `y`. */

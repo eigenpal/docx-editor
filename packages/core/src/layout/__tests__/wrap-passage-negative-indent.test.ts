@@ -1,7 +1,7 @@
-// A paragraph with a negative left indent keeps that reach beside a float. The float's
-// passages start at the column edge, and a passage that starts there starts at the paragraph's
-// own left bound instead (17.3.1.12 ind, 20.4.2.17 wrapSquare). A float wholly in the margin
-// wraps nothing, as in Word: the indented text runs on under it.
+// A paragraph with a negative left or right indent keeps that reach beside a float. The float's
+// passages stop at the column edges, and a passage that meets a column edge reaches the
+// paragraph's own bound instead (17.3.1.12 ind, 20.4.2.17 wrapSquare). A float wholly in the
+// margin wraps nothing: the indented text runs on under it.
 
 import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
@@ -9,6 +9,9 @@ import { paragraphFragmentsOf } from '../semantic-records.ts';
 import { layoutContext, load, squareAnchorAtLeft } from './anchored-drawing-test-fixtures.ts';
 
 const PT = 12700;
+/** The column's right edge, and the paragraph's right bound with `w:right="-851"`. */
+const COLUMN_RIGHT = 468;
+const PARAGRAPH_RIGHT = COLUMN_RIGHT + 42.55;
 
 /** A square-wrapped picture `width` by 72pt, `x` points into the column, beside indented text. */
 function linesBeside(x: number, indent: string, width = 144) {
@@ -57,6 +60,22 @@ describe('a negative indent beside a float', () => {
     const { picture, lines } = linesBeside(-40, 'w:left="-851"', 30);
     expect(picture.x).toBeCloseTo(-40, 6);
     expect(spansOf(lines[0]!)[0]).toBeCloseTo(-42.55, 6);
+    expect(lines[0]!.spans.some((span) => overlaps(span, picture))).toBe(true);
+  });
+
+  test('a negative right indent ends the passage right of the float in the margin', () => {
+    const { picture, lines } = linesBeside(300, 'w:right="-851"');
+    const ends = lines[0]!.spans.map((span) => span.box.x + span.box.width);
+    expect(lines[0]!.spans.some((span) => span.box.x >= picture.x + picture.width)).toBe(true);
+    expect(Math.max(...ends)).toBeGreaterThan(COLUMN_RIGHT);
+    expect(Math.max(...ends)).toBeLessThanOrEqual(PARAGRAPH_RIGHT + 0.000_001);
+    expect(lines[0]!.spans.some((span) => overlaps(span, picture))).toBe(false);
+  });
+
+  test('a float wholly in the right margin leaves the indented text running under it', () => {
+    const { picture, lines } = linesBeside(480, 'w:right="-851"', 20);
+    const ends = lines[0]!.spans.map((span) => span.box.x + span.box.width);
+    expect(Math.max(...ends)).toBeGreaterThan(COLUMN_RIGHT);
     expect(lines[0]!.spans.some((span) => overlaps(span, picture))).toBe(true);
   });
 });
