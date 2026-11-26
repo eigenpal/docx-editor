@@ -9,6 +9,7 @@ import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawi
 import type { LayoutBox } from '../layout/semantic-records.ts';
 import { regionCutClipBox } from '../layout/drawing-group-picture-layers.ts';
 import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
+import { automaticTextCss } from './semantic-paint-automatic-text.ts';
 
 /** A length, in points, past which no member of a drawing paints. */
 const FAR = 100_000;
@@ -78,6 +79,11 @@ export function paintGroupTextboxStories(
     // line that holds an inline box, which carries its paragraph mark's face.
     content.style.fontWeight = 'normal';
     content.style.fontStyle = 'normal';
+    // Automatic text (17.3.2.6 color, CT_Color) takes its colour from the member's own fill
+    // (20.1.8.54 solidFill), not from shading around the group: white on a dark fill, black
+    // on a light fill or none.
+    const automaticText = automaticTextCss(story.fillHex);
+    content.style.color = automaticText;
     const turn = member.rotationDegrees;
     if (turn !== 0 && Number.isFinite(turn)) {
       // The member turns about its box center, which sits here in content-box coordinates.
@@ -88,7 +94,7 @@ export function paintGroupTextboxStories(
     }
     for (const fragment of story.fragments) {
       // Painted read-only: no selection, editing, or drawing bindings at all.
-      content.append(ctx.paintStoryFragment(document, fragment, { readOnly: true }));
+      content.append(ctx.paintStoryFragment(document, fragment, { readOnly: true, automaticText }));
     }
     // Pictures and equations inside the story are inert too: no drawing selection target,
     // and no pointer target that would turn back on inside the inert layer.
