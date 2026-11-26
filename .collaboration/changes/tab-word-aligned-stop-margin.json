@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A tab before an aligned stop after the right indent moved to the next line when the text after it overflowed the right indent, even when it fit before the stop.",
+  "after": "The tab stays on its line when the text after it fits before the stop, the room that line placement gives it.",
+  "reason": "Only line breaking in local layout changes. Shared nodes, operations, and package serialization remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/tab-wraps-with-its-word.test.ts"],
+  "changeset": "tab-word-aligned-stop-margin",
+  "migration": null
+}

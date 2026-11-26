@@ -1233,7 +1233,7 @@ export function breakParagraph(
           );
         const chopsWord = canChopAfterTabs() && tabAllowsWordChop(piece);
         const fresh = { x: contentOriginX + indentLeft, room: available - borders.trailing };
-        const pen = { stopX: stopXAtPen(), room: lineAvailable() - line.width };
+        const pen = { x: penX(), stopX: stopXAtPen(), room: lineAvailable() - line.width };
         if (
           plainTab &&
           holdsContent() &&
