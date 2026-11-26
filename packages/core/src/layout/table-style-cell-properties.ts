@@ -22,7 +22,11 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { wmlChildNamed as childNamed } from '../store/store/tree-op-table-shared.ts';
 import type { CascadedTableFormatting } from './style-cascade.ts';
-import { readMarginSides, type StatedMarginSides } from './table-cell-margins.ts';
+import {
+  readMarginSides,
+  type CellMarginsPt,
+  type StatedMarginSides,
+} from './table-cell-margins.ts';
 import {
   readStatedCellVerticalAlign,
   type CellVerticalAlign,
@@ -96,6 +100,25 @@ export function rowStyleCellMargins(
     }
   }
   return margins;
+}
+
+/**
+ * How far the conditional formats of a row widen the left margin of its cells past the
+ * margin the row has without them, in points; `0` when they do not.
+ *
+ * `withConditions` is the row's {@link rowStyleCellMargins}. A legacy table that states no
+ * indent keeps its text where the margin without conditional formats puts it, so its grid
+ * moves out by this much (`legacyConditionalLeadingShiftPt`).
+ */
+export function conditionalLeadingMarginGrowthPt(
+  style: TableStyle,
+  tableLevel: CellMarginsPt,
+  withConditions: StatedMarginSides
+): number {
+  const whole = wholeTableCellProperties(style);
+  if (!whole.conditionalMargins || withConditions === whole.margins) return 0;
+  const growth = (withConditions.left ?? tableLevel.left) - (whole.margins.left ?? tableLevel.left);
+  return Number.isFinite(growth) && growth > 0 ? growth : 0;
 }
 
 function conditionalMarginBox(format: OoxmlElement): OoxmlElement | undefined {

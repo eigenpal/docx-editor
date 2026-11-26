@@ -181,7 +181,9 @@ function builtInNormalTableProperties(): OoxmlElement | undefined {
  * the built-in properties.
  */
 function isBuiltInNormalTable(type: string, name: string | undefined): boolean {
-  return type === 'table' && name?.toLowerCase() === 'normal table';
+  // "Table Normal" names the same built-in style, in this spelling only: a style named
+  // `table normal` applies as written.
+  return type === 'table' && (name?.toLowerCase() === 'normal table' || name === 'Table Normal');
 }
 
 export function readStyleDefinition(

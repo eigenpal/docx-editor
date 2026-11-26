@@ -2,7 +2,8 @@
 // of left and right cell margin. Reference renderings ignore everything it authors (indent,
 // alignment, cell margins, borders, shading, paragraph and run properties) in compatibility
 // modes 15, 14, and 12, as the default style and when a table names it. The name decides,
-// not the id: a default style with another name applies as written.
+// not the id: a default style with another name applies as written. "Table Normal" names the
+// same built-in style.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
@@ -93,6 +94,17 @@ test('the built-in "Normal Table" ignores everything it authors', () => {
   expect(normal.bold).toBe(false);
   expect(normal.border).toBeUndefined();
   expect(normal.spaceBefore).toBe(0);
+});
+
+test('the name "Table Normal" is the same built-in style, in that spelling only', () => {
+  const alias = firstCell({ name: 'Table Normal' });
+  expect(alias.tableX).toBe(0);
+  expect(alias.inset).toBeCloseTo(5.4, 6);
+  expect(alias.border).toBeUndefined();
+  // Another case is another style, which applies as written.
+  const lower = firstCell({ name: 'table normal' });
+  expect(lower.tableX).toBeGreaterThan(0);
+  expect(lower.inset).toBeCloseTo(1.5, 6);
 });
 
 test('the same style under another name applies as written', () => {

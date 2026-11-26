@@ -120,9 +120,11 @@ export function hasUnsupportedRowGeometry(
  * Fixed and AutoFit layouts behave alike for a `dxa` width; a fixed table also takes it with an
  * `auto` width. A trailing alignment (right in a left-to-right
  * table, left in a right-to-left one) always aligns the content. A leading alignment aligns
- * the content when an indent is stated, directly or by a table style, or a table style
- * applies; a table with neither puts its outer edge on the text edge. In a text box, only a
- * leading alignment takes the rule, and it always aligns the content.
+ * the content when an indent is stated (`w:tblInd`, 17.4.50), directly or by a table style.
+ * Without a stated indent, a table with an automatic width, with cell spacing, or laid out
+ * right to left aligns the content when a table style applies; any other table puts its outer
+ * edge on the text edge.
+ * In a text box, only a leading alignment takes the rule, and it always aligns the content.
  *
  * A table with cell spacing aligns the content of its aligned outer cell the same way, so its
  * frame reaches past the text edge by the spacing gap, the frame rule and the cell inset.
@@ -190,7 +192,11 @@ export function legacyFixedTableContentOffset(
         return undefined;
     }
   }
-  if (leadingAlignment && !indentStated && !styled && !shape.textBox) {
+  // A table style alone aligns no content of an unspaced left-to-right table with an absolute
+  // width: a styled table whose style chain states no indent keeps its outer edge on the text
+  // edge, with table-level, style and cell margins alike. The other shapes keep the style rule.
+  const styleAligns = styled && !(shape.widthType === 'dxa' && !spaced && !shape.bidiVisual);
+  if (leadingAlignment && !indentStated && !styleAligns && !shape.textBox) {
     // A spaced table keeps its outer edge at the text edge, less half its leading frame rule.
     const half = spaced ? outerBandPt(tableBorders!.left) / 2 : 0;
     return half > 0 ? -half : undefined;
@@ -276,6 +282,54 @@ export function legacyFixedTableContentOffset(
       : leading;
   if (inset === undefined) return undefined;
   return side === 'left' && inset !== 0 ? -inset : inset;
+}
+
+/** Whether the table or a style it resolves states a table indent (`w:tblInd`, 17.4.50). */
+function statesTableIndent(table: OoxmlElement, propertyNodes: readonly OoxmlElement[]): boolean {
+  const direct = table.children.find(
+    (node) => node.kind !== 'textValue' && node.localName === 'tblPr'
+  );
+  const nodes = direct && direct.kind !== 'textValue' ? [...propertyNodes, direct] : propertyNodes;
+  return nodes.some((props) =>
+    props.children.some((node) => node.kind !== 'textValue' && node.localName === 'tblInd')
+  );
+}
+
+/**
+ * How far a legacy table that keeps its outer edge on the text edge moves that edge out for a
+ * conditional left cell margin (`w:tblStylePr/w:tcPr/w:tcMar`, 17.7.6.8), in points.
+ *
+ * A leading-aligned table with an absolute width and no stated indent puts its outer edge on
+ * the text edge ({@link legacyFixedTableContentOffset}). Its text stays where the cell margin
+ * without conditional formats puts it, so a wider conditional margin of the first row moves
+ * the grid out by the difference: a 400-twip first-column margin over a 200-twip margin moves
+ * the grid 10pt out, and the text of the first cell stays 10pt inside the text edge. Later
+ * rows keep the grid of the first row. Compatibility mode 15 does not move the grid.
+ */
+export function legacyConditionalLeadingShiftPt(
+  table: OoxmlElement,
+  propertyNodes: readonly OoxmlElement[],
+  rows: readonly SemanticTableRow[],
+  shape: SideRuleTableShape
+): number {
+  const shift = rows[0]?.conditionalLeadingMarginPt;
+  if (
+    shift === undefined ||
+    !hasCompatibilityRule(shape.compatibilityMode, 'fixedTableContentEdgeOrigin') ||
+    shape.depth !== 0 ||
+    shape.floating ||
+    shape.bidiVisual ||
+    shape.textBox ||
+    shape.cellSpacingPt !== 0 ||
+    shape.alignment !== 'left' ||
+    shape.widthType !== 'dxa' ||
+    rows[0]!.cells[0]?.gridColumn !== 0 ||
+    statesTableIndent(table, propertyNodes) ||
+    !hasSupportedLegacyTableMargins(table, propertyNodes) ||
+    hasUnsupportedRowGeometry(table, { allowGridSkips: true, placedRows: true })
+  )
+    return 0;
+  return shift;
 }
 
 /**

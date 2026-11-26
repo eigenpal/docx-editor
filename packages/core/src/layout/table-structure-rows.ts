@@ -62,7 +62,11 @@ import {
 } from './table-cell-margins.ts';
 import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readStatedCellVerticalAlign } from './table-cell-vertical-align.ts';
-import { rowStyleCellMargins, styleCellVerticalAlign } from './table-style-cell-properties.ts';
+import {
+  conditionalLeadingMarginGrowthPt,
+  rowStyleCellMargins,
+  styleCellVerticalAlign,
+} from './table-style-cell-properties.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
 import { cellIgnoresEndMark, cellNoWrap } from './table-cell-hide-mark.ts';
 import { rowExceptionAlignment } from './legacy-row-placement.ts';
@@ -557,6 +561,14 @@ function resolveRow(
     });
   }
   raiseRowTopMargins(cells);
+  // A first cell with a left margin of its own does not take the style's.
+  const firstCell = plan.cells.find((node) => node.kind === 'tableCell');
+  const firstProperties = firstCell && childNamed(firstCell, 'tcPr');
+  const firstOwnMargins = firstProperties && childNamed(firstProperties, 'tcMar');
+  const leadingGrowth =
+    firstOwnMargins && readMarginSides(firstOwnMargins).left !== undefined
+      ? 0
+      : conditionalLeadingMarginGrowthPt(tableStyle, rowMargins, styleMargins);
   const rowRevision = plan.revision;
   const rowRevisionKind = rowRevision
     ? rowRevision.localName === 'ins'
@@ -576,6 +588,7 @@ function resolveRow(
     isHeader,
     cantSplit: readFlag(rowProperties, 'cantSplit'),
     ...rowExceptionAlignment(rowNode),
+    ...(leadingGrowth > 0 ? { conditionalLeadingMarginPt: leadingGrowth } : {}),
     height: exactRowHeightWithBottomMargin(readRowHeight(rowProperties), cells),
     cells,
   };

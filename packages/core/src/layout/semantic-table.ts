@@ -86,7 +86,10 @@ import { tableRowIsHeader } from './table-row-header-style.ts';
 import { withMergedHeaderRows } from './table-header-merged-rows.ts';
 import { uniformRowCellSpacingPt } from './table-row-cell-spacing.ts';
 import { modernSharedPercentWidth, resolveTableWidthPlacement } from './table-width-placement.ts';
-import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
+import {
+  legacyConditionalLeadingShiftPt,
+  legacyFixedTableContentOffset,
+} from './legacy-fixed-table-content.ts';
 import { withLegacyRowPlacement } from './legacy-row-placement.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import {
@@ -298,6 +301,11 @@ export interface SemanticTableRow {
   readonly alignment?: TableAlignment;
   /** Derived, never serialized: how far a legacy table moves this row right of its grid. */
   readonly xShiftPt?: number;
+  /**
+   * How far the row's conditional formats widen the left cell margin past the margin without
+   * them (`w:tblStylePr/w:tcPr/w:tcMar`, 17.7.6.8), in points. Absent when they do not.
+   */
+  readonly conditionalLeadingMarginPt?: number;
 }
 
 /**
@@ -331,6 +339,12 @@ export interface SemanticTableStructure {
    * carries. It does not depend on the column widths, so AutoFit widening keeps it.
    */
   readonly legacyContentOffsetPt?: number;
+  /**
+   * Derived, never serialized: how far a legacy table that keeps its outer edge on the text
+   * edge moves its grid out for a conditional left cell margin
+   * (`legacyConditionalLeadingShiftPt`). It does not depend on the column widths.
+   */
+  readonly legacyConditionalShiftPt?: number;
   /**
    * Derived, never serialized: the outer side rule an automatic-width mode-15 AutoFit table
    * keeps inside its container, so its grid settles that much narrower than the room.
@@ -785,6 +799,15 @@ function readTableRows(
       ? withLegacyTableSideRules(sideRules.rows)
       : sideRules.rows;
   const outerRuleOffsetPt = contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.ruleShiftPt;
+  const conditionalShiftPt =
+    contentOffset === undefined
+      ? legacyConditionalLeadingShiftPt(
+          table,
+          tableStyle.tablePropertyNodes,
+          contentRows,
+          sideRuleShape
+        )
+      : 0;
   const autoOuterRulePt =
     contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
   const shadedRows = withRowSpacingShading(
@@ -808,6 +831,7 @@ function readTableRows(
       ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
       ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
       ...(contentOffset === undefined ? {} : { legacyContentOffsetPt: contentOffset }),
+      ...(conditionalShiftPt > 0 ? { legacyConditionalShiftPt: conditionalShiftPt } : {}),
       ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
       ...(sideRules.holdsWhenWidened ? { sharedGridLinesHold: true as const } : {}),
       ...(placement.textBoxBidiShiftPt ? { textBoxBidiShiftPt: placement.textBoxBidiShiftPt } : {}),
