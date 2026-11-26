@@ -27,6 +27,8 @@ interface BodyAnchorFrameInput {
     readonly width: number;
     readonly height: number;
     readonly margin: { readonly left: number; readonly right: number; readonly bottom: number };
+    /** The side margins of the sheet a continued section starts on (`hostSheetGeometry`). */
+    readonly hostMargin?: { readonly left: number; readonly right: number };
   };
   readonly insets: { readonly top: number; readonly bottom: number; readonly height: number };
   readonly contentWidth: number;
@@ -46,6 +48,14 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     marginLeft: geometry.margin.left,
     marginRight: geometry.margin.right,
     marginBottom: marginInset(geometry.margin.bottom),
+    ...(geometry.hostMargin
+      ? {
+          horizontalMarginFrame: {
+            left: geometry.hostMargin.left - geometry.margin.left,
+            width: geometry.width - geometry.hostMargin.left - geometry.hostMargin.right,
+          },
+        }
+      : {}),
     // Effective insets keep page-relative anchors stable when tall furniture moves body text.
     contentInsetTop: insets.top,
     contentInsetBottom: insets.bottom,

@@ -56,6 +56,12 @@ export interface PageContentInsets {
   readonly bottom: number;
   /** `pageHeight - top - bottom`. */
   readonly height: number;
+  /**
+   * The sheet's left and right page margins. Set only for the host sheet of a continued
+   * section, whose own side margins can differ from the sheet's.
+   */
+  readonly left?: number;
+  readonly right?: number;
 }
 
 export interface PageContentInsetInputs {
