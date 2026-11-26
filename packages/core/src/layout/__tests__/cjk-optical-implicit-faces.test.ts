@@ -139,6 +139,13 @@ test('authored scaling and complex shaping remain strict refusal gates', () => {
   ])
     unchanged(attempt({ measure: m }));
 });
+test('a synthesized stand-in face that layout can measure keeps the optical fit', () => {
+  // A bold face of a partly served family stands in through its regular face: its own face is
+  // not installed, but it measures with real metrics.
+  const standIn = { ...measure, hasResolvedFont: () => false, hasMeasurableFont: () => true };
+  expect(attempt({ measure: standIn, style: { ...style, bold: true } }).result).toBeDefined();
+  unchanged(attempt({ measure: { ...standIn, hasMeasurableFont: () => false } }));
+});
 test('authored tracking of either sign qualifies an implicit East Asian line', () => {
   for (const characterSpacingPt of [-0.2, 0.2])
     expect(attempt({ style: { ...style, characterSpacingPt } }).result).toBeDefined();

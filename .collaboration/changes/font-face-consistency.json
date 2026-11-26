@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A synthesized stand-in face did not count as measurable for layout, a host face for one face of a family with its own bytes painted in the family's own face, the PDF converter counted its own same-family stand-ins as coverage, and an English family name did not find faces supplied under its localized name.",
+  "after": "Layout measures stand-in faces with real metrics, paint uses the face that measurement uses, the converter reports same-family stand-ins as partial coverage, and the localized name lookup works in both directions.",
+  "reason": "The change is in local font resolution, measurement, paint aliases, and export reports only. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/stand-in-face-measurability.test.ts",
+    "packages/core/src/editor/__tests__/host-family-paint.test.ts",
+    "packages/core/src/layout/__tests__/own-family-faces.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-implicit-faces.test.ts",
+    "packages/docx-to-pdf/test/partial-family-coverage.test.ts"
+  ],
+  "changeset": "font-face-consistency",
+  "migration": null
+}

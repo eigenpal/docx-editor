@@ -211,6 +211,8 @@ export interface SemanticTableCell {
   readonly vMergeContinue: boolean;
   /** This cell starts a vertical merge that the next row continues. */
   readonly headsVerticalMerge?: true;
+  /** `w:vMerge w:val="restart"`, authored, whether or not the next row continues it. */
+  readonly restartsVerticalMerge?: true;
   /** `w:hideMark` excludes the end-of-cell glyph from row sizing. */
   readonly hideEndMark?: boolean;
   /** `w:noWrap`: autofit never narrows the cell's column below its preferred width. */

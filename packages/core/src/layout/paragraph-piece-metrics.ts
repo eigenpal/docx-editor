@@ -9,6 +9,7 @@ import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store
 import type { FieldAwarePiece, PositionalTab } from './field-projection.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
 import { measureInlineDrawing } from './drawing-layout.ts';
+import { canChopPiece } from './layout-owned-piece.ts';
 import { displayText, runStylesEqual, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
@@ -104,12 +105,19 @@ export interface TabWordBreaks {
   opensAt(piece: Piece, offset: number, before: string): boolean;
 }
 
+/** The word right after a tab: its width, and whether every piece of it may be chopped. */
+export interface WordAfterTab {
+  readonly width: number;
+  readonly choppable: boolean;
+}
+
 /**
- * The width of the word right after a tab: its text up to the first break opportunity. That is a
- * breaking space, a zero-width space, another tab, a line break, a break the line breaker takes
- * (`breaks`: after a dash, between ideographs, at a seam of pieces), or an optional hyphen (kept,
- * with the width of the hyphen that a break there shows). No-break spaces belong to the word. A
- * picture or an equation ends it.
+ * The word right after a tab: its text up to the first break opportunity. That is a breaking
+ * space, a zero-width space, another tab, a line break, a break the line breaker takes (`breaks`:
+ * after a dash, between ideographs, at a seam of pieces), or an optional hyphen (kept, with the
+ * width of the hyphen that a break there shows). No-break spaces belong to the word. A picture or
+ * an equation ends it. `choppable` is false when a piece of the word cannot be chopped, for
+ * example a page number.
  */
 export function measureWordAfterTab(
   pieces: readonly Piece[],
@@ -118,16 +126,21 @@ export function measureWordAfterTab(
   measurer: TextMeasurer,
   breaks: TabWordBreaks,
   pageBreaksIgnored = false
-): number {
+): WordAfterTab {
   let width = 0;
   let word = '';
+  let choppable = true;
+  const result = (): WordAfterTab => ({ width, choppable });
   for (let index = pieceIndex; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
-    if (piece.unsupported || piece.inlineDrawing || piece.equation) return width;
+    if (piece.unsupported || piece.inlineDrawing || piece.equation) return result();
     const style = styleForFontSlot(piece.style, piece.fontSlot);
-    if (isOptionalHyphenPiece(piece)) return word ? width + measurer.measure('-', style) : width;
+    if (isOptionalHyphenPiece(piece)) {
+      if (word) width += measurer.measure('-', style);
+      return result();
+    }
     const from = index === pieceIndex ? offsetInPiece : 0;
-    if (index > pieceIndex && word && breaks.opensAt(piece, 0, word)) return width;
+    if (index > pieceIndex && word && breaks.opensAt(piece, 0, word)) return result();
     const inner = breaks
       .boundaries(piece)
       .find(
@@ -155,11 +168,14 @@ export function measureWordAfterTab(
     }
     const slice = piece.text.slice(from, to);
     const visible = pageBreaksIgnored ? slice.replaceAll(PAGE_BREAK_CHAR, '') : slice;
-    if (visible) width += measurer.measure(displayText(visible, style), style);
-    if (ended) return width;
+    if (visible) {
+      width += measurer.measure(displayText(visible, style), style);
+      if (!canChopPiece(piece)) choppable = false;
+    }
+    if (ended) return result();
     word += slice;
   }
-  return width;
+  return result();
 }
 
 /**

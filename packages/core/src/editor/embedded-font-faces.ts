@@ -23,6 +23,7 @@ import {
   FontResolutionError,
   type FontResourceSnapshot,
 } from '../layout/font-resource.ts';
+import { isOwnFamilyHostFace } from '../layout/served-font-families.ts';
 import { sfntFaceIsBold } from '../layout/synthetic-bold.ts';
 import { materializeCollectionFace } from './font-collection-face.ts';
 
@@ -189,33 +190,37 @@ export async function registerEmbeddedFontFaces(
       ? materializeCollectionFace(bytes, face.faceIndex)
       : bytes;
   };
+  /** Register `face` under `alias` as the face `as` of the alias; false when it fails. */
+  const register = async (
+    alias: string,
+    face: FontSource,
+    as: FontSourceSubstitution['from'] = face.request
+  ): Promise<boolean> => {
+    try {
+      const browserBytes = browserBytesOf(face);
+      const descriptors: FaceDescriptors = {
+        weight: weightDescriptor(as.weight, browserBytes),
+        style: as.style,
+      };
+      const fontFace = createFontFace(alias, browserBytes, descriptors);
+      await fontFace.load();
+      fontSet.add(fontFace);
+      added.push({ set: fontSet, face: fontFace });
+      accepted.push({ alias, source: face, descriptors });
+      return true;
+    } catch {
+      // Paint fidelity is best-effort; the face still measures shaped.
+      return false;
+    }
+  };
   await Promise.all(
     [...byFamily].map(async ([family, faces]) => {
       const alias = aliasForFamily(faces.map((face) => `${face.hash}:face:${face.faceIndex}`));
-      let anyLoaded = false;
-      await Promise.all(
-        faces.map(async (face) => {
-          try {
-            const browserBytes = browserBytesOf(face);
-            const descriptors: FaceDescriptors = {
-              weight: weightDescriptor(face.request.weight, browserBytes),
-              style: face.request.style,
-            };
-            const fontFace = createFontFace(alias, browserBytes, descriptors);
-            await fontFace.load();
-            fontSet.add(fontFace);
-            added.push({ set: fontSet, face: fontFace });
-            accepted.push({ alias, source: face, descriptors });
-            anyLoaded = true;
-          } catch {
-            // Paint fidelity is best-effort; the face still measures shaped.
-          }
-        })
-      );
+      const loaded = await Promise.all(faces.map((face) => register(alias, face)));
       // Only advertise an alias the browser actually accepted: pointing the painter at a
       // family with no registered face would push text to the generic fallback instead of
       // the declared family behind it.
-      if (anyLoaded) aliases.set(family, alias);
+      if (loaded.includes(true)) aliases.set(family, alias);
     })
   );
   if (added.length === 0) return NO_REGISTRATION;
@@ -238,6 +243,7 @@ export async function registerEmbeddedFontFaces(
     const alias = aliases.get(familyKey(substitution.to.family));
     if (alias !== undefined) aliases.set(from, alias);
   }
+  await registerHostFacesOfOwnFamilies(byFamily, aliases, substitutions, register);
 
   let disposed = false;
   const shownIn = new WeakSet<object>([fontSet]);
@@ -275,6 +281,69 @@ export async function registerEmbeddedFontFaces(
     },
   };
 }
+
+/**
+ * Give a family with faces of its own the faces a host substitutes for it.
+ *
+ * A host can substitute one exact face of a family that also has its own bytes (an embedded
+ * regular face, and a bold face from the host's resolver). Measurement then uses the host's
+ * face for that face. The family's own alias holds only its own faces, so paint would draw
+ * that face as a synthesized style of an own face instead. Such a family therefore paints
+ * through an alias of its own: its own faces, plus each substituted face under the weight and
+ * style of the document face that it answers. A face that stands in through another style
+ * stays out. Measurement takes its stand-ins from the same faces by the same rule
+ * (`isOwnFamilyHostFace`), so CSS font matching picks the same nearest face.
+ *
+ * The family's first alias stays as it was: another family that borrows it measures through
+ * the family's own faces only.
+ */
+async function registerHostFacesOfOwnFamilies(
+  byFamily: ReadonlyMap<string, readonly FontSource[]>,
+  aliases: Map<string, string>,
+  substitutions: readonly FontSourceSubstitution[],
+  register: (
+    alias: string,
+    face: FontSource,
+    as?: FontSourceSubstitution['from']
+  ) => Promise<boolean>
+): Promise<void> {
+  const sourceOf = new Map<string, FontSource>();
+  for (const faces of byFamily.values())
+    for (const face of faces) {
+      const key = faceKey(face.request);
+      if (!sourceOf.has(key)) sourceOf.set(key, face);
+    }
+  const hostFaces = new Map<string, { as: FontSourceSubstitution['from']; source: FontSource }[]>();
+  for (const { from, to } of substitutions) {
+    const family = familyKey(from.family);
+    if (!aliases.has(family) || !byFamily.has(family) || !isOwnFamilyHostFace(from, to)) continue;
+    const source = sourceOf.get(faceKey(to));
+    if (!source) continue;
+    const list = hostFaces.get(family);
+    if (list) list.push({ as: from, source });
+    else hostFaces.set(family, [{ as: from, source }]);
+  }
+  await Promise.all(
+    [...hostFaces].map(async ([family, extra]) => {
+      const own = byFamily.get(family)!;
+      const alias = aliasForFamily([
+        ...own.map((face) => `${face.hash}:face:${face.faceIndex}`),
+        ...extra.map(
+          ({ as, source }) => `${source.hash}:face:${source.faceIndex}:as:${as.weight}${as.style}`
+        ),
+      ]);
+      const loaded = await Promise.all([
+        ...own.map((face) => register(alias, face)),
+        ...extra.map(({ as, source }) => register(alias, source, as)),
+      ]);
+      // Every face, or none: a partial alias would draw a face in another family's style.
+      if (!loaded.includes(false)) aliases.set(family, alias);
+    })
+  );
+}
+
+const faceKey = (face: FontSourceSubstitution['from']): string =>
+  `${familyKey(face.family)}|${face.weight}|${face.style}`;
 
 /**
  * The sources a shaping snapshot admitted, as the validated, owned copies it holds — never the

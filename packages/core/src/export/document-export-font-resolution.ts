@@ -15,6 +15,7 @@ import {
   type FontSubstitution,
   type ResolvedFont,
 } from '../layout/font-resource.ts';
+import { sameFontFamily } from '../store/package/default-font-faces.ts';
 import { ExportResourceError } from './export-session.ts';
 
 /** One paintable face in an export font-resolution report. @public */
@@ -207,6 +208,16 @@ export function snapshotDroppedEmbeddedFonts(
   );
 }
 
+/** Whether `substitution` draws a face from another weight or style of its own family. */
+function sameFamilyOtherFace(substitution: FontSubstitution | null | undefined): boolean {
+  if (!substitution) return false;
+  const { requested, resolved } = substitution;
+  return (
+    sameFontFamily(requested.family, resolved.family) &&
+    (requested.weight !== resolved.weight || requested.style !== resolved.style)
+  );
+}
+
 export function fontResolutionReport(
   requestedFamilies: readonly string[],
   defaultFamily: string,
@@ -242,9 +253,11 @@ export function fontResolutionReport(
       );
     }
     // A stand-in or a synthesized style shows in `faces` as evidence, but does not cover the
-    // family.
+    // family. A substitution to another weight or style of the same family is a synthesized
+    // style too, whichever origin supplied it (the PDF converter's stand-in origin does).
     const synthesized = (face: ExportFontFaceResolution): boolean =>
-      synthesizedFaces.has(fontRequestKey({ family, weight: face.weight, style: face.style }));
+      synthesizedFaces.has(fontRequestKey({ family, weight: face.weight, style: face.style })) ||
+      sameFamilyOtherFace(face.substitution);
     const covering = standInFamilies.has(family.trim().toLowerCase())
       ? faces.filter((face) => face.via === 'direct').length
       : faces.filter((face) => !synthesized(face)).length;
