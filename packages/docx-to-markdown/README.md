@@ -74,7 +74,7 @@ For search and AI ingestion, use `{ displayMode: 'proposed' }` to show pending i
 
 Fonts determine line wrapping, table row heights, and the page boundaries in `result.pages`. Markdown does not preserve the DOCX font family, but the converter needs font measurements to calculate layout.
 
-Start with the bundled substitutes for common document fonts. Use `fonts` to supply the author's licensed fonts or override a substitute. Use `fallbackFonts: googleFonts()` to load missing faces from Google Fonts; it requires network access and does not override faces already resolved by earlier sources.
+Start with the bundled substitutes for common document fonts. A family that no source supplies takes a bundled fallback face, by the same rules as the editor and PDF export; the converter reports it as `incomplete-font`. The converter loads no symbol, mathematics, Arabic, or emoji fallback face, so a line with a character that its font lacks can differ from the editor. Use `fonts` to supply the author's licensed fonts or override a substitute. Use `fallbackFonts: googleFonts()` to load missing faces from Google Fonts; it requires network access and does not override faces already resolved by earlier sources.
 
 See [font setup and troubleshooting](docs/fonts.md) for runnable examples, resolution reports, and guidance on matching page references to the source document.
 

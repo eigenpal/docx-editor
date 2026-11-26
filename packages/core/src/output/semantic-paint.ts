@@ -1,3 +1,4 @@
+import { fontFamilyStack } from '../layout/glyph-fallback-aliases.ts';
 import {
   applySyntheticBoldSpacing,
   fieldAnchorStart,
@@ -692,7 +693,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     // The measurer's fallback stack trails the family so an unresolvable name falls
     // back to the SAME face measurement fell back to — not to the inherited font.
     const stack = fallbackStackForFamily(family, undefined, ctx.serifHangulFace);
-    css.fontFamily = alias ? `"${alias}", "${family}", ${stack}` : `"${family}", ${stack}`;
+    css.fontFamily = fontFamilyStack(ctx.fontAlias, alias, family, stack);
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT_COLOR_HEX.get(style.highlight) : undefined;

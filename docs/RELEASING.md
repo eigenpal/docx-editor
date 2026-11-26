@@ -26,7 +26,7 @@ The [Release workflow](../.github/workflows/release.yml) uses Changesets:
 
 `@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, and `@docx-editor.dev/docx-to-pdf` use the EigenPal Pro License. See the [editor-api terms](../packages/editor-api/LICENSE.md), [Pro terms](../packages/pro/LICENSE.md), and [DOCX to PDF terms](../packages/docx-to-pdf/LICENSE.md). Their manifests use `LicenseRef-EigenPal-Pro-Evaluation-1.0`.
 
-Core, React, Vue, Nuxt, i18n, and DOCX to Markdown use Apache 2.0. The fonts package uses `Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License`. The CJK font package uses `Apache-2.0 AND OFL-1.1`.
+Core, React, Vue, Nuxt, i18n, and DOCX to Markdown use Apache 2.0. The fonts package uses `Apache-2.0 AND OFL-1.1 AND CC-BY-4.0 AND LicenseRef-GUST-Font-License`. The CJK font package uses `Apache-2.0 AND OFL-1.1`.
 
 The ten published packages are in a fixed group in `.changeset/config.json`. Changesets assigns them the same release version.
 

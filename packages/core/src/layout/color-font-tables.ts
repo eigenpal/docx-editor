@@ -1,4 +1,4 @@
-import type { ResolvedFont } from '../layout/font-resource.ts';
+import type { ResolvedFont } from './font-resource.ts';
 
 const colorFaces = new WeakMap<ResolvedFont, boolean>();
 

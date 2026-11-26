@@ -162,8 +162,10 @@ test.each(['field', 'marker'] as const)(
     try {
       for (let i = 0; i < 100 && editor.fontMeasurement().measurer !== 'shaped'; i++)
         await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(seen).toHaveLength(1);
       expect(seen[0]!.families).toContain('Wingdings');
+      // A later request can ask for glyph fallback faces, when the fixture face lacks the
+      // symbol. It does not ask for the symbol face again.
+      expect(seen.slice(1).flatMap((request) => request.families)).not.toContain('Wingdings');
       expect(editor.fontMeasurement()).toMatchObject({ measurer: 'shaped', resolving: false });
       expect(editor.getDocumentFonts()).not.toContain('Wingdings');
     } finally {

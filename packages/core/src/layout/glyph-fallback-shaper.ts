@@ -1,37 +1,97 @@
-import { shapeExportClusterFallback } from './export-cluster-fallback.ts';
-import { orderFallbackFacesForCluster } from './export-color-font.ts';
-import { orderFacesForScript } from './export-script-support.ts';
-import { shapeExportHyphenFallback } from './export-hyphen-fallback.ts';
-import { synthesizeExportSmallCaps } from './export-small-caps.ts';
-// Optional export fallback over admitted faces. Measurement and PDF glyph publication
-// share this shaper, so fallback changes pagination before any painter runs.
+import { shapeClusterGlyphFallback } from './glyph-cluster-fallback.ts';
+import { orderFallbackFacesForCluster } from './color-font-tables.ts';
+import { orderFacesForScript } from './font-script-support.ts';
+import { shapeHyphenGlyphFallback } from './hyphen-glyph-fallback.ts';
+import { synthesizeSmallCaps } from './synthetic-small-caps.ts';
+// Optional glyph fallback over admitted faces. Measurement and glyph publication share this
+// shaper, in the editor and in an export, so fallback changes pagination before a painter runs.
 import {
   createShapingEnvironment,
   type ShapeInput,
   type ShapedRun,
   type TextShaper,
-} from '../layout/shaped-run.ts';
-import {
-  FontResolutionError,
-  type FontRequest,
-  type ResolvedFont,
-} from '../layout/font-resource.ts';
-import type { LayoutShapingOptions } from '../layout/shaped-measurer.ts';
+  markFacePreservingShaper,
+  preservesShapingFace,
+} from './shaped-run.ts';
+import { FontResolutionError, type FontRequest, type ResolvedFont } from './font-resource.ts';
+import type { LayoutShapingOptions } from './shaped-measurer.ts';
 
-export function withExportGlyphFallbacks(
+/** How a host uses the glyph fallback chain. */
+export interface GlyphFallbackOptions {
+  /**
+   * False leaves small caps to the face's own feature. A painter that draws small caps
+   * itself (CSS `font-variant`) cannot draw the synthesized capitals, so its measurer must
+   * not measure them.
+   */
+  readonly synthesizeSmallCaps?: boolean;
+  /**
+   * Told the characters of a run that no admitted face covers. A host that loads its
+   * fallback faces on demand reads them to decide which faces to ask for.
+   */
+  readonly onUncovered?: (characters: string) => void;
+  /**
+   * True keeps the substitutions that need no fallback face (the hyphen, synthesized small
+   * caps) when `requests` is empty. Every renderer then measures them alike, whether or not
+   * it holds a fallback face.
+   */
+  readonly withoutFaces?: boolean;
+}
+
+/** The characters of the clusters that `run` could not draw. */
+function uncoveredCharacters(text: string, run: ShapedRun): string {
+  let out = '';
+  for (const cluster of run.clusters) {
+    if (run.glyphs.slice(cluster.glyphStart, cluster.glyphEnd).some((glyph) => glyph.id === 0))
+      out += text.slice(cluster.textStart, cluster.textEnd);
+  }
+  return out;
+}
+
+export function withGlyphFallbacks(
   shaping: LayoutShapingOptions,
-  requests: readonly FontRequest[]
+  requests: readonly FontRequest[],
+  options: GlyphFallbackOptions = {}
 ): LayoutShapingOptions {
-  if (requests.length === 0) return shaping;
+  if (requests.length === 0 && !options.onUncovered && !options.withoutFaces) return shaping;
   if (requests.length > 16) throw new RangeError('At most 16 glyph fallback faces are supported');
   const fonts = requests
-    .map((request) => shaping.fonts.resolve(request))
-    .filter((font): font is ResolvedFont => !(font instanceof FontResolutionError));
+    .map((request) => {
+      try {
+        return shaping.fonts.resolve(request);
+      } catch {
+        return undefined; // a request the snapshot refuses names no face
+      }
+    })
+    .filter((font): font is ResolvedFont => !!font && !(font instanceof FontResolutionError));
+  const smallCaps: typeof synthesizeSmallCaps =
+    options.synthesizeSmallCaps === false ? (_shaper, _input, run) => run : synthesizeSmallCaps;
   const compatible: TextShaper = {
     shape(input) {
-      return shapeExportHyphenFallback(shaping.shaper, input, shaping.shaper.shape(input));
+      return shapeHyphenGlyphFallback(shaping.shaper, input, shaping.shaper.shape(input));
     },
   };
+  const report = (input: ShapeInput, run: ShapedRun): ShapedRun => {
+    if (options.onUncovered && !/^[\t\n\r\f]*$/.test(input.text)) {
+      const characters = uncoveredCharacters(input.text, run);
+      if (characters) options.onUncovered(characters);
+    }
+    return run;
+  };
+  // No fallback face resolved: every run keeps its own face. The shaper still substitutes
+  // the hyphen and reports what the face lacks, and it stays face preserving, so a measurer
+  // reads line metrics from the face alone.
+  if (fonts.length === 0) {
+    const plain: TextShaper = {
+      shape(input) {
+        const run = smallCaps(compatible, input, compatible.shape(input));
+        return run.glyphs.some((glyph) => glyph.id === 0) ? report(input, run) : run;
+      },
+    };
+    return {
+      ...shaping,
+      shaper: preservesShapingFace(shaping.shaper) ? markFacePreservingShaper(plain) : plain,
+    };
+  }
   // The fallback chain is a function of the input and of `fonts`, which this closure fixes.
   // A caching base shaper hands back one run object for every equal input, so the finished run
   // is kept against it and the chain runs once per distinct text, not once per span. The
@@ -55,13 +115,13 @@ export function withExportGlyphFallbacks(
         memo.input.environment === input.environment
       )
         return memo.run;
-      const run = shapeWithFallbacks(input, shapeExportHyphenFallback(shaping.shaper, input, base));
+      const run = shapeWithFallbacks(input, shapeHyphenGlyphFallback(shaping.shaper, input, base));
       finished.set(base, { input, run });
       return run;
     },
   };
   const shapeWithFallbacks = (input: ShapeInput, compatibleRun: ShapedRun): ShapedRun => {
-    const primary = synthesizeExportSmallCaps(compatible, input, compatibleRun);
+    const primary = smallCaps(compatible, input, compatibleRun);
     // Controls have no ink and are not evidence that a text face lacks coverage.
     if (!primary.glyphs.some((glyph) => glyph.id === 0) || /^[\t\n\r\f]*$/.test(input.text))
       return primary;
@@ -78,7 +138,7 @@ export function withExportGlyphFallbacks(
       (/^(Arab|Syrc|Nkoo|Mong)$/.test(input.environment.script) &&
         missingClustersAreNonJoining(input.text, primary))
     ) {
-      const mixed = shapeExportClusterFallback(compatible, input, primary, fonts);
+      const mixed = shapeClusterGlyphFallback(compatible, input, primary, fonts, smallCaps);
       if (mixed) return mixed;
     }
     // Color faces go first for emoji presentation and last otherwise, so a dingbat stays a
@@ -99,7 +159,7 @@ export function withExportGlyphFallbacks(
           ...input,
           environment: createShapingEnvironment({ ...input.environment, font }),
         };
-        const run = synthesizeExportSmallCaps(compatible, next, compatible.shape(next));
+        const run = smallCaps(compatible, next, compatible.shape(next));
         if (!run.glyphs.some((glyph) => glyph.id === 0)) return run;
       } catch {
         /* One unsupported fallback face does not hide later admitted faces. */
@@ -107,7 +167,7 @@ export function withExportGlyphFallbacks(
     }
     // Partial font replacement cannot safely preserve joining-script context yet.
     // Keep uncovered runs explicit so strict exporters refuse them.
-    return primary;
+    return report(input, primary);
   };
   return { ...shaping, shaper };
 }

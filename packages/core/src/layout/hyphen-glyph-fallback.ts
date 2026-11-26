@@ -1,13 +1,8 @@
-// Word can use a face's ordinary hyphen for a missing nonbreaking-hyphen glyph.
+// A face's ordinary hyphen draws a non-breaking hyphen that the face has no glyph for.
 // Preserve the source character and clusters: its no-break semantics stay in Core layout.
-import {
-  createShapedRun,
-  type ShapeInput,
-  type ShapedRun,
-  type TextShaper,
-} from '../layout/shaped-run.ts';
+import { createShapedRun, type ShapeInput, type ShapedRun, type TextShaper } from './shaped-run.ts';
 
-export function shapeExportHyphenFallback(
+export function shapeHyphenGlyphFallback(
   shaper: TextShaper,
   input: ShapeInput,
   primary: ShapedRun

@@ -41,7 +41,7 @@ describe('server-first defaults', () => {
     const fingerprint = createHash('sha256')
       .update(JSON.stringify(FONT_ASSET_MANIFEST))
       .digest('hex');
-    expect(fingerprint).toBe('be99da0070a497770f1f506b43a2c14e424800901f04a523bf4db0687d2f23db');
+    expect(fingerprint).toBe('72bb25197cc0fe7828ce5b8037461e4a2d16314a66095601ae49080e27568098');
   });
 
   test('uses the shaped path without a DOM and produces a pinned pagination golden', async () => {
