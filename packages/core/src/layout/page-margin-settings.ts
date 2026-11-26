@@ -88,10 +88,11 @@ export function sectionTextAreaTwips(
 ): { readonly widthTwips: number; readonly heightTwips: number } {
   const { pageSize, margins } = section;
   const atTop = pageMarginSettingsFrom(settingsRoot)?.gutterAtTop === true;
-  const gutter = Math.max(0, margins.gutterTwips);
+  // As `geometryOfSection` reads it: a side gutter as authored, a top gutter never negative.
+  const side = atTop ? 0 : margins.gutterTwips;
+  const top = atTop ? Math.max(0, margins.gutterTwips) : 0;
   return {
-    widthTwips: pageSize.widthTwips - margins.leftTwips - margins.rightTwips - (atTop ? 0 : gutter),
-    heightTwips:
-      pageSize.heightTwips - margins.topTwips - margins.bottomTwips - (atTop ? gutter : 0),
+    widthTwips: pageSize.widthTwips - margins.leftTwips - margins.rightTwips - side,
+    heightTwips: pageSize.heightTwips - margins.topTwips - margins.bottomTwips - top,
   };
 }

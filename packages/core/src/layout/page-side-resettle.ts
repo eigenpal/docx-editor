@@ -7,13 +7,19 @@
 // of a page moves its number, and an odd move puts the page on the other side.
 //
 // Body fragments, anchored drawings, column separators and content-control boundaries are
-// relative to the content box, so they travel with it. Only the records that hold sheet
-// coordinates are translated here. A drawing positioned from the page edge keeps its distance
-// to the text, not to the sheet: the body pass resolved it against the earlier side.
+// relative to the content box, so they travel with it. The records that hold sheet
+// coordinates are translated here. A floating table (`w:tblpPr/@w:horzAnchor="page"`,
+// CT_TblPPr, §17.4.57) or an anchored drawing (`wp:positionH/@relativeFrom="page"`,
+// ST_RelFromH, §20.4.3.4) positioned from the page edge is moved back, so it keeps its
+// distance to the sheet. The body lines keep the wrap the body pass gave them, and a text
+// frame (`w:framePr`) and an object in a margin band keep their distance to the text.
 
+import { shiftAnchoredDrawing } from './drawing-overlap.ts';
 import type { OverflowPageShell } from './page-furniture-insets.ts';
+import { translateParagraphFragment } from './paragraph-frame.ts';
 import { strippedStoryProjections } from './published-story-projections.ts';
 import type {
+  BlockFragmentRecord,
   HeaderFooterStoryRecord,
   LayoutBox,
   NoteAreaRecord,
@@ -39,6 +45,59 @@ function moveNoteArea(area: NoteAreaRecord, dx: number): NoteAreaRecord {
       : {}),
     notes: area.notes.map((note) => ({ ...note, box: move(note.box) })),
   };
+}
+
+/** `block` and every box in it, `dx` points sideways; `held` collects its paragraph ids. */
+function blockMovedSideways(
+  block: BlockFragmentRecord,
+  dx: number,
+  held: Set<string>
+): BlockFragmentRecord {
+  if (block.kind === 'paragraph') {
+    held.add(block.paragraphId);
+    return translateParagraphFragment(block, dx, 0);
+  }
+  const move = (box: LayoutBox): LayoutBox => ({ ...box, x: box.x + dx });
+  return {
+    ...block,
+    box: move(block.box),
+    rows: block.rows.map((row) => ({
+      ...row,
+      box: move(row.box),
+      cells: row.cells.map((cell) => ({
+        ...cell,
+        box: move(cell.box),
+        blocks: cell.blocks.map((inner) => blockMovedSideways(inner, dx, held)),
+      })),
+    })),
+  };
+}
+
+/**
+ * The body records of `page` that are positioned from the page edge, moved `dx` points so
+ * that they stay where they are on the sheet while the content box moves the other way.
+ * Returns nothing when the page holds no such record.
+ */
+function pageEdgeRecordsHeld(
+  page: PageRecord,
+  dx: number
+): Pick<PageRecord, 'fragments' | 'anchoredDrawings'> | undefined {
+  const held = new Set<string>();
+  let changed = false;
+  const fragments = page.fragments.map((fragment) => {
+    if (fragment.kind !== 'table' || fragment.floatingWrap?.float.horzAnchor !== 'page')
+      return fragment;
+    changed = true;
+    return blockMovedSideways(fragment, dx, held);
+  });
+  // A drawing anchored in a moved table cell goes with its cell.
+  const anchoredDrawings = page.anchoredDrawings?.map((drawing) => {
+    if (drawing.horizontalFrame !== 'page' && !held.has(drawing.anchorParagraphId)) return drawing;
+    changed = true;
+    return shiftAnchoredDrawing(drawing, dx, 0);
+  });
+  if (!changed) return undefined;
+  return { fragments, ...(anchoredDrawings ? { anchoredDrawings } : {}) };
 }
 
 /**
@@ -77,6 +136,7 @@ function storyOnSide(
 /**
  * `page` with its content box, header, footer, note areas and page borders on the side
  * `shell` resolves, or `page` itself when it is there already or the shell names no side.
+ * Body records positioned from the page edge keep their place on the sheet.
  */
 export function pageOnShellSide(page: PageRecord, shell: OverflowPageShell): PageRecord {
   if (shell.contentLeft === undefined) return page;
@@ -87,6 +147,7 @@ export function pageOnShellSide(page: PageRecord, shell: OverflowPageShell): Pag
   const footer = storyOnSide(page.footer, shell.footer, dx);
   return {
     ...rest,
+    ...pageEdgeRecordsHeld(page, -dx),
     contentBox: { ...page.contentBox, x: page.contentBox.x + dx },
     ...(shell.pageBorders ? { pageBorders: shell.pageBorders } : {}),
     ...(header ? { header } : {}),
