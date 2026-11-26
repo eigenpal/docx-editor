@@ -562,7 +562,7 @@ Use this only between releases of one collaboration format. A client of another 
 
 ### Plan for the cost of exports and upgrades
 
-The extension exports the room on each load and each store, and an upgrade creates the room again. This work runs on the server's thread, so every room on that process waits. A room state is much larger than its DOCX file. These values are from one laptop:
+The extension exports the room on each load and each store, and an upgrade creates the room again. This work runs on the server's thread, so every room on that process waits. A room state is much larger than its DOCX file. These values are from one laptop. The times were measured with the larger rooms of format 1.5.5.1, so they are an upper limit:
 
 | Document | DOCX size | Room state | Load check | Export on a store | Upgrade on load |
 | --- | --- | --- | --- | --- | --- |
