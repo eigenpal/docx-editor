@@ -11,6 +11,7 @@ import {
   type ShapedRun,
   type TextShaper,
   markFacePreservingShaper,
+  markMissingGlyphFallbackShaper,
   preservesShapingFace,
 } from './shaped-run.ts';
 import { FontResolutionError, type FontRequest, type ResolvedFont } from './font-resource.ts';
@@ -169,7 +170,10 @@ export function withGlyphFallbacks(
     // Keep uncovered runs explicit so strict exporters refuse them.
     return report(input, primary);
   };
-  return { ...shaping, shaper };
+  return {
+    ...shaping,
+    shaper: preservesShapingFace(shaping.shaper) ? markMissingGlyphFallbackShaper(shaper) : shaper,
+  };
 }
 
 /** Letters of the joining scripts, the tatweel, and the join controls: what a join passes through. */

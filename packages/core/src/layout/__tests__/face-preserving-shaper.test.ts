@@ -19,6 +19,7 @@ import { withFontShapingPolicy } from '../font-shaping-policy.ts';
 import { LAYOUT_HARFBUZZ_SHAPER_POLICY } from '../layout-shaper-policy.ts';
 import {
   markFacePreservingShaper,
+  markMissingGlyphFallbackShaper,
   preservesShapingFace,
   type ShapeInput,
   type TextShaper,
@@ -92,4 +93,22 @@ test('the production shaper is face-preserving, and the policy wrapper keeps the
   expect(preservesShapingFace(withFontShapingPolicy(own, LAYOUT_HARFBUZZ_SHAPER_POLICY))).toBe(
     false
   );
+});
+
+test('a missing glyph fallback shaper shapes for line metrics only the text its face lacks', () => {
+  const font = dejaVu();
+  const fallback = countingShaper(false);
+  const measurer = measurerOver(markMissingGlyphFallbackShaper(fallback.shaper), font);
+  const plain = countingShaper(false);
+  // The cmap of the face maps every character: the face alone sets the band.
+  expect(measurer.lineMetrics(style, 'Agreement ')).toEqual(
+    measurerOver(plain.shaper, font).lineMetrics(style, 'Agreement ')
+  );
+  expect(fallback.texts).not.toContain('Agreement ');
+  // A character that the face lacks can move to another face, which then sets the band.
+  measurer.lineMetrics(style, 'Agreement \u{4e00}');
+  expect(fallback.texts).toContain('Agreement \u{4e00}');
+  // Synthesized small capitals shape other characters than the text holds.
+  measurer.lineMetrics({ ...style, smallCaps: true }, 'Clause ');
+  expect(fallback.texts).toContain('Clause ');
 });
