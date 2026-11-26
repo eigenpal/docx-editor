@@ -556,7 +556,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Table styles control borders, cell shading, and text formatting, including header rows and banding. Conditional cell margins and whole-table conditional shading do not apply. The editor has no table-style picker.',
+      'Table styles control borders, cell shading, cell margins, vertical alignment, and text formatting, including header rows and banding. Whole-table conditional shading does not apply. The editor has no table-style picker.',
   },
   {
     id: 'tables.floating',

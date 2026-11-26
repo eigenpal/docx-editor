@@ -74,9 +74,12 @@ import {
   CELL_PAD,
   DEFAULT_CELL_MARGINS,
   MAX_CELL_MARGIN_PT,
+  OMITTED_CELL_MARGINS,
   mergeMargins,
+  mergeTableMargins,
   readMarginSides,
   type CellMarginsPt,
+  type StatedMarginSides,
 } from './table-cell-margins.ts';
 import { type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
@@ -112,6 +115,7 @@ export {
   mergeMargins,
   readMarginSides,
   type CellMarginsPt,
+  type StatedMarginSides,
 };
 
 export {
@@ -545,13 +549,13 @@ function readTableRows(
   // familiar 108-twip inset belongs to the authored default table style, not
   // this application fallback. Styles, table properties and cells override
   // each side independently, including explicit zero.
-  let styleMargins: CellMarginsPt = { top: 0, right: 0.5, bottom: 0, left: 0.5 };
+  let styleMargins: CellMarginsPt = OMITTED_CELL_MARGINS;
   let styleBorders = EMPTY_TABLE_BORDER_BOX;
   for (const node of tableStyle.tablePropertyNodes) {
-    styleMargins = mergeMargins(styleMargins, readMarginSides(childNamed(node, 'tblCellMar')));
+    styleMargins = mergeTableMargins(styleMargins, readMarginSides(childNamed(node, 'tblCellMar')));
     styleBorders = mergeTableBorders(styleBorders, readTableBorders(node));
   }
-  const defaultMargins = mergeMargins(
+  const defaultMargins = mergeTableMargins(
     styleMargins,
     readMarginSides(tblPr && childNamed(tblPr, 'tblCellMar'))
   );
