@@ -581,9 +581,9 @@ export function pageRefAssignmentToken(pages: readonly PageRecord[]): string {
  * substituted text length is — paint and the offset accounting clamp to that width, so a
  * multi-digit page number never lengthens the model.
  *
- * A page-field placeholder can still reach layout as several spans (a font or script change
- * inside a picture's literal text, or a break inside it). They all carry the same marker, so
- * only the first paints the value and the rest paint nothing. `previous` is the last span of
+ * A page-field placeholder or a `PAGEREF` result can still reach layout as several spans (a
+ * space, a font or script change inside a picture's literal text, or a break inside it). They
+ * all carry the same marker, so only the first paints the value and the rest paint nothing. `previous` is the last span of
  * the line before, so a placeholder that continues onto this line is recognized too.
  */
 function substituteBodyPageFieldLine(
@@ -615,8 +615,11 @@ function substituteBodyPageFieldLine(
       // its cache, so the restore is an identity no-op there.
       const text = live ? computed : pageRef.cached;
       if (text.length === 0) continue;
-      // A result with spaces ("- 2 -") reaches layout as one span per word, all under the same
-      // marker: the first paints the whole number, the rest paint nothing.
+      // A result with spaces reaches layout as one span per word, all under the same marker:
+      // the first paints the whole value, the rest paint nothing. A `PAGEREF` result
+      // (ECMA-376 Part 1, 17.16.5.45) takes the target section's `w:pgNumType/@w:fmt`
+      // (`CT_PageNumber`, 17.6.12), and `ST_NumberFormat` (17.18.59) `numberInDash` gives
+      // "- 2 -" and `cardinalText` gives words.
       const painted = sameFieldAtom(before, span, 'pageRef') ? '' : text;
       if (painted === span.text) continue;
       if (!spans) spans = line.spans.slice();

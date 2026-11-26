@@ -104,8 +104,9 @@ describe('body PAGEREF fields compute the target page at finalize', () => {
   });
 
   test('a result with spaces paints once, not once per word', () => {
-    // A dashed page number ("- 2 -", Word's numberInDash) breaks into several spans at its
-    // spaces; every span carries the same PAGEREF marker, and only the first may paint.
+    // A dashed page number (`ST_NumberFormat` `numberInDash`, ECMA-376 Part 1, 17.18.59)
+    // breaks into several spans at its spaces; every span carries the same PAGEREF marker,
+    // and only the first may paint.
     expect(textsOf(layoutOf(TWO_PAGE_BODY('- 2 -')))).toContain('page - 2 -');
     expect(textsOf(layoutOf(TWO_PAGE_BODY('- 9 -')))).toContain('page - 9 -');
   });
