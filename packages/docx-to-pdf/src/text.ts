@@ -27,9 +27,9 @@ import {
 import { ownedGapAfter } from './owned-gap.ts';
 import { paragraphGridOffsetX } from './paragraph-grid-origin.ts';
 import { EmbeddedFace } from './fonts.ts';
-import { griddedBaselineInLine, PDF_PAINT_GRID_PT, snapToGrid } from './baseline-grid.ts';
+import { paintedBaselineUnits, PDF_PAINT_GRID_PT, shiftedBaselinePt } from './baseline-grid.ts';
 
-export { griddedBaselineInLine, paintedBaselineFromTop, snapToGrid } from './baseline-grid.ts';
+export { paintedBaselineFromTop, snapToGrid } from './baseline-grid.ts';
 import { colorGlyph, glyphOutline, type ColorGlyphLayer } from './color-glyphs.ts';
 import { color, flateStream, number as n, pageHeight, rect, Work } from './context.ts';
 import { outlineOperators, type OutlinePlacement } from './outline-placement.ts';
@@ -212,6 +212,22 @@ export class TextWriter {
     readonly authorSlots: ReadonlyMap<string, number> = new Map(),
     readonly rowRevisions: ReadonlyMap<BlockFragmentRecord, RowRevision> = new Map()
   ) {}
+  private readonly lineBaselines = new WeakMap<
+    SemanticSpanVisit['line'],
+    { top: number; paragraph: SemanticSpanVisit['paragraph']; units: number }
+  >();
+  /**
+   * The device unit of a line's baseline, computed once for a line at a position. Every run
+   * on the line then shares it, whatever its face: a line has one baseline.
+   */
+  private lineUnits(visit: SemanticSpanVisit, top: number, face: EmbeddedFace): number {
+    const { line, paragraph } = visit;
+    const known = this.lineBaselines.get(line);
+    if (known && known.top === top && known.paragraph === paragraph) return known.units;
+    const units = paintedBaselineUnits(top, line, face, paragraph);
+    this.lineBaselines.set(line, { top, paragraph, units });
+    return units;
+  }
   /** `marker`: a list marker, which a tracked row's revision does not mark. */
   paint(visit: SemanticSpanVisit, page: PDFPage, marker = false): string {
     const { span, line, storyOrigin, absoluteBox } = visit;
@@ -270,38 +286,14 @@ export class TextWriter {
       absoluteBox.x - visit.page.box.x + (span.glyphOffsetPt ?? 0) + paragraphGridOffsetX(visit);
     // Reference PDFs put every text baseline on a 0.24pt grid measured from the page top:
     // 109.44, 126.00, 141.84 and 168.72 are 456, 525, 591 and 703 units exactly.
-    //
-    // TWO snaps, and the order is the whole point. The reference rounds the ascent to a
-    // whole device unit FIRST, then accumulates the exact line advance from there, then
-    // rounds the result. Rounding only at the end is not the same, because the ascent's
-    // own fraction then rides along every line of the paragraph and decides where each one
-    // lands. Calibri 11pt ascends 10.4736pt, which is 43.64 units; the reference lays out
-    // from 44. On `footnote-overlap-regression.docx` that fraction alone moved the third
-    // line of a paragraph a full unit, and snapping the ascent took the corpus from 38 of
-    // 56 pages under 1% to 42. See `.cache/pdf/claude-snapped-ascent/FINDING.md`.
-    //
-    // The line's HEIGHT is still never rounded. Layout keeps its unrounded metrics, so flow
-    // and pagination cannot move, and rounding each line's height instead accumulates and is
-    // badly wrong (see .cache/pdf/claude-lineheight-grid/FINDING.md).
-    //
-    // An exact half-unit rounds toward the page TOP, not away from zero. Ties are not rare:
-    // any exact line spacing that is an odd multiple of 0.12pt hits one on every other line,
-    // and `Math.round` rounds them the wrong way. A captured control of twelve lines at
-    // `w:line="300" w:lineRule="exact"` from a story origin on the grid puts six baselines on
-    // an exact .5, and the reference takes the lower unit for all six; `Math.round` missed
-    // every one of them by 0.24pt. See `.cache/pdf/claude-linerule/`.
-    const baselineFromTop =
-      storyOrigin.y -
-      visit.page.box.y +
-      line.box.y +
-      griddedBaselineInLine(line, face, visit.paragraph) -
-      baselineShiftPtOf(style);
-    // The sum above is exact in decimal but not in binary: a baseline that is mathematically
-    // 2149.5 units arrives as 2149.5000000000014, and `ceil(x - 0.5)` then takes the unit BELOW
-    // the one the tie rule asks for, painting the whole line 0.24pt low. Snap the quotient back
-    // to the grid first. The tolerance is far under any real geometry and far over the error.
-    const unitsFromTop = snapToGrid(baselineFromTop / PDF_PAINT_GRID_PT);
-    const baseline = pageHeight(page) - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
+    // `paintedBaselineUnits` holds the rule that picks the unit. The line's HEIGHT is never
+    // rounded: layout keeps its exact metrics, so flow and pagination cannot move.
+    const baseline =
+      pageHeight(page) -
+      shiftedBaselinePt(
+        this.lineUnits(visit, storyOrigin.y - visit.page.box.y + line.box.y, face),
+        baselineShiftPtOf(style)
+      );
     // Automatic text takes white on dark run shading, else on dark paragraph shading. A named
     // highlight replaces the run shading behind the text, so only the paragraph's counts then.
     const shading = HIGHLIGHT_NAME.test(style.highlight ?? '') ? null : style.shading;
