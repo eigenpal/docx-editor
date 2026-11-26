@@ -27,7 +27,8 @@ const UNICODE_SMALL_SQUARE = '\u{25aa}';
 /**
  * Real captured ascent/descent at 12 pt: the paragraph face, then the two symbol faces.
  * The document sets `w:spacing w:line="276"`, Word's 1.15 default, so a plain line is
- * (11.520 + 2.268) x 1.15 = 15.856 and a Symbol-marked one (12.064 + 2.268) x 1.15 = 16.482.
+ * (11.520 + 2.268) x 1.15 = 15.856. A Symbol-marked one adds the marker's extra ascent once,
+ * unscaled: 15.856 + (12.064 - 11.520) = 16.400.
  */
 const BANDS: Record<string, readonly [number, number]> = {
   '': [11.52, 2.268],
@@ -157,7 +158,7 @@ describe('an admitted symbol face reaching a numbering marker', () => {
     // Symbol's taller ascent raises the baseline, and the box by the same amount.
     expect(plain!.lines[0]!.box.height).toBeCloseTo(15.856, 3);
     expect(symbol!.lines[0]!.baseline).toBeCloseTo(12.064, 3);
-    expect(symbol!.lines[0]!.box.height).toBeCloseTo(16.482, 3);
+    expect(symbol!.lines[0]!.box.height).toBeCloseTo(16.4, 3);
     // Wingdings ascends LESS than the paragraph face, so its line is untouched.
     expect(wingdings!.lines[0]!.baseline).toBeCloseTo(11.52, 3);
     expect(wingdings!.lines[0]!.box.height).toBeCloseTo(15.856, 3);
