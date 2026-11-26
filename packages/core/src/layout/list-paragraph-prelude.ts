@@ -8,6 +8,8 @@ import { numberingLevelTiers } from './numbering-level-tier.ts';
 import { resolveParagraphOutlineLevel } from './paragraph-outline-level.ts';
 import { propertiesOf } from './paragraph-flow.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+import { isBareSectionMark } from './section-mark-break.ts';
+import { paragraphSectionNode } from './section-properties.ts';
 import { cascadeParagraphFormatting, type StyleCascadeTable } from './style-cascade.ts';
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { styleIdFromProps } from './style-chain.ts';
@@ -106,7 +108,13 @@ export function readNumPr(
  */
 export interface ParagraphListPrelude {
   readonly styleCascade: StyleCascadeTable | undefined;
+  /** Null for a paragraph without numbering, and for a numbered bare section mark. */
   readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
+  /**
+   * The paragraph carries a section break and resolves a `w:numPr`. Its number then depends on
+   * its content (see {@link paragraphListPrelude}), so a text edit can add or remove it.
+   */
+  readonly numberedSectionMark: boolean;
   /** Properties below and above the numbering level, from `numberingLevelTiers`. */
   readonly belowLevel: readonly OoxmlProperty[];
   readonly aboveLevel: readonly OoxmlProperty[];
@@ -132,7 +140,16 @@ export function paragraphListPrelude(
   const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
   const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
   const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
-  const numPr = readNumPr(nodes);
+  const resolvedNumPr = readNumPr(nodes);
+  // A bare section mark is a paragraph whose mark carries the section break (`w:pPr/w:sectPr`,
+  // `CT_SectPr`, ECMA-376 Part 1, 17.6.18) and that holds no content. It shows no list number,
+  // and the count skips it, though its style or its own `w:numPr` numbers it (`CT_NumPr`,
+  // Part 1, 17.3.1.19). The standard does not state this rule. Thesis templates put one, in
+  // the numbered heading style, before each chapter. A numbered paragraph that holds content,
+  // or that has no section break, keeps its number.
+  const numberedSectionMark =
+    resolvedNumPr !== null && paragraphSectionNode(paragraph) !== undefined;
+  const numPr = numberedSectionMark && isBareSectionMark(paragraph) ? null : resolvedNumPr;
   // Only a list paragraph reads the tiers; skip the second style-chain walk for the rest.
   const tiers =
     numPr && styleCascade && cascaded
@@ -155,6 +172,7 @@ export function paragraphListPrelude(
   const prelude: ParagraphListPrelude = {
     styleCascade,
     numPr,
+    numberedSectionMark,
     belowLevel: tiers.below,
     aboveLevel: tiers.above,
     inheritedMarkProps,
