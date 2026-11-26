@@ -19,14 +19,15 @@
 // unless the head row is `hRule="exact"`: a fixed row clips its own content, so the merged
 // text continues here in the part of the merge on the next page.
 //
-// Merges that share rows take this path only as a family of fixed merges: they start in the
-// same row, and every row they cover is `hRule="exact"` (`fixedFamily`). Each merge carries
-// its own text through its own rows, and the family activates together.
+// Merges that share rows take this path only as a family of fixed merges: every row they
+// cover is `hRule="exact"` (`fixedFamily`). They can start in the same row or in rows that
+// an earlier merge of the family covers. Each merge carries its own text through its own
+// rows, and the family activates together.
 //
 // Each fragment of a carried merge paints its share of the text in one head row: the placed
-// head row on the first page, and a zero-height carried head row on each later page. A
-// family shares these head rows (`table-vmerge-head-rows.ts`).
-import type { OoxmlNode } from '@docx-editor.dev/core/store';
+// head row on the first page, and a zero-height carried head row on each later page. Merges
+// from one row share these head rows (`table-vmerge-head-rows.ts`), and a merge that starts in
+// a later row has its own.
 import type {
   SemanticTableCell,
   SemanticTableRow,
@@ -50,6 +51,7 @@ import { cellContentInsets, type CellContentInsets } from './table-cell-geometry
 import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { resolveVMergeSpans } from './table-vmerge.ts';
+import { flowsAcrossPages } from './table-vmerge-carry-content.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import { withoutZeroHeightBottomEdge } from './table-vmerge-boundary.ts';
 import { isCarriedHeadRow } from './table-carried-head-row.ts';
@@ -66,81 +68,7 @@ import {
 
 const blockBottom = (block: BlockFragmentRecord): number => block.box.y + block.box.height;
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const EPSILON = 0.001;
-// Notes, drawings, nested tables, breaks, and unknown extensions stay on the existing path.
-// Field instructions remain inert and use the native projection and its atomic source range.
-const TEXT_NAMES = new Set([
-  'p',
-  'pPr',
-  'r',
-  'rPr',
-  't',
-  'spacing',
-  'jc',
-  'ind',
-  'rFonts',
-  'sz',
-  'szCs',
-  'lang',
-  'b',
-  'bCs',
-  'i',
-  'iCs',
-  'u',
-  'color',
-  'highlight',
-  'shd',
-  'vertAlign',
-  'kern',
-  'position',
-  'w',
-  'fitText',
-  'caps',
-  'smallCaps',
-  'strike',
-  'dstrike',
-  'vanish',
-  'noProof',
-  'rtl',
-  'cs',
-  'pStyle',
-  'rStyle',
-  'contextualSpacing',
-  'widowControl',
-  'fldChar',
-  'instrText',
-  'fldSimple',
-  'lastRenderedPageBreak',
-  'proofErr',
-  'bookmarkStart',
-  'bookmarkEnd',
-  'tab',
-  'tabs',
-  'numPr',
-  'numId',
-  'ilvl',
-  'keepNext',
-  'keepLines',
-  'ins',
-  'del',
-  'delText',
-  'hyperlink',
-]);
-
-function textOnly(cell: SemanticTableCell, budget: { remaining: number }): boolean {
-  if (cell.textDirection !== 'horizontal') return false;
-  const pending: OoxmlNode[] = [...cell.blocks];
-  while (pending.length > 0) {
-    if (--budget.remaining < 0) return false;
-    const node = pending.pop()!;
-    if (node.kind === 'textValue') continue;
-    if (!('localName' in node) || node.namespaceUri !== W || !TEXT_NAMES.has(node.localName))
-      return false;
-    for (const child of node.children) pending.push(child);
-  }
-  return true;
-}
 
 interface Head {
   readonly cell: SemanticTableCell;
@@ -167,7 +95,7 @@ interface Group {
    */
   fragmentStart?: { readonly index: number; readonly top: number; pending?: boolean };
   headRecord?: TableRowFragmentRecord;
-  /** The fixed merges from the same head row that take this path with it (`fixedFamily`). */
+  /** The fixed merges that share rows and take this path with it (`fixedFamily`). */
   family?: readonly Group[];
 }
 
@@ -226,7 +154,10 @@ function overlappingClusters(sorted: readonly Group[]): { members: Group[]; last
 /** Whether `group` decides activation for its family: the first member, or a lone merge. */
 const leadsFamily = (group: Group): boolean => (group.family?.[0] ?? group) === group;
 
-/** A protected, text-only merge whose rows can cross a page while its text uses a cursor. */
+/**
+ * Merges whose rows can cross a page while their text uses a cursor. Their content must flow
+ * across pages (`flowsAcrossPages`, `table-vmerge-carry-content.ts`).
+ */
 export function createVMergeFragmentCarry(
   structure: SemanticTableStructure,
   rows: readonly SemanticTableRow[],
@@ -275,7 +206,11 @@ export function createVMergeFragmentCarry(
     const candidates = [...grouped.values()].sort((a, b) => a.first - b.first);
     const nodeBudget = { remaining: 100_000 };
     const validGroup = (group: Group): boolean => {
-      if (!group.heads.every((head) => textOnly(head.cell, nodeBudget))) return false;
+      let fixed = true;
+      for (let index = group.first; index <= group.last; index++)
+        fixed &&= rows[index]!.height.rule === 'exact';
+      if (!group.heads.every((head) => flowsAcrossPages(head.cell, nodeBudget, fixed)))
+        return false;
       for (let index = group.first; index <= group.last; index++) {
         const row = rows[index]!;
         if (row.isHeader) return false;
@@ -315,16 +250,20 @@ export function createVMergeFragmentCarry(
   }
 
   /**
-   * Merges that start in the same row and end in different rows, over rows that are all
-   * `hRule="exact"` (`w:trHeight`, `CT_Height`, §17.4.80; `ST_HeightRule`, §17.18.37). No merged
-   * text can change the height of a fixed row, so the merges cannot affect each other's rows,
-   * and each one carries its own text through its own rows. They start in one row, so they
-   * take this path together or not at all: a head left in that row would size it, and the
-   * row clips what it cannot hold.
+   * Merges that share rows, over rows that are all `hRule="exact"` (`w:trHeight`, `CT_Height`,
+   * §17.4.80; `ST_HeightRule`, §17.18.37). No merged text can change the height of a fixed row,
+   * so the merges cannot affect each other's rows, and each one carries its own text through
+   * its own rows. This holds for merges from one row and for a merge that starts in a row an
+   * earlier one covers. They take this path together or not at all: a head left on the older
+   * path would size its row, and the row clips what it cannot hold. The first merge decides
+   * for the family when its head row is placed.
    */
   function fixedFamily(cluster: readonly Group[], last: number): boolean {
     const first = cluster[0]!.first;
-    if (cluster.some((group) => group.first !== first)) return false;
+    // A later member's top is predicted from the fixed rows above it (`activate`). Cell
+    // spacing adds gaps between rows that the prediction does not hold, so such a table keeps
+    // families to one head row.
+    if (structure.cellSpacingPt > 0 && cluster.some((group) => group.first !== first)) return false;
     for (let index = first; index <= last; index++) {
       if (rows[index]!.height.rule !== 'exact') return false;
     }
@@ -353,7 +292,15 @@ export function createVMergeFragmentCarry(
   function activate(group: Group, top: number, bottom: number): void {
     const family = group.family ?? [group];
     if (!family.every(prepare)) return;
-    if (!family.some((member) => wantsCarry(member, top, bottom))) return;
+    // A merge that starts in a later row starts below the rows above it. They are fixed rows of
+    // the family, so `prepare` has measured each one.
+    const topOf = (member: Group): number => {
+      let at = top;
+      for (let index = group.first; index < member.first; index++)
+        at += fixedRowHeight.get(index) ?? 0;
+      return at;
+    };
+    if (!family.some((member) => wantsCarry(member, topOf(member), bottom))) return;
     if (!family.every((member) => member.physicalHeights.every((h) => h <= bottom + EPSILON)))
       return;
     for (const member of family) member.active = true;
@@ -814,7 +761,7 @@ export function createVMergeFragmentCarry(
       const here = atRow.get(index);
       if (!here) return row;
       for (const group of here) {
-        // A family decides once, through its first member: every member starts in this row.
+        // A family decides once, through its first member, when the first head row is placed.
         if (index === group.first && !group.active && leadsFamily(group))
           activate(group, top, bottom);
       }
