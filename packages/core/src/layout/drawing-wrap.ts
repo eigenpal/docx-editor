@@ -533,6 +533,26 @@ export function availableTextIntervalsOnScanline(
   );
 }
 
+/**
+ * {@link availableTextIntervalsOnScanline} for a paragraph that starts at `paragraphLeft`. The
+ * float's passages start at the left edge of the column it was placed in; a paragraph with a
+ * negative left indent (17.3.1.12 ind) keeps that reach beside the float, so a passage that
+ * starts at the column edge starts at the paragraph's own left bound instead.
+ */
+export function paragraphTextIntervalsOnScanline(
+  y: number,
+  input: WrapExclusionInput,
+  paragraphLeft: number
+): readonly ScanlineInterval[] {
+  const available = availableTextIntervalsOnScanline(y, input);
+  if (paragraphLeft >= input.contentLeft) return available;
+  return available.map((interval) =>
+    interval.start <= input.contentLeft + 0.000_001
+      ? Object.freeze({ start: paragraphLeft, end: interval.end })
+      : interval
+  );
+}
+
 /** Point-in effect-expanded clipped shape via exact scanline Minkowski region at `y`. */
 export function pointInEffectExpandedClip(
   x: number,

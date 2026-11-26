@@ -29,7 +29,7 @@ import {
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingGeometry } from './drawing-geometry.ts';
 import {
-  availableTextIntervalsOnScanline,
+  paragraphTextIntervalsOnScanline,
   squareExclusionBounds,
   type ScanlineInterval,
   type WrapExclusionInput,
@@ -350,7 +350,7 @@ export function mergeAvailableIntervalsAtY(
     )
       continue;
     const probeY = rectangular ? Math.max(y, band.y) : y;
-    const atY = availableTextIntervalsOnScanline(probeY, zone.input);
+    const atY = paragraphTextIntervalsOnScanline(probeY, zone.input, contentLeft);
     if (
       zone.sourceKind === 'table' &&
       !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)
