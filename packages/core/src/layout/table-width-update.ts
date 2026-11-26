@@ -53,6 +53,7 @@ import { registerTableCellBreakKeys } from './layout-cache.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { finalizedWithHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { moveRowToWidths } from './table-row-geometry-reuse.ts';
+import { headerOccurrence, repeatGroupOccurrence } from './table-header-occurrence.ts';
 import { createRepeatedHeaderPlacements } from './table-header-repeat-reuse.ts';
 import { shareTableFragmentFacts } from './table-fragment-facts.ts';
 import { markHorizontalTableFragment } from './table-cell-text-direction.ts';
@@ -175,19 +176,6 @@ function sameGrid(a: SemanticTableStructure, b: SemanticTableStructure): boolean
     }
   }
   return true;
-}
-
-/** The page occurrence a repeated header row's line ids were stamped with. */
-function headerOccurrence(row: TableRowFragmentRecord): string | undefined {
-  for (const cell of row.cells)
-    for (const block of cell.blocks) {
-      if (block.kind !== 'paragraph') continue;
-      for (const line of block.lines) {
-        const at = line.id.lastIndexOf(':occ:');
-        if (at >= 0) return line.id.slice(at + ':occ:'.length);
-      }
-    }
-  return undefined;
 }
 
 function sameLineHeights(a: LineRecord, b: LineRecord): boolean {
@@ -543,11 +531,14 @@ export function updateTableWidths(
   const placeHeaders = (rows: readonly TableRowFragmentRecord[]): WidthHeaderPlacement[] | null => {
     const placed: WidthHeaderPlacement[] = [];
     let plan: HeaderGroupPlan | undefined;
+    // One repeat stamps every row of the group with one occurrence. A row with no lines (only
+    // merge continuations) carries none, so it takes the group's.
+    const groupOccurrence = repeatGroupOccurrence(rows);
     for (const [index, old] of rows.entries()) {
       const source = headers[index];
       if (!source || source.id !== old.id || old.isContinuation || old.hasContinuation) return null;
       let placementDeps = headerDeps;
-      const occurrence = old.isHeaderRepeat ? headerOccurrence(old) : undefined;
+      const occurrence = old.isHeaderRepeat ? groupOccurrence : undefined;
       if (old.isHeaderRepeat && occurrence === undefined) return null;
       if (occurrence !== undefined)
         placementDeps = { ...headerDeps, pageOccurrenceKey: () => occurrence };

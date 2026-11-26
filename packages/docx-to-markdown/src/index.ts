@@ -432,6 +432,18 @@ export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExpo
   return translateMarkdownLayout(layout);
 }
 
+/**
+ * Let the runtime drop the objects that `WeakRef` creation and `deref()` keep alive for the
+ * current job. The engine caches use `WeakRef`, and the runtime keeps each target strongly until
+ * the microtask checkpoint ends, not until the export returns. An export of in-memory bytes runs
+ * entirely in microtasks, so without a task boundary every disposed document tree and the caches
+ * keyed by it stay live, and back-to-back exports add about 200 MB each. A timer callback runs
+ * after the checkpoint on every host, so it releases them before the next export starts.
+ */
+function releaseKeptWeakRefTargets(): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
 /** Convert untrusted DOCX bytes with Node-safe resource and shaping defaults. @public */
 export async function exportMarkdown(
   source: ExportDocumentSource,
@@ -462,6 +474,8 @@ export async function exportMarkdown(
   } finally {
     opened.session.dispose();
   }
+  await releaseKeptWeakRefTargets();
+  checkExportAbort(options.signal);
   const result = images
     ? translateMarkdownLayout(layout, await resolveMedia(data, options), images.syntax)
     : translateMarkdownLayout(layout);

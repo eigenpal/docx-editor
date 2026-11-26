@@ -17,6 +17,7 @@ import type {
   StoryPageFieldNeeds,
 } from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
+import { formatPageFormula } from './field-formula.ts';
 import { formatNumericPicture } from './field-numeric-picture.ts';
 import {
   formatPageFieldNumber,
@@ -135,17 +136,35 @@ export function pageFieldMeasuredText(
   return pageFieldPlaceholder(switches, sectionFormat);
 }
 
+/** The finalize marker for a body page field. */
+export interface PageFieldMarker extends AllowlistedPageFieldMatch {
+  /**
+   * The saved result of a formula field, painted when the formula has no value on the page it
+   * lands on (a division by zero, say).
+   */
+  readonly savedResult?: string;
+  /**
+   * Set on another field's result that holds body page fields (`{ QUOTE "x" { PAGE } }`): its
+   * saved text around each nested field's marker. Finalize paints the text with each nested
+   * field's value in place. Nested markers never carry segments.
+   */
+  readonly segments?: readonly (string | PageFieldMarker)[];
+}
+
 /**
- * The finalize marker for a body page field: its kind and only the switches it states.
+ * The finalize marker for a body page field: its kind, only the switches it states, and a
+ * formula's compiled expression and saved result.
  */
 export function pageFieldMarker(
   kind: AllowlistedPageField,
-  switches: PageFieldSwitches
-): AllowlistedPageFieldMatch {
+  switches: PageFieldSwitches & Pick<AllowlistedPageFieldMatch, 'formula'>,
+  savedResult = ''
+): PageFieldMarker {
   return {
     kind,
     ...(switches.picture !== undefined ? { picture: switches.picture } : {}),
     ...(switches.numberFormat !== undefined ? { numberFormat: switches.numberFormat } : {}),
+    ...(switches.formula !== undefined ? { formula: switches.formula, savedResult } : {}),
   };
 }
 
@@ -242,6 +261,27 @@ export function projectPageFieldValue(
   }
   if (kind !== 'PAGE') return formatDecimal(Math.floor(value));
   return formatSectionPageNumber(value, context.format);
+}
+
+/**
+ * The text a page field or page formula shows under a page context, or null when a formula has
+ * no value on that page (a division by zero, or a result its switches cannot render). The
+ * caller then keeps the field's saved result.
+ */
+export function pageFieldText(
+  match: Pick<AllowlistedPageFieldMatch, 'kind' | 'picture' | 'numberFormat' | 'formula'>,
+  context: FieldPageContext
+): string | null {
+  if (match.formula === undefined) return projectPageFieldValue(match.kind, context, match);
+  return formatPageFormula(
+    match.formula,
+    {
+      page: context.pageNumber,
+      numPages: context.pageCount,
+      sectionPages: context.sectionPageCount ?? context.pageCount,
+    },
+    match
+  );
 }
 
 /**
@@ -581,14 +621,24 @@ function substituteBodyPageFieldLine(
     }
     const marker = span.fieldAtom?.pageField;
     if (!marker) continue;
-    const text = samePageFieldAtom(before, span)
-      ? ''
-      : projectPageFieldValue(marker.kind, context, marker);
+    const text = samePageFieldAtom(before, span) ? '' : pageFieldMarkerText(marker, context);
     if (text === span.text) continue;
     if (!spans) spans = line.spans.slice();
     spans[index] = { ...span, text };
   }
   return spans ? { ...line, spans } : line;
+}
+
+/** What a body page-field marker paints on a page: its value, or its segments with values. */
+function pageFieldMarkerText(marker: PageFieldMarker, context: FieldPageContext): string {
+  const valueOf = (field: PageFieldMarker): string =>
+    pageFieldText(field, context) ?? field.savedResult ?? '';
+  if (marker.segments === undefined) return valueOf(marker);
+  let text = '';
+  for (const segment of marker.segments) {
+    text += typeof segment === 'string' ? segment : valueOf(segment);
+  }
+  return text;
 }
 
 /** True when `before` is an earlier piece of the same body page-field atom as `span`. */
