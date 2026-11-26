@@ -1,5 +1,9 @@
 # @docx-editor.dev/i18n
 
+## 2.41.0
+
+No changes in this release.
+
 ## 2.40.0
 
 ### Minor Changes
