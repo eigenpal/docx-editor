@@ -1,7 +1,8 @@
 // A paragraph that holds only a section break takes no list number and does not advance the
-// count. Chinese thesis templates put such a paragraph, in the numbered `heading 1` style,
-// before each chapter. Word and WPS show no number on it, so the next chapter keeps its own
-// number. A numbered paragraph with no content and no section break keeps its number.
+// count (`w:pPr/w:sectPr`, `CT_SectPr`, ECMA-376 Part 1, 17.6.18; `CT_NumPr`, 17.3.1.19).
+// Chinese thesis templates put such a paragraph, in the numbered `heading 1` style, before
+// each chapter, so the next chapter keeps its own number. A numbered paragraph with no
+// content and no section break keeps its number.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -54,6 +55,7 @@ const sectPr = (header: boolean) =>
   '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>' +
   '</w:sectPr>';
 const HEADING_1 = '<w:pStyle w:val="2"/>';
+const HEADING_2 = '<w:pStyle w:val="4"/>';
 /** Direct numbering, with no style and so no outline level. */
 const LIST_ITEM = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>';
 const item = (content: string) => `<w:p><w:pPr>${LIST_ITEM}</w:pPr>${content}</w:p>`;
@@ -205,6 +207,26 @@ describe('a paragraph that holds only a section break', () => {
       });
       surface.type('X');
       expect(bodyMarkers(surface)).toEqual([['[1.]One', '[2.]X'], ['[3.]Two']]);
+    });
+  });
+
+  test('skips the count at its own level and restarts no lower level', () => {
+    const body =
+      chapter('Intro') +
+      section('Scope') +
+      breakParagraph('', true, HEADING_2) +
+      section('Graphs') +
+      breakParagraph() +
+      section('Data') +
+      chapter('Theory') +
+      section('Proof') +
+      sectPr(false);
+    withSurface(docx(body), (surface) => {
+      expect(bodyMarkers(surface)).toEqual([
+        ['[第一章]Intro', '[1.1]Scope', '[]'],
+        ['[1.2]Graphs', '[]'],
+        ['[1.3]Data', '[第二章]Theory', '[2.1]Proof'],
+      ]);
     });
   });
 

@@ -139,14 +139,12 @@ export function paragraphListPrelude(
   const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
   const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
   const resolvedNumPr = readNumPr(nodes);
-  // A bare section mark is a paragraph whose mark is a section break and that holds no content
-  // (`w:pPr/w:sectPr`, `CT_SectPr`, ECMA-376 Part 1, 17.6.18). Word shows no list number on it,
-  // and the count skips it, though its style or `w:numPr` numbers it
-  // (`CT_NumPr`, Part 1, 17.3.1.19). Chinese thesis templates put one, in the numbered heading
-  // style, before each chapter. The standard does not state this rule. LibreOffice
-  // (writerfilter `DomainMapper.cxx`, tdf#97417) and ONLYOFFICE
-  // (`CDocumentNumberingInfoEngine.CheckParagraph`) apply it too. A numbered paragraph that
-  // holds content, or that has no section break, keeps its number.
+  // A bare section mark is a paragraph whose mark carries the section break (`w:pPr/w:sectPr`,
+  // `CT_SectPr`, ECMA-376 Part 1, 17.6.18) and that holds no content. It shows no list number,
+  // and the count skips it, though its style or its own `w:numPr` numbers it (`CT_NumPr`,
+  // Part 1, 17.3.1.19). The standard does not state this rule. Thesis templates put one, in
+  // the numbered heading style, before each chapter. A numbered paragraph that holds content,
+  // or that has no section break, keeps its number.
   const numberedSectionMark =
     resolvedNumPr !== null && paragraphSectionNode(paragraph) !== undefined;
   const numPr = numberedSectionMark && isBareSectionMark(paragraph) ? null : resolvedNumPr;
