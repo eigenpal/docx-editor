@@ -125,6 +125,7 @@ A document can name a font that no source supplies, or use a character that its 
 
 - A fallback face loads when the document's text needs it. A document whose fonts cover its text loads none.
 - A family that the browser has installed keeps its own face.
+- A fixed `FontConfiguration` loads nothing after the document opens. A fallback face that it holds is in use from the first layout.
 - `defaultFonts()` loads no fallback face. Use `packagedFonts()`, or a resolver that serves these families under their own names.
 - To turn off the symbol, mathematics, Arabic, and emoji faces, pass `packagedFonts({ fallbackFaces: false })`. The `allow` option does not limit them.
 - Small capitals in a font without a small-capitals feature follow the browser in the editor. PDF export draws them at 80% of the font size, so such a line can differ.

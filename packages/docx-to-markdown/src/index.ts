@@ -342,12 +342,7 @@ function withFontResolution(
     );
   }
   for (const family of fontResolution?.families ?? []) {
-    // A family in a generic stand-in face has every face, but with another font's widths.
-    const standsIn = family.faces.some(
-      (face) =>
-        face.sourceFamily !== undefined && isGenericStandIn(family.family, face.sourceFamily)
-    );
-    if (family.coverage === 'complete' && !standsIn) continue;
+    if (family.coverage === 'complete') continue;
     warnings.push(
       Object.freeze({
         code: 'incomplete-font' as const,
@@ -401,6 +396,8 @@ export async function openDocumentForExport(
       fonts: [...callerFonts, packagedExportFonts, ...missingFonts, namedFallbackFonts],
       // After the document's embedded fonts, so a stand-in never replaces one of them.
       lastResortFonts: [standInFonts],
+      // A family in a generic stand-in face has another font's widths: report it uncovered.
+      reportsStandIn: isGenericStandIn,
       fontShaping,
       onFontResolution: options.onFontResolution,
     });

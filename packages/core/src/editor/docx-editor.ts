@@ -1137,7 +1137,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const shapeFonts = async (composed: typeof fonts) =>
         fallbackFonts.shaping(
           await createLayoutShaping(composed, undefined, fontShaping),
-          canProbe
+          canProbe,
+          typeof configured !== 'function'
         );
       // Once, on whatever path this load exits by. The set is not final until the refusal
       // loop settles — a rejected explicit source hands budget back and un-drops an

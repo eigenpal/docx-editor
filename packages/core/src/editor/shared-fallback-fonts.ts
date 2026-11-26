@@ -312,8 +312,16 @@ export interface GlyphFallbackDemand {
    * `cssSmallCaps` tells that a browser draws small caps, through CSS: the measurer then
    * follows the browser for a face without the feature. With no browser to follow, the shaper
    * synthesizes them, as an export does.
+   *
+   * `complete` tells that the fonts cannot grow: the host gave a fixed set of faces. Nothing
+   * loads later, so the chain holds every fallback family from the first layout, and an
+   * uncovered character asks for nothing. The document lays out once.
    */
-  shaping(shaping: LayoutShapingOptions, cssSmallCaps: boolean): LayoutShapingOptions;
+  shaping(
+    shaping: LayoutShapingOptions,
+    cssSmallCaps: boolean,
+    complete?: boolean
+  ): LayoutShapingOptions;
 }
 
 /**
@@ -338,8 +346,9 @@ export function createGlyphFallbackDemand(request: (held: boolean) => void): Gly
     has,
     pending: () => pending,
     reset: () => (wanted.clear(), void (pending = false)),
-    shaping(shaping, cssSmallCaps) {
+    shaping(shaping, cssSmallCaps, complete = false) {
       pending = false;
+      if (complete) for (const family of GLYPH_FALLBACK_FAMILIES) wanted.add(fold(family));
       // The faces asked for when this shaping was built. A later step is due only when
       // these are held and a character is still uncovered, not while they still load.
       const held = new Set(wanted);

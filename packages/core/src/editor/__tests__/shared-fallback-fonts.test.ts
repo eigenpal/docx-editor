@@ -351,4 +351,17 @@ describe('the glyph fallback demand', () => {
     demand.shaping(fonts, true);
     expect(demand.pending()).toBe(false);
   });
+
+  test('a fixed set of fonts holds the whole chain from the first layout and asks for nothing', () => {
+    const asked: boolean[] = [];
+    const demand = createGlyphFallbackDemand((held) => asked.push(held));
+    const fonts = shapingOver(['Times New Roman']);
+    demand.shaping(fonts.shaping, true, true);
+    expect(fonts.requests).toContain('Times New Roman');
+    // An uncovered character over fonts that hold no fallback face: nothing can load later.
+    demand.shaping(shapingOver([]).shaping, true, true).shaper.shape(input('☐'));
+    expect(asked).toEqual([]);
+    expect(demand.pending()).toBe(false);
+    expect(demand.families()).toContain('Noto Emoji');
+  });
 });
