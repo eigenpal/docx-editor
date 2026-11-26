@@ -405,6 +405,7 @@ function shiftWrapInput(input: WrapExclusionInput, dx: number, dy: number): Wrap
     }),
     contentLeft: input.contentLeft + dx,
     contentRight: input.contentRight + dx,
+    ...(input.contourFoot === undefined ? {} : { contourFoot: input.contourFoot + dy }),
     ...(input.polygon
       ? {
           polygon: input.polygon.map((point) =>

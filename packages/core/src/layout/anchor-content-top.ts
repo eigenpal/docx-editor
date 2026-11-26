@@ -8,8 +8,8 @@
 // The bottom limit mirrors it. In modern modes the object moves up to end at the content box
 // bottom, unless that would lift it into or above its own line: the lifted object must start at
 // or below the line's bottom. Otherwise it keeps its offset, and the flow moves the line to the
-// next page instead (see `paragraph-own-anchors.ts`). Legacy modes move it
-// up to end at the sheet bottom, never above the sheet top, and never move the line.
+// next page instead (see `paragraph-own-anchors.ts`). Legacy modes move it up to end at the
+// sheet bottom, never above the sheet top, and never move the line.
 //
 // In a table cell the same object, laid out in the cell, stops at the cell box top in every
 // mode, and the row grows to hold it (see `cell-anchor-extent.ts`).

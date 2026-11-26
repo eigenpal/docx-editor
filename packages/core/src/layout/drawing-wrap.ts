@@ -568,6 +568,9 @@ export function availableTextIntervalsOnScanline(
 /** How far, in points, the foot of a line band may touch a contour and stay clear of it. */
 const BAND_FOOT_TOUCH_PT = 0.01;
 
+/** How far above and below a contour vertex a band reads it, past a spike's single tip point. */
+const VERTEX_SIDE_PT = 0.000_1;
+
 /** Contour vertices a line band probes one by one; a denser band is sampled. */
 const MAX_BAND_VERTEX_PROBES = 12;
 
@@ -598,17 +601,31 @@ function polygonBandProbes(top: number, foot: number, input: WrapExclusionInput)
       if (!least || at.x < least.x) least = at;
       if (!most || at.x > most.x) most = at;
     }
-    return least && most ? [...probes, least.y, most.y] : probes;
+    // A vertex can be the tip of a spike, which a scanline through it meets in a single point:
+    // read just above and just below it as well.
+    for (const at of least && most ? [least, most] : [])
+      probes.push(
+        at.y,
+        Math.max(top, at.y - VERTEX_SIDE_PT),
+        Math.min(foot, at.y + VERTEX_SIDE_PT)
+      );
+    return probes;
   }
-  if (inside.length <= MAX_BAND_VERTEX_PROBES) return [...probes, ...inside.map((at) => at.y)];
+  const near = (at: DrawingPoint) =>
+    probes.push(at.y, Math.max(top, at.y - VERTEX_SIDE_PT), Math.min(foot, at.y + VERTEX_SIDE_PT));
+  if (inside.length <= MAX_BAND_VERTEX_PROBES) {
+    for (const at of inside) near(at);
+    return probes;
+  }
   const quarter = MAX_BAND_VERTEX_PROBES / 4;
   inside.sort((a, b) => a.x - b.x);
-  for (let index = 0; index < quarter; index += 1)
-    probes.push(inside[index]!.y, inside[inside.length - 1 - index]!.y);
+  for (let index = 0; index < quarter; index += 1) {
+    near(inside[index]!);
+    near(inside[inside.length - 1 - index]!);
+  }
   inside.sort((a, b) => a.y - b.y);
   const step = inside.length / (MAX_BAND_VERTEX_PROBES - 2 * quarter);
-  for (let index = 0; index < inside.length; index += step)
-    probes.push(inside[Math.floor(index)]!.y);
+  for (let index = 0; index < inside.length; index += step) near(inside[Math.floor(index)]!);
   return probes;
 }
 

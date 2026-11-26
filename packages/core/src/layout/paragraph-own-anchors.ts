@@ -214,8 +214,9 @@ export function createOwnAnchorPageFit(
  * The paragraph's lines with each line's height raised to the room its own objects need below
  * its top, for `w:keepNext` pricing. A line fits with an object of height `h` when the object
  * ends above the margin where it is, or when `h` fits below the line's bottom (the object then
- * moves up, and starts at or below that bottom). `opening` gives the space and top border above the first line, which a paragraph-relative
- * offset counts from. Modern modes only (`modern`); other modes return the lines unchanged.
+ * moves up, and starts at or below that bottom). `opening` gives the space and top border above
+ * the first line, which a paragraph-relative offset counts from. Modern modes only (`modern`);
+ * other modes return the lines unchanged.
  */
 export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
   paragraph: OoxmlNode,

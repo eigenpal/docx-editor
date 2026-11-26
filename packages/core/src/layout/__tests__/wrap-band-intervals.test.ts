@@ -116,3 +116,37 @@ describe('tight and through wrap inside a concave outline', () => {
     ]);
   });
 });
+
+describe('a band that holds the tip of a spike', () => {
+  // A diamond whose right tip, at (300, 120), points into the band from y 110 to 124.
+  const diamond = [
+    { x: 200, y: 20 },
+    { x: 300, y: 120 },
+    { x: 200, y: 220 },
+    { x: 100, y: 120 },
+  ];
+
+  for (const mode of ['tight', 'through'] as const)
+    test(`${mode} wrap keeps text clear of the tip`, () => {
+      const input = Object.freeze({ ...tightWrap(diamond), mode });
+      const available = availableTextIntervalsOverBand(110, 124, input);
+      expect(available[available.length - 1]!.start).toBeCloseTo(300, 3);
+    });
+});
+
+test('a shifted wrap keeps its contour foot with it', () => {
+  // The contour meets the box bottom at 300, so a line that starts there still wraps.
+  const input = Object.freeze({
+    ...tightWrap([
+      { x: 100, y: 100 },
+      { x: 300, y: 100 },
+      { x: 300, y: 300 },
+      { x: 100, y: 300 },
+    ]),
+    contourFoot: 300,
+  });
+  expect(availableTextIntervalsOverBand(300.001, 314.001, input)).toEqual([
+    { start: 0, end: 100 },
+    { start: 300, end: 400 },
+  ]);
+});
