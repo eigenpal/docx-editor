@@ -1,3 +1,4 @@
+import { fontFamilyStack } from './glyph-fallback-aliases.ts';
 import { isRunKerningEnabled, kernsText } from './run-kerning.ts';
 // Browser/canvas-backed text measurement for the semantic layout lane.
 //
@@ -387,11 +388,8 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     const aliased = declared ? fontAlias?.(declared) : undefined;
     const alias = aliased && FONT_NAME.test(aliased) ? aliased : null;
     const stack = fallbackStackForFamily(declared, fallbackFamily, options.serifHangulFace);
-    const family = declared
-      ? alias
-        ? `"${alias}", "${declared}", ${stack}`
-        : `"${declared}", ${stack}`
-      : fallbackFamily;
+    // The same list as paint, with the glyph fallback faces behind the alias.
+    const family = declared ? fontFamilyStack(fontAlias, alias, declared, stack) : fallbackFamily;
     const weight = style.bold ? 'bold' : 'normal';
     const slant = style.italic ? 'italic' : 'normal';
     const variant = style.smallCaps ? 'small-caps' : 'normal';

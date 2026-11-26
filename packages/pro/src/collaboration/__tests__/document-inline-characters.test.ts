@@ -146,3 +146,34 @@ test('a deletion across a symbol converges and undo restores it', async () => {
   const rejoined = await harness.remount(bob);
   harness.expectConverged(alice, rejoined);
 });
+
+// Symbol characters display through their Unicode glyphs (the dash, a Greek letter). The
+// stored `w:char` stays the authored private-use code on every replica.
+const symbolFontBytes = zipDocument(
+  '<w:p><w:r><w:t>a</w:t><w:sym w:font="Symbol" w:char="F02D"/><w:t>b</w:t>' +
+    '<w:sym w:font="Symbol" w:char="F061"/><w:t>c</w:t></w:r></w:p>'
+);
+
+test('Symbol characters keep their authored codes through concurrent edits and undo', async () => {
+  const { alice, bob, pause, resume } = await harness.pair(symbolFontBytes);
+  const before = body(alice);
+  pause();
+  harness.apply(alice, [
+    { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 0), offset: 1, text: 'X' },
+  ]);
+  harness.apply(bob, [
+    { op: 'deleteText', paragraphId: harness.paragraphIdAt(bob, 0), start: 3, end: 4 },
+  ]);
+  resume();
+  harness.expectConverged(alice, bob);
+  expect(body(bob)).toMatch(/X<\/w:t><w:sym w:char="F02D" w:font="Symbol"\/>/);
+  expect(body(bob)).not.toContain('F061');
+  expect(bob.room.session.undo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expect(body(bob)).toContain('w:char="F061"');
+  expect(alice.room.session.undo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expect(body(bob)).toBe(before);
+  const rejoined = await harness.remount(bob);
+  harness.expectConverged(alice, rejoined);
+});

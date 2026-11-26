@@ -12,6 +12,7 @@ import {
   tryCreateCanvasMeasurer,
   type CanvasTextContext,
 } from '../index.ts';
+import { withGlyphFallbackAliases } from '../glyph-fallback-aliases.ts';
 
 /** Records the font shorthand it was asked to measure with. */
 function recordingContext(): { context: CanvasTextContext; fonts: string[] } {
@@ -71,5 +72,42 @@ describe('the canvas measurer resolves embedded-font aliases', () => {
     expect(
       resolveDefaultSurfaceMeasurer(1, { context, fontAlias: () => 'docx-embedded-1' }).producer
     ).toBe('canvas-measurer+embedded');
+  });
+});
+
+describe('the canvas measurer names the glyph fallback faces', () => {
+  const fallbacks = ['docx-symbols', 'docx-emoji'];
+
+  test('they follow the alias, before the declared family', () => {
+    const { context, fonts } = recordingContext();
+    const measurer = tryCreateCanvasMeasurer({
+      context,
+      fontAlias: withGlyphFallbackAliases(
+        (family: string) => (family === 'Embedded Serif' ? 'docx-embedded-1' : undefined),
+        fallbacks
+      ),
+    });
+    measurer!.measure('hello', style);
+    expect(fonts[0]).toContain('"docx-embedded-1", "docx-symbols", "docx-emoji", "Embedded Serif"');
+  });
+
+  test('without an alias they follow the declared family', () => {
+    const { context, fonts } = recordingContext();
+    const measurer = tryCreateCanvasMeasurer({
+      context,
+      fontAlias: withGlyphFallbackAliases(() => undefined, fallbacks),
+    });
+    measurer!.measure('hello', style);
+    expect(fonts[0]).toContain('"Embedded Serif", "docx-symbols", "docx-emoji", ');
+  });
+
+  test('a run in a glyph fallback face does not repeat its alias', () => {
+    const { context, fonts } = recordingContext();
+    const measurer = tryCreateCanvasMeasurer({
+      context,
+      fontAlias: withGlyphFallbackAliases(() => 'docx-symbols', fallbacks),
+    });
+    measurer!.measure('hello', style);
+    expect(fonts[0]).toContain('"docx-symbols", "docx-emoji", "Embedded Serif"');
   });
 });

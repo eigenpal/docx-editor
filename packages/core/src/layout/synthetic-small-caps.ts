@@ -1,5 +1,5 @@
-import { fixedPoint } from '../layout/shaped-run.ts';
-// Synthetic small caps for export faces without an OpenType smcp substitution.
+import { fixedPoint } from './shaped-run.ts';
+// Synthetic small caps for faces without an OpenType smcp substitution.
 // The same scaled glyph advances feed layout and the exporter. Source Unicode stays intact.
 import type {
   ShapeInput,
@@ -7,7 +7,7 @@ import type {
   TextShaper,
   ShapedGlyph,
   ShapedCluster,
-} from '../layout/shaped-run.ts';
+} from './shaped-run.ts';
 
 /**
  * The scale of a synthesized small capital: 0.8 of the run size, rounded to a whole
@@ -18,7 +18,7 @@ export function syntheticSmallCapsScale(fontSizeHalfPoints: number): number {
   return Math.max(1, Math.round(fontSizeHalfPoints * 0.8)) / fontSizeHalfPoints;
 }
 
-export function synthesizeExportSmallCaps(
+export function synthesizeSmallCaps(
   shaper: TextShaper,
   input: ShapeInput,
   featured: ShapedRun

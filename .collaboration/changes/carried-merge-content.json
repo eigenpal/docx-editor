@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Merged text over fixed-height rows with line breaks, inline pictures, or nested tables, or next to a merge that starts in a covered row, was clipped at the first row at a page break.",
+  "after": "That merged text continues in the part of the merge on the next page.",
+  "reason": "Only derived layout geometry changes. Shared operations and stored document content remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-carried-content.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vmerge-fixed-rows-page-break.test.ts"
+  ],
+  "changeset": "carried-merge-content",
+  "migration": null
+}

@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import type { ResolvedFont } from '../../layout/font-resource.ts';
+import type { ResolvedFont } from '../font-resource.ts';
 import {
   hasColorGlyphTables,
   orderFallbackFacesForCluster,
   prefersEmojiPresentation,
-} from '../export-color-font.ts';
+} from '../color-font-tables.ts';
 
 /** A minimal sfnt directory listing the given table tags, with no table data. */
 function sfnt(tags: readonly string[], collection = false): Uint8Array {

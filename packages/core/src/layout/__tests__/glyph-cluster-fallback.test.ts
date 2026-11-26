@@ -8,20 +8,20 @@ import {
   sha256FontBytes,
   FontResolutionError,
   HARFBUZZ_SHAPING_LIBRARY,
-} from '../../layout/index.ts';
+} from '../index.ts';
 import {
   createShapedRun,
   createShapingEnvironment,
   type ShapeInput,
   type TextShaper,
-} from '../../layout/shaped-run.ts';
-import type { LayoutShapingOptions } from '../../layout/shaped-measurer.ts';
-import { withExportGlyphFallbacks } from '../export-glyph-fallback.ts';
-import { shapeExportHyphenFallback } from '../export-hyphen-fallback.ts';
+} from '../shaped-run.ts';
+import type { LayoutShapingOptions } from '../shaped-measurer.ts';
+import { withGlyphFallbacks } from '../glyph-fallback-shaper.ts';
+import { shapeHyphenGlyphFallback } from '../hyphen-glyph-fallback.ts';
 
 await initializeHarfBuzz();
 const bytes = new Uint8Array(
-  readFileSync(new URL('../../layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url))
+  readFileSync(new URL('./fixtures/fonts/DejaVuSans.ttf', import.meta.url))
 );
 const request = (family: string) => ({ family, weight: 400, style: 'normal' as const });
 const fonts = createFontResourceSnapshot({
@@ -52,7 +52,7 @@ const coverage: TextShaper = {
     };
   },
 };
-const fallback = withExportGlyphFallbacks({ fonts, shaper: coverage } as LayoutShapingOptions, [
+const fallback = withGlyphFallbacks({ fonts, shaper: coverage } as LayoutShapingOptions, [
   request('B'),
   request('C'),
 ]).shaper;
@@ -113,7 +113,7 @@ test('uncovered text and excessive fragmentation remain explicit missing-glyph r
 });
 
 test('a complete fallback face does not replace supported primary letters or spaces', () => {
-  const shaping = withExportGlyphFallbacks(
+  const shaping = withGlyphFallbacks(
     {
       fonts,
       shaper: {
@@ -138,7 +138,7 @@ test('missing nonbreaking hyphens use the primary hyphen without losing source U
     ...shaped,
     glyphs: shaped.glyphs.map((glyph) => ({ ...glyph, id: glyph.cluster === 1 ? 0 : glyph.id })),
   };
-  const run = shapeExportHyphenFallback(actual, value, missing);
+  const run = shapeHyphenGlyphFallback(actual, value, missing);
   expect(run.text).toBe(value.text);
   expect(run.glyphs.map((glyph) => glyph.id)).toEqual(
     actual.shape(input('A-A')).glyphs.map((glyph) => glyph.id)
@@ -149,7 +149,7 @@ test('missing nonbreaking hyphens use the primary hyphen without losing source U
     [2, 3],
   ]);
   expect(run.fontSpans[0]!.font).toBe(primary);
-  expect(shapeExportHyphenFallback(actual, value, shaped)).toBe(shaped);
+  expect(shapeHyphenGlyphFallback(actual, value, shaped)).toBe(shaped);
 });
 
 // Cluster fallback rebuilds the run through `createShapedRun`. A synthesized small-caps glyph

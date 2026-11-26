@@ -8,19 +8,21 @@ import {
   sha256FontBytes,
   FontResolutionError,
   HARFBUZZ_SHAPING_LIBRARY,
-} from '../../layout/index.ts';
+} from '../index.ts';
 import {
   createShapingEnvironment,
+  markFacePreservingShaper,
+  preservesShapingFace,
   type ShapeInput,
   type ShapedRun,
   type TextShaper,
-} from '../../layout/shaped-run.ts';
-import type { LayoutShapingOptions } from '../../layout/shaped-measurer.ts';
-import { withExportGlyphFallbacks } from '../export-glyph-fallback.ts';
+} from '../shaped-run.ts';
+import type { LayoutShapingOptions } from '../shaped-measurer.ts';
+import { withGlyphFallbacks } from '../glyph-fallback-shaper.ts';
 
 await initializeHarfBuzz();
 const bytes = new Uint8Array(
-  readFileSync(new URL('../../layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url))
+  readFileSync(new URL('./fixtures/fonts/DejaVuSans.ttf', import.meta.url))
 );
 const request = (family: string) => ({ family, weight: 400, style: 'normal' as const });
 const fonts = createFontResourceSnapshot({
@@ -93,10 +95,9 @@ function coverageShaper(keyOf: (input: ShapeInput) => string): {
 
 test('a caching base shaper runs the fallback chain once per distinct input', () => {
   const base = coverageShaper((input) => `${input.environment.font.id}|${input.text}`);
-  const fallback = withExportGlyphFallbacks(
-    { fonts, shaper: base.shaper } as LayoutShapingOptions,
-    [request('B')]
-  ).shaper;
+  const fallback = withGlyphFallbacks({ fonts, shaper: base.shaper } as LayoutShapingOptions, [
+    request('B'),
+  ]).shaper;
   const first = fallback.shape(input('AB'));
   const callsAfterFirst = base.calls();
   expect(callsAfterFirst).toBeGreaterThan(1);
@@ -107,10 +108,9 @@ test('a caching base shaper runs the fallback chain once per distinct input', ()
 test('a base shaper that reuses one run for unequal inputs still gets each chain run', () => {
   // Keyed by face alone, so "AB" and "BA" come back as the same base run object.
   const base = coverageShaper((input) => input.environment.font.id);
-  const fallback = withExportGlyphFallbacks(
-    { fonts, shaper: base.shaper } as LayoutShapingOptions,
-    [request('B')]
-  ).shaper;
+  const fallback = withGlyphFallbacks({ fonts, shaper: base.shaper } as LayoutShapingOptions, [
+    request('B'),
+  ]).shaper;
   fallback.shape(input('AB'));
   const callsAfterFirst = base.calls();
   fallback.shape(input('BA'));
@@ -121,10 +121,9 @@ test('a base shaper that reuses one run for unequal inputs still gets each chain
 test('the memo answers only an input equal in every field', () => {
   // Keyed by face alone, so each call below gets the same base run object.
   const base = coverageShaper((input) => input.environment.font.id);
-  const fallback = withExportGlyphFallbacks(
-    { fonts, shaper: base.shaper } as LayoutShapingOptions,
-    [request('B')]
-  ).shaper;
+  const fallback = withGlyphFallbacks({ fonts, shaper: base.shaper } as LayoutShapingOptions, [
+    request('B'),
+  ]).shaper;
   const german = createShapingEnvironment({ ...environment, language: 'de' });
   const variants: ShapeInput[] = [
     input('AB'),
@@ -138,4 +137,40 @@ test('the memo answers only an input equal in every field', () => {
     // A memo hit makes exactly one base call; the chain makes more.
     expect(base.calls()).toBeGreaterThan(before + 1);
   }
+});
+
+test('a run that no admitted face covers reports its uncovered characters', () => {
+  const base = coverageShaper((input) => `${input.environment.font.id}|${input.text}`);
+  const uncovered: string[] = [];
+  const fallback = withGlyphFallbacks(
+    { fonts, shaper: base.shaper } as LayoutShapingOptions,
+    [request('B')],
+    { onUncovered: (characters) => uncovered.push(characters) }
+  ).shaper;
+  // Covered through the fallback face: nothing to report.
+  fallback.shape(input('AB'));
+  expect(uncovered).toEqual([]);
+  // No face covers "C". The whole run stays in its own face, and "B" is uncovered there too.
+  fallback.shape(input('ABC'));
+  expect(uncovered).toEqual(['BC']);
+});
+
+test('with no fallback face held, the shaper reports and keeps the face of each run', () => {
+  const base = markFacePreservingShaper(
+    coverageShaper((input) => `${input.environment.font.id}|${input.text}`).shaper
+  );
+  const uncovered: string[] = [];
+  const shaping = withGlyphFallbacks(
+    { fonts, shaper: base } as LayoutShapingOptions,
+    [request('Missing')],
+    { onUncovered: (characters) => uncovered.push(characters) }
+  );
+  expect(preservesShapingFace(shaping.shaper)).toBe(true);
+  expect(shaping.shaper.shape(input('AB')).glyphs.some((glyph) => glyph.id === 0)).toBe(true);
+  expect(uncovered).toEqual(['B']);
+});
+
+test('no fallback face and no listener leaves the shaping as it is', () => {
+  const shaping = { fonts, shaper: actual } as LayoutShapingOptions;
+  expect(withGlyphFallbacks(shaping, [])).toBe(shaping);
 });

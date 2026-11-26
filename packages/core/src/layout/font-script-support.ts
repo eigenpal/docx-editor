@@ -4,7 +4,7 @@
 // maps the basic Arabic letters for mathematical use and carries no Arabic joining lookups,
 // so a run shaped in it draws every letter in its isolated form. The whole-run fallback
 // therefore ranks a face that declares the run's script above one that only covers it.
-import type { ResolvedFont } from '../layout/font-resource.ts';
+import type { ResolvedFont } from './font-resource.ts';
 
 /** OpenType script tags for an ISO 15924 code, newer Indic tags first. */
 const OPENTYPE_TAGS: ReadonlyMap<string, readonly string[]> = new Map([

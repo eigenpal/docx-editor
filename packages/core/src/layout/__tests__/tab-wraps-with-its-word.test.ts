@@ -125,6 +125,35 @@ test('a custom left stop after the right indent keeps its tab up to the margin',
   expect(at(8500)).toEqual(['Text', '\t', 'L'.repeat(10)]);
 });
 
+test('a right stop after the right indent keeps its tab when the word fits before the margin', () => {
+  // A contents line: the indent edge is 350pt and the right stop at 380pt lies between it and
+  // the 400pt margin. Text after an aligned stop may run past the indent to the stop, so the page
+  // number fits after its tab, and the tab does not move down to the 72pt stop.
+  const stops =
+    '<w:tabs><w:tab w:val="left" w:pos="1440"/><w:tab w:val="right" w:leader="dot" w:pos="7600"/></w:tabs>';
+  const lines = layout(
+    run('1.') + tab + run('T'.repeat(38)) + tab + run('12'),
+    `${stops}<w:ind w:right="1000"/>`
+  );
+
+  expect(texts(lines)).toEqual([`1.\t${'T'.repeat(38)}\t12`]);
+  const page = lines[0]!.spans.find((span) => span.text === '12')!;
+  expect(page.box.x + page.box.width).toBeCloseTo(380, 5);
+});
+
+test('a right stop after the right indent moves its tab with a word that fits there on a fresh line', () => {
+  // 342pt of text leaves 8pt before the 350pt indent edge. The 42pt word ends at the 380pt stop
+  // on a fresh line, past the indent, so the tab moves down with it instead of staying alone.
+  const lines = layout(
+    run('A'.repeat(57)) + tab + run('1234567'),
+    '<w:tabs><w:tab w:val="right" w:pos="7600"/></w:tabs><w:ind w:right="1000"/>'
+  );
+
+  expect(texts(lines)).toEqual(['A'.repeat(57), '\t1234567']);
+  const word = lines[1]!.spans.find((span) => span.text === '1234567')!;
+  expect(word.box.x + word.box.width).toBeCloseTo(380, 5);
+});
+
 test('a stop at the right edge keeps its tab only in a legacy document', () => {
   // In mode 15 the moved tab ends its line alone. A legacy document keeps the tab on the line,
   // because text after a stop at the edge may run past it.

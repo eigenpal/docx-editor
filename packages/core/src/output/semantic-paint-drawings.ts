@@ -52,6 +52,7 @@ import { paintGroupTextboxStories } from './semantic-paint-group-text.ts';
 import { refusalLabel } from './semantic-paint-refusal-label.ts';
 import { paintTextArt } from './semantic-paint-text-art.ts';
 import { paintTextboxStory } from './semantic-paint-textbox.ts';
+import type { AutomaticTextCss } from './semantic-paint-automatic-text.ts';
 import { applyAccessibility, positionedBox } from './semantic-paint-drawing-box.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
@@ -95,8 +96,11 @@ export interface DrawingPaintContext {
   readonly paintStoryFragment?: (
     document: Document,
     fragment: ParagraphFragmentRecord | TableFragmentRecord,
-    /** `readOnly` paints without selection and editing bindings. */
-    options?: { readonly readOnly?: boolean }
+    /**
+     * `readOnly` paints without selection and editing bindings. `automaticText` is the
+     * colour the story's automatic text inherits from its box.
+     */
+    options?: { readonly readOnly?: boolean; readonly automaticText?: AutomaticTextCss }
   ) => HTMLElement;
   /** Paint drawings without their node binding, inside a story no command may reach. */
   readonly unbound?: boolean;

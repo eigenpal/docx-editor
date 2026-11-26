@@ -334,9 +334,10 @@ describe('drawing canvases', () => {
     expect(vector.components[1]!.arrowheadsEmu?.length).toBe(1);
     const texts = projection!.groupTextboxes!;
     expect(texts.map((member) => member.frameEmu.x)).toEqual([0, 2300000]);
-    // The shape paints as a vector component; the story carries text only. It keeps the
-    // outline, whose inner half insets the text, and the text rectangle of the geometry.
-    expect(texts[0]!.story.fillHex).toBeNull();
+    // The shape paints as a vector component; the story paints text only. It keeps the
+    // outline, whose inner half insets the text, the text rectangle of the geometry, and the
+    // fill that automatic text takes its colour from.
+    expect(texts[0]!.story.fillHex).toBe('DCE6F2');
     expect(texts[0]!.story.strokeHex).toBe('1F3864');
     expect(texts[0]!.story.strokeWidthEmu).toBe(12700);
     expect(texts[0]!.story.insetsEmu.left).toBeGreaterThan(91440);

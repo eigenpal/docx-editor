@@ -200,7 +200,8 @@ function projectMember(
       }),
       // The member's shape paints as a vector component; its story paints text only. The
       // outline stays on the story: its inner half insets the text, as in a top-level shape.
-      story: Object.freeze({ ...placed.story, fillHex: null }),
+      // The fill stays too: automatic text takes its colour from it.
+      story: Object.freeze({ ...placed.story }),
       rotationDegrees: placed.rotationDegrees,
     })
   );
