@@ -192,7 +192,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Apply RGB colors or document theme colors to text. Saving preserves theme references so colors can follow the document theme.',
+      'Apply RGB colors or document theme colors to text. Saving preserves theme references so colors can follow the document theme. Automatic text paints white on a dark shading or shape fill and black on a light one.',
   },
   {
     id: 'text.highlight',

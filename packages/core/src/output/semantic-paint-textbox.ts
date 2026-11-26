@@ -235,8 +235,8 @@ export function paintTextboxStory(
   // line that holds an inline box, which carries its paragraph mark's face.
   content.style.fontWeight = 'normal';
   content.style.fontStyle = 'normal';
-  // Automatic text (17.3.2.6 color) follows the box's own fill (20.1.8.54 solidFill), not
-  // shading around the box: white on a dark fill, black on a light fill or none, as Word shows it.
+  // Automatic text (17.3.2.6 color, CT_Color) follows the box's own fill (20.1.8.54 solidFill),
+  // not shading around the box: white on a dark fill, black on a light fill or none.
   content.style.color = automaticTextColor(story.fillHex) ? '#FFFFFF' : '#000000';
   const turn = story.contentRotation;
   if (turn) {
