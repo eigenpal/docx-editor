@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A dash bullet or symbol character that a DOCX file writes in the Symbol font now shows as a minus sign instead of a missing-glyph box.
+Bullets and symbol characters in the Symbol font, such as the dash, Greek letters, math signs, and arrows, now show their glyphs instead of missing-glyph boxes when the font is not available.

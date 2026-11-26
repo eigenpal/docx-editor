@@ -121,8 +121,8 @@ describe('symbol-font private-use mapping', () => {
   test('leaves everything it cannot map exactly', () => {
     // Not a symbol family: the codepoint means whatever that font says it means.
     expect(mapSymbolPuaText(SYMBOL_BULLET, 'Calibri')).toBe(SYMBOL_BULLET);
-    // In range but unmapped — a wrong glyph is not better than an unknown one.
-    expect(mapSymbolPuaText('', 'Symbol')).toBe('');
+    // An unmapped extension piece: a wrong glyph is not better than an unknown one.
+    expect(mapSymbolPuaText('\uf0e6', 'Symbol')).toBe('\uf0e6');
     // Ordinary text is returned by identity.
     const plain = '1.';
     expect(mapSymbolPuaText(plain, 'Symbol')).toBe(plain);
@@ -149,9 +149,9 @@ describe('symbol-font private-use mapping', () => {
   test('partial translations preserve the font needed by unknown private-use glyphs', () => {
     const part = document(listParagraph('Unknown symbol', '0'));
     const body = part.root!.children.find((child) => child.localName === 'body')!;
-    const index = numbering(NUMBERING.replace(SYMBOL_BULLET, `${SYMBOL_BULLET}`));
+    const index = numbering(NUMBERING.replace(SYMBOL_BULLET, `${SYMBOL_BULLET}\uf0e6`));
     const [item] = resolveStoryListItems(body.children, index, undefined).values();
-    expect(item!.markerText).toBe('•');
+    expect(item!.markerText).toBe('•\uf0e6');
     expect(item!.markerStyle.fontFamily).toBe('Symbol');
   });
 
