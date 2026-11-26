@@ -1,5 +1,12 @@
 # @docx-editor.dev/pro
 
+## 2.41.0
+
+### Patch Changes
+
+- 4eab3ae: In Safari, a click in a scrolled document after focus left the editor no longer scrolls back to the previous caret position. Fixes #2116
+- Updated dependencies: @docx-editor.dev/core@2.41.0, @docx-editor.dev/react@2.41.0, @docx-editor.dev/vue@2.41.0
+
 ## 2.40.0
 
 ### Minor Changes
