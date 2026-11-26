@@ -529,6 +529,7 @@ function resolveRow(
       gridColumn,
       ...(gridColumnId ? { gridColumnId } : {}),
       vMergeContinue: continuesAbove,
+      ...(vMerge === 'restart' ? { restartsVerticalMerge: true as const } : {}),
       hideEndMark: cellIgnoresEndMark(tableStyle, conditions, cellProperties),
       ...(cellNoWrap(tableStyle, conditions, cellProperties) ? { noWrap: true as const } : {}),
       vAlign: readCellVerticalAlign(cellProperties),

@@ -116,13 +116,13 @@ export function cellEndMarkHeight(
  * there the two are both 15.60. This takes the first reading, which is the one that leaves
  * every mixed row in the corpus where it already is.
  *
- * A row of continuations only takes this box from its FIRST cell, and a first cell with
- * `w:hideMark` takes a default line instead ({@link mergedRowFirstCellHeight}). A row that
- * also holds waiting `btLr` cells, or a cell with no end paragraph (a head that a merged-text
- * carry emptied, or an invalid empty `w:tc`), still takes the largest box of its cells (not
- * measured). t6 gives a continuation `w:hideMark` and its row is 23.52pt, which that rule
- * does not derive; later controls varied the mark size, its spacing, and the paragraph
- * styles, and each gave the default line.
+ * A row of continuations, alone or with waiting `btLr` cells, takes this box from its FIRST
+ * cell, and a first cell with `w:hideMark` takes a default line instead
+ * ({@link mergedRowFirstCellHeight}). A row with a cell that has no end paragraph (a head
+ * that a merged-text carry emptied, or an invalid empty `w:tc`) still takes the largest box
+ * of its cells (not measured). t6 gives a continuation `w:hideMark` and its row is 23.52pt,
+ * which that rule does not derive; later controls varied the mark size, its spacing, and the
+ * paragraph styles, and each gave the default line.
  */
 export function cellContinuationHeight(
   cell: SemanticTableCell,
@@ -143,10 +143,11 @@ export function cellContinuationHeight(
  * They are mutually exclusive by construction. A `btLr` cell reserves no mark floor: its
  * text runs along the row, so only a row that nothing else sizes takes its end mark.
  *
- * A row of continuations only (`onlyContinuations`) takes the box of its first cell, as a
- * row of merge heads does ({@link mergedRowFirstCellHeight}): measured with two and three
- * cells of different end-paragraph boxes, in a `w:bidiVisual` table, in a nested table, and
- * in a header, the row was as tall as the first cell's box in document order. Every cell then
+ * A row of continuations (`onlyContinuations`), alone or with waiting `btLr` cells, takes
+ * the box of its first cell, as a row of merge heads does ({@link mergedRowFirstCellHeight}):
+ * measured with two and three cells of different end-paragraph boxes, in a `w:bidiVisual`
+ * table, in a nested table, in a header, and with a `btLr` cell before or after a
+ * continuation, the row was as tall as the first cell's box in document order. Every cell then
  * pads that box with its own margins, so the largest top and bottom margins in the row count.
  * `firstCellPt` is null for the first cell, which measures the box, and that box afterwards.
  */
@@ -157,7 +158,7 @@ export function cellReservedMarkHeights(
   options: {
     readonly vertical: boolean;
     readonly markSizedRow: boolean;
-    /** Set when every cell of the row continues a vertical merge. */
+    /** Set when the row takes its first cell's box (`mergedRowSizing`). */
     readonly onlyContinuations?: { readonly firstCellPt: number | null };
   }
 ): { readonly markFloor: number; readonly continuation: number } {
@@ -199,8 +200,9 @@ function defaultParagraphRunStyle(deps: TableFlowDeps): ReturnType<typeof resolv
  * continuations mixed, and in a `w:bidiVisual` table: only the first cell in document order
  * set the row, never the larger of the two. A merge head gives its mark's line and its spacing
  * after, but not its spacing before: a one-paragraph head with 4pt before still gave the bare
- * line. A continuation gives its whole box, as {@link cellContinuationHeight} does. A head
- * whose first line is 12pt over an 8pt end paragraph gave the 8pt line.
+ * line. A continuation gives its whole box, as {@link cellContinuationHeight} does, and so
+ * does a `btLr` cell (`w:textDirection`, 17.4.72), a merge head or not: 6pt before counted.
+ * A head whose first line is 12pt over an 8pt end paragraph gave the 8pt line.
  *
  * A first cell with `w:hideMark` (17.4.21), a head or a continuation, gave one line of the
  * default paragraph style's run properties over the document defaults, whatever the other
@@ -221,6 +223,7 @@ export function mergedRowFirstCellHeight(
     const measured = deps.measurer.hasResolvedFont?.(style) === false ? DEFAULT_RUN_STYLE : style;
     return deps.measurer.lineMetrics(measured).height;
   }
-  const before = cell.vMergeContinue ? Math.max(0, box.spacing.before) : 0;
+  const whole = cell.vMergeContinue || cell.textDirection === 'btLr';
+  const before = whole ? Math.max(0, box.spacing.before) : 0;
   return before + box.linePt + Math.max(0, box.spacing.after);
 }

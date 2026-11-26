@@ -4192,6 +4192,7 @@ export interface SemanticTableCell {
     };
     readonly noWrap?: true;
     readonly preferredWidth: PreferredWidth;
+    readonly restartsVerticalMerge?: true;
     // (undocumented)
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
     // (undocumented)
