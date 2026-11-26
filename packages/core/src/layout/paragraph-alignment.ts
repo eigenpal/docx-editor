@@ -353,29 +353,43 @@ function alignLogicalSpans(
       slotEnd -= 1;
     const centered = (): readonly StyleSpanRecord[] =>
       spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + slack / 2 } }));
+    // The start edge is the right one in a right-to-left paragraph.
+    const atStartEdge = (): readonly StyleSpanRecord[] => {
+      if (!paragraphRtl) return spans;
+      const start = slack - rtlTrailingAdvance;
+      return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
+    };
     // Float advances hold their reserved positions, so a line with one never moves.
     const floatReserved = spans.some((span) => (span.wrapAdvanceBefore ?? 0) > 0.001);
-    // A left-to-right distributed line with a tab stretches only the text after its last
-    // tab, from that tab's stop to the line end, when the stop is a left one. Otherwise, or
-    // when that text has nothing to stretch, the whole line centers with its tab positions.
+    // A line with a tab stretches only the text after its last tab (`w:tab`, CT_Empty,
+    // ECMA-376 §17.3.3.32): the tab holds its stop, so the text before it keeps its natural
+    // spacing. Text that a center, right or decimal stop (ST_TabJc, §17.18.84) places does
+    // not stretch either: the stop decides where it sits. Float advances hold their reserved
+    // positions, and a right-to-left distributed line keeps its own rules.
     const tabIndex =
-      distributed !== undefined && !paragraphRtl && !floatReserved
+      !floatReserved && (distributed === undefined || !paragraphRtl)
         ? lastTabBefore(spans, slotEnd)
         : -1;
     if (tabIndex >= 0) {
       const from = tabIndex + 1;
       const stretched =
-        spans[tabIndex]!.tabAlignment === undefined && from < slotEnd
+        from < slotEnd && !tabPlacesText(spans[tabIndex]!, distributed !== undefined)
           ? stretchJustifiedLine(
               spans.slice(from),
               measurer,
               slack,
               slotEnd - from,
               distributed,
-              true
+              distributed !== undefined,
+              paragraphRtl,
+              eastAsianSpacing
             )
           : null;
-      return stretched ? [...spans.slice(0, from), ...stretched] : centered();
+      if (stretched) return [...spans.slice(0, from), ...stretched];
+      // Nothing stretches: a distributed line centers with its tab positions, and a justified
+      // line (`w:jc`, CT_Jc, §17.3.1.13) stays at its start edge.
+      if (distributed !== undefined) return centered();
+      return atStartEdge();
     }
     // A distributed line with nothing to stretch, such as a single word or character, centers.
     const centers =
@@ -395,14 +409,22 @@ function alignLogicalSpans(
     if (stretched) return stretched;
     // Nothing to stretch, such as one word before a manual line break: a distributed line
     // centers; any other line stays at its start edge, the right one in a right-to-left paragraph.
-    if (centers) return centered();
-    if (!paragraphRtl) return spans;
-    const start = slack - rtlTrailingAdvance;
-    return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
+    return centers ? centered() : atStartEdge();
   }
 
   const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
+/**
+ * Whether the stop a tab span reached places the text after it, so that this text cannot
+ * stretch. A left stop never does. A center, right or decimal stop does while the tab keeps
+ * some width; text too long for such a stop takes the tab's room and flows as plain text.
+ * On a `distributed` line every such stop does.
+ */
+function tabPlacesText(tab: StyleSpanRecord, distributed: boolean): boolean {
+  if (tab.tabAlignment === undefined) return false;
+  return distributed || tab.box.width > OVERFLOW_TOLERANCE_PT;
 }
 
 /** The index of the last tab span before `end`, or -1. */
@@ -454,12 +476,10 @@ function stretchJustifiedLine(
   // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
   // slots either: a boundary between two of them took a share of the slack from the words.
   const gapBefore: number[] = [];
-  // Spaces before a distributed line's first character keep their advance.
+  // Spaces before the first character of the stretched text keep their advance.
   let slotStart = 1;
-  if (distributed !== undefined) {
-    while (slotStart < slotEnd && withoutTrailingSpaces(spans[slotStart - 1]!.text) === '')
-      slotStart += 1;
-  }
+  while (slotStart < slotEnd && withoutTrailingSpaces(spans[slotStart - 1]!.text) === '')
+    slotStart += 1;
   for (let index = slotStart; index < slotEnd; index += 1) {
     // A space inside a fitted group is not a slot: the group keeps its stated width.
     if (insideFitTextGroup(spans[index - 1]!, spans[index]!)) continue;
