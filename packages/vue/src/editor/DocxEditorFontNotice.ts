@@ -21,7 +21,7 @@ const selectFontSubstitutions = (snapshot: EditorSnapshot): readonly string[] =>
 
 /**
  * What a custom font notice receives. `fonts` and `message` hold family names from the
- * document, so render them as text, never with `v-html`.
+ * document, so render them as text, never as HTML.
  *
  * @public
  */
