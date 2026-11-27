@@ -322,6 +322,11 @@ export class TextWriter {
     if (!face.colorLayers) out.push(`/${face.name} ${n(size)} Tf`);
     if (style.textOutline)
       out.unshift(`q ${color(style.textOutline.color)} RG ${n(style.textOutline.widthPt)} w 2 Tr`);
+    // The run's render mode (ISO 32000-1 §9.3.6). A `w14:textOutline` fills each glyph in the
+    // run's color (`w:color`, CT_Color, ECMA-376 Part 1, 17.3.2.6) and strokes it; `w14` is an
+    // extension namespace that a consumer reads or ignores (Part 3, 7.2). Other text is filled
+    // only. An emoji carrier returns to this mode, so the glyphs after the emoji keep the outline.
+    const runMode = style.textOutline ? '2 Tr' : '0 Tr';
     const origins = penOrigins(shaped.run);
     const batch = createGlyphBatch(out, horizontal);
     // Glyphs of a COLR face are not written as text: the face cannot be subset, and the
@@ -421,7 +426,7 @@ export class TextWriter {
             out.push(`/${host.name} ${n(activeSize)} Tf 3 Tr ${n(stretch)} Tz`);
             batch.add(host, activeSize, gx, gy, carrier);
             batch.flush();
-            out.push('0 Tr 100 Tz');
+            out.push(`${runMode} 100 Tz`);
             strokeWidth = 0;
           }
           continue;
