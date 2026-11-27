@@ -55,6 +55,8 @@ export function shapeClusterGlyphFallback(
   const colorFaces = hasColorGlyphTables(input.environment.font)
     ? []
     : fonts.filter(hasColorGlyphTables);
+  // Where the emoji sequence that the last group ends with starts; -1 when it ends with none.
+  let sequenceStart = -1;
   for (const cluster of [...primary.clusters].sort((a, b) => a.textStart - b.textStart)) {
     let font = input.environment.font;
     const text = input.text.slice(cluster.textStart, cluster.textEnd);
@@ -70,13 +72,12 @@ export function shapeClusterGlyphFallback(
     // the whole sequence, so the face forms the sequence's own glyph.
     if (
       previousGroup &&
+      sequenceStart >= 0 &&
       previousGroup.end === cluster.textStart &&
-      previousGroup.font !== input.environment.font &&
-      cluster.textEnd - previousGroup.start <= MAX_EMOJI_SEQUENCE &&
-      hasColorGlyphTables(previousGroup.font) &&
-      continuesEmojiSequence(text, input.text.slice(previousGroup.start, cluster.textStart))
+      cluster.textEnd - sequenceStart <= MAX_EMOJI_SEQUENCE &&
+      continuesEmojiSequence(text, input.text.slice(sequenceStart, cluster.textStart))
     ) {
-      const sequence = input.text.slice(previousGroup.start, cluster.textEnd);
+      const sequence = input.text.slice(sequenceStart, cluster.textEnd);
       let drawn = false;
       try {
         drawn = !shape(previousGroup.font, sequence).glyphs.some((glyph) => glyph.id === 0);
@@ -131,6 +132,8 @@ export function shapeClusterGlyphFallback(
       if (found) font = found;
       else if (missing) return null;
     }
+    sequenceStart =
+      font !== input.environment.font && hasColorGlyphTables(font) ? cluster.textStart : -1;
     const previous = groups.at(-1);
     if (previous && previous.font === font && previous.end === cluster.textStart)
       previous.end = cluster.textEnd;

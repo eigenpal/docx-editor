@@ -33,7 +33,7 @@ import {
   GLYPH_FALLBACK_FACES,
   GLYPH_FALLBACK_FAMILIES,
   glyphFallbackFamiliesFor,
-  COLOR_GLYPH_FALLBACK_FAMILIES,
+  EMOJI_GLYPH_FALLBACK_FAMILIES,
   hasMetricCompatibleSubstitute,
 } from '../layout/font-fallback-rules.ts';
 import { withGlyphFallbackAliases } from '../layout/glyph-fallback-aliases.ts';
@@ -378,9 +378,10 @@ export function createGlyphFallbackDemand(request: (held: boolean) => void): Gly
             want(glyphFallbackFamiliesFor(characters, (family) => held.has(fold(family))));
           },
           // A character that its run face draws but that selects emoji presentation asks for
-          // the color face alone, once: the other fallback faces would not draw it in color.
+          // the emoji step of the chain, once. The step keeps the faces before the color face,
+          // so a missing symbol still takes the same face as in an export.
           onEmojiPresentation() {
-            want(COLOR_GLYPH_FALLBACK_FAMILIES);
+            want(EMOJI_GLYPH_FALLBACK_FAMILIES);
           },
         }
       );

@@ -76,13 +76,13 @@ export function clusterAsksForEmoji(text: string, after = ''): boolean {
 
 /**
  * Whether a cluster that the run's own face draws asks for a color face instead: the emoji
- * variation selector U+FE0F after a character above U+00FF, or a keycap sequence. A
+ * variation selector U+FE0F after a character above U+00FF, or a keycap sequence with it. A
  * character whose default presentation is emoji, and a Latin-1 sign such as `©` with
  * U+FE0F, keep the run face's glyph.
  */
 export function clusterSelectsColorFace(text: string, after = ''): boolean {
   if (/^[\uFE0E\uFE0F]+$/u.test(text)) return false;
-  if (/^[0-9#*]$/u.test(text)) return /^\uFE0F?\u20E3/u.test(after);
+  if (/^[0-9#*]$/u.test(text)) return /^\uFE0F\u20E3/u.test(after);
   const sequence = /^[\uFE0E\uFE0F]/u.test(after) ? text + after[0] : text;
   return (
     sequence.includes('\uFE0F') && !sequence.includes('\uFE0E') && (text.codePointAt(0) ?? 0) > 0xff
