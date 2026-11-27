@@ -326,8 +326,11 @@ export class TextWriter {
       out.push(`/${face.name} ${n(size)} Tf`);
       selected = { face, size };
     }
+    // No `q`/`Q` pair around the outline's stroke state, as for synthetic bold below. Poppler
+    // places a span's `ActualText` at the text position in effect at `EMC`, and `Q` restores
+    // the position from before the span, so its extraction reversed the words of the line.
     if (style.textOutline)
-      out.unshift(`q ${color(style.textOutline.color)} RG ${n(style.textOutline.widthPt)} w 2 Tr`);
+      out.unshift(`${color(style.textOutline.color)} RG ${n(style.textOutline.widthPt)} w 2 Tr`);
     // The run's render mode (ISO 32000-1 §9.3.6). A `w14:textOutline` fills each glyph in the
     // run's color (`w:color`, CT_Color, ECMA-376 Part 1, 17.3.2.6) and strokes it; `w14` is an
     // extension namespace that a consumer reads or ignores (Part 3, 7.2). Other text is filled
@@ -528,9 +531,8 @@ export class TextWriter {
     // The render mode outlives `ET`; every other stroke in this writer sets its own colour
     // and width. No `q`/`Q` pair: pdf.js ends a text item at `Q`, which split a bold
     // right-to-left line into visual-order pieces.
-    if (strokeWidth > 0) out.push('0 Tr');
+    if (strokeWidth > 0 || style.textOutline) out.push('0 Tr');
     out.push('ET');
-    if (style.textOutline) out.push('Q');
     const placements: OutlinePlacement[] = [];
     for (const glyph of outlineGlyphs) {
       // Font units to page: the glyph's size, the run's horizontal scale, and the same
