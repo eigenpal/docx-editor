@@ -1,29 +1,95 @@
-import { defineComponent, h, ref, type CSSProperties, type PropType } from 'vue';
+import {
+  defineComponent,
+  h,
+  ref,
+  type CSSProperties,
+  type PropType,
+  type SlotsType,
+  type VNode,
+} from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import type { TFunction } from '@docx-editor.dev/i18n';
+import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
+import { isDevelopment } from '../lib/is-development';
 import { useEditorState } from './useEditorState';
 
 const NONE: readonly string[] = [];
 const selectFontSubstitutions = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.fontSubstitutions ?? NONE;
 
+/** What a custom font notice receives. @public */
+export interface DocxEditorFontNoticeContext {
+  /** The families that render in a substitute face. Never empty. */
+  readonly fonts: readonly string[];
+  /** The packaged message, already translated, with the families in it. */
+  readonly message: string;
+  /** Hides the notice for this set of families. A different set shows it again. */
+  readonly dismiss: () => void;
+}
+
 /** Props for `DocxEditor.FontNotice`. @public */
 export interface DocxEditorFontNoticeProps {
   className?: string;
   style?: CSSProperties;
   t?: TFunction;
+  /**
+   * Your own notice, in place of the packaged bar. The default slot does the same and
+   * wins over this prop. It renders only while there are substituted families that the
+   * reader has not dismissed.
+   */
+  children?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
 }
 
-/** @public */
+const warnedSlot = new Set<'both' | 'disabled'>();
+
+/**
+ * Warn once, in development, when the `fontNotice` slot cannot do what it says: it
+ * replaces `fontNotice.children`, and `:font-notice="false"` renders no notice for it.
+ */
+export function warnFontNoticeSlot(
+  fontNotice: boolean | DocxEditorFontNoticeProps,
+  hasSlot: boolean
+): void {
+  if (!hasSlot || !isDevelopment()) return;
+  const kind =
+    fontNotice === false
+      ? 'disabled'
+      : typeof fontNotice === 'object' && fontNotice.children
+        ? 'both'
+        : null;
+  if (kind === null || warnedSlot.has(kind)) return;
+  warnedSlot.add(kind);
+  console.warn(
+    kind === 'both'
+      ? '[docx-editor] The #fontNotice slot replaces fontNotice.children. Pass only one.'
+      : '[docx-editor] The #fontNotice slot is ignored with :font-notice="false", which ' +
+          'renders no font notice.'
+  );
+}
+
+/**
+ * Word-style font compatibility notice. Fill the default slot to render your own notice
+ * from the same state.
+ *
+ * @public
+ */
 export const DocxEditorFontNotice = defineComponent({
   name: 'DocxEditorFontNotice',
   props: {
     className: { type: String, default: undefined },
     style: { type: Object as PropType<CSSProperties>, default: undefined },
     t: { type: Function as PropType<TFunction>, default: undefined },
+    children: {
+      type: Function as PropType<DocxEditorFontNoticeProps['children']>,
+      default: undefined,
+    },
   },
-  setup(props) {
+  slots: Object as SlotsType<{
+    /** Your own notice, in place of the packaged bar. */
+    default?: (context: DocxEditorFontNoticeContext) => VNode[];
+  }>,
+  setup(props, { slots }) {
     const substitutions = useEditorState(selectFontSubstitutions);
     const { t: ambient } = useTranslation();
     const dismissedKey = ref<string | null>(null);
@@ -35,6 +101,14 @@ export const DocxEditorFontNotice = defineComponent({
       if (dismissedKey.value === key) return null;
       const t = props.t ?? ambient;
       const fonts = subs.join(', ');
+      // Interpolated locally as well: hosts commonly bridge a bare `(key) => string` into
+      // `t`, and the notice must not surface a literal placeholder then.
+      const message = t('editor.fontSubstitutionNotice', { fonts }).replace('{fonts}', fonts);
+      const dismiss = () => {
+        dismissedKey.value = key;
+      };
+      const custom = slots.default ?? props.children;
+      if (custom) return custom({ fonts: subs, message, dismiss });
       return h(
         'div',
         {
@@ -43,20 +117,10 @@ export const DocxEditorFontNotice = defineComponent({
           ...(props.style ? { style: props.style } : {}),
         },
         [
-          h(
-            'span',
-            { class: 'docx-font-notice__text' },
-            t('editor.fontSubstitutionNotice', { fonts }).replace('{fonts}', fonts)
-          ),
+          h('span', { class: 'docx-font-notice__text' }, message),
           h(
             'button',
-            {
-              type: 'button',
-              class: 'docx-font-notice__dismiss',
-              onClick: () => {
-                dismissedKey.value = key;
-              },
-            },
+            { type: 'button', class: 'docx-font-notice__dismiss', onClick: dismiss },
             t('common.dismiss')
           ),
         ]

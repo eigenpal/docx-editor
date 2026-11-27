@@ -170,6 +170,7 @@ export {
 export { useBookmarks, type UseBookmarksReturn } from './editor/useBookmarks';
 export {
   DocxEditorFontNotice,
+  type DocxEditorFontNoticeContext,
   type DocxEditorFontNoticeProps,
 } from './editor/DocxEditorFontNotice';
 export {

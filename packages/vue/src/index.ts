@@ -321,6 +321,7 @@ export {
 
 export {
   DocxEditorFontNotice,
+  type DocxEditorFontNoticeContext,
   type DocxEditorFontNoticeProps,
 } from './editor/DocxEditorFontNotice';
 

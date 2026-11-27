@@ -229,7 +229,18 @@
     },
     "editor/DocxEditorFontNotice": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["class", "name", "props", "role"],
+      "propsAddedInVue": [
+        "children",
+        "children",
+        "default",
+        "default",
+        "fontNotice",
+        "hasSlot",
+        "name",
+        "props",
+        "slots",
+        "type"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },

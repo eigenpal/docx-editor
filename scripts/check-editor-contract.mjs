@@ -40,6 +40,8 @@ const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   'loadingIndicator',
   // Open-failure dialog buttons; Vue uses the `openFailureActions` named slot.
   'renderOpenFailureActions',
+  // A custom font notice; Vue uses the `fontNotice` named slot.
+  'renderFontNotice',
 ]);
 
 function extractInterfaceBody(source, name) {
