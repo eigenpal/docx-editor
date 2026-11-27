@@ -602,6 +602,8 @@ export {
   type LayoutShapingOptions,
   type ShapedMeasurerOptions,
 } from './shaped-measurer.ts';
+export { geometryOnPage } from './page-geometry.ts';
+export { pageMarginSettingsFrom } from './page-margin-settings.ts';
 export {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSections,
@@ -615,6 +617,7 @@ export {
   readSectionProperties,
   type DocumentSection,
   type DocumentSectionsEnumeration,
+  type PageMarginSettings,
   type SectionBreakType,
   type SectionColumnDefinition,
   type SectionColumns,

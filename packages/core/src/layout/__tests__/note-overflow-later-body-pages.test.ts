@@ -46,11 +46,22 @@ function furnitureDoc(options: {
   readonly coverSectionTwo?: boolean;
   /** A4 with margins and header distances that are not whole points. */
   readonly fractionalGeometry?: boolean;
+  /** `w:pgMar/@w:gutter`: on facing pages the gutter of an even page is on the right. */
+  readonly gutterTwips?: number;
+  /** The headers print the page number after their text. */
+  readonly numberedHeaders?: boolean;
 }): Uint8Array {
+  const pageField =
+    options.numberedHeaders === true
+      ? '<w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple>'
+      : '';
   const story = (tag: 'hdr' | 'ftr', text: string, count = 1) =>
     strToU8(
       `<w:${tag} xmlns:w="${W}">` +
-        Array.from({ length: count }, () => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`).join('') +
+        Array.from(
+          { length: count },
+          () => `<w:p><w:r><w:t>${text}</w:t></w:r>${tag === 'hdr' ? pageField : ''}</w:p>`
+        ).join('') +
         `</w:${tag}>`
     );
   const refs =
@@ -62,7 +73,8 @@ function furnitureDoc(options: {
     ? '<w:pgSz w:w="11906" w:h="7203"/>' +
       '<w:pgMar w:top="1087" w:right="719" w:bottom="1083" w:left="721" w:header="367" w:footer="363"/>'
     : '<w:pgSz w:w="12240" w:h="7200"/>' +
-      '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720" w:header="360" w:footer="360"/>';
+      '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720" w:header="360" w:footer="360"' +
+      ` w:gutter="${options.gutterTwips ?? 0}"/>`;
   const sectOne = `<w:sectPr>${refs}${geometry}<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr></w:sectPr>`;
   const sectTwo =
     `<w:sectPr>${refs}<w:type w:val="nextPage"/>${geometry}` +
@@ -138,7 +150,7 @@ function layoutOf(bytes: Uint8Array): SemanticLayout {
   const bySection = resolveHeaderFooterPartsBySection(loaded.package);
   const sectionFurniture = sections.map((section, index) => {
     const parts = bySection[index]!;
-    const geometry = geometryOfSection(section.properties);
+    const geometry = geometryOfSection(section.properties, { evenAndOddHeaders: true });
     const width = geometry.width - geometry.margin.left - geometry.margin.right;
     const story = (map: ReadonlyMap<string, never>) => {
       const laid = new Map();
@@ -230,6 +242,32 @@ describe('body pages after a sectEnd note sheet', () => {
         expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(bottom + 0.001);
       }
     }
+  });
+
+  test('a page that keeps its variant still takes the gutter side of its new number', () => {
+    // Facing pages: the gutter (36pt) is left on an odd page and right on an even page.
+    // The taller even footer makes the moved pages keep the header and footer they had.
+    const layout = oddOverflowLayout({
+      evenFooterLines: 3,
+      gutterTwips: 720,
+      numberedHeaders: true,
+    });
+    const headerText = (page: SemanticLayout['pages'][number]): string =>
+      (page.header?.fragments ?? [])
+        .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+        .flatMap((line) => line.spans.map((span) => span.text))
+        .join('');
+    let keptVariant = 0;
+    layout.pages.forEach((page, index) => {
+      expect(page.contentBox.x - page.box.x).toBe(index % 2 === 0 ? 72 : 36);
+      expect(page.header?.box.x).toBe(page.contentBox.x);
+      expect(page.footer?.box.x).toBe(page.contentBox.x);
+      expect(headerText(page).endsWith(String(index + 1))).toBe(true);
+      if (page.noteStream === undefined && page.header?.variant !== variantFor(index + 1))
+        keptVariant += 1;
+    });
+    // The case is real only when some page kept the variant of its earlier number.
+    expect(keptVariant).toBeGreaterThan(0);
   });
 
   test('a blank cover page keeps showing no header or footer', () => {

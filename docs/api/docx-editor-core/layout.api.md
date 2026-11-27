@@ -1635,7 +1635,10 @@ export function fragmentsOfParagraph(layout: SemanticLayout, paragraphId: string
 export function genericStandInFamily(family: string): string;
 
 // @public
-export function geometryOfSection(section: SectionProperties): PageGeometry;
+export function geometryOfSection(section: SectionProperties, settings?: PageMarginSettings): PageGeometry;
+
+// @public
+export function geometryOnPage(geometry: PageGeometry, pageNumber: number): PageGeometry;
 
 // @public
 export const GLYPH_FALLBACK_FACES: readonly FontRequest[];
@@ -2122,7 +2125,7 @@ export interface LayoutFontSubstitution {
 }
 
 // @public
-export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, hfPageContext?: HeaderFooterPageContext, documentProperties?: DocumentProperties, inputs?: HeaderFooterStoryInputs): HeaderFooterStoryLayout;
+export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, sectionPageContext?: HeaderFooterPageContext, documentProperties?: DocumentProperties, inputs?: HeaderFooterStoryInputs): HeaderFooterStoryLayout;
 
 // @public
 export function layoutNoteById(part: OoxmlPart | null | undefined, noteId: number, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
@@ -2857,6 +2860,10 @@ export interface PageFurniture {
 
 // @public
 export interface PageGeometry {
+    readonly evenPageMargin?: {
+        readonly left: number;
+        readonly right: number;
+    };
     readonly footerDistance?: number;
     readonly headerDistance?: number;
     // (undocumented)
@@ -2871,6 +2878,16 @@ export interface PageGeometry {
     // (undocumented)
     readonly width: number;
 }
+
+// @public
+export interface PageMarginSettings {
+    readonly evenAndOddHeaders?: boolean;
+    readonly gutterAtTop?: boolean;
+    readonly mirrorMargins?: boolean;
+}
+
+// @public
+export function pageMarginSettingsFrom(settingsRoot: OoxmlElement | null | undefined): Pick<PageMarginSettings, 'mirrorMargins' | 'gutterAtTop'> | undefined;
 
 // @public
 export interface PageRecord {
@@ -3986,6 +4003,7 @@ export interface SectionProperties {
         readonly heightTwips: number;
         readonly widthTwips: number;
     };
+    readonly rtlGutter?: true;
     // (undocumented)
     readonly titlePage: boolean;
     readonly verticalAlign?: SectionVerticalAlign;
@@ -4159,6 +4177,7 @@ export interface SemanticLayoutOptions {
     readonly pageBottomReservesFollowFlow?: boolean;
     // @internal
     readonly pageBottomReservesFromPreviousPass?: boolean;
+    readonly pageMarginSettings?: Pick<PageMarginSettings, 'mirrorMargins' | 'gutterAtTop'>;
     readonly paragraphLineUnitPt?: number;
     readonly producer?: string;
     readonly projectFieldLink?: FieldLinkProjector;

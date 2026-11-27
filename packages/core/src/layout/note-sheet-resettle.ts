@@ -4,7 +4,8 @@
 // An insertion in front of either can change the page number that picks its variant.
 
 import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
-import { layoutUsesEvenAndOddHeaders } from './page-parity-sheet.ts';
+import { layoutHasPageSides, layoutUsesEvenAndOddHeaders } from './page-parity-sheet.ts';
+import { pageEdgeTableIds, pageOnShellSide } from './page-side-resettle.ts';
 import type { LayoutBox, NoteAreaRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 
 /**
@@ -38,14 +39,17 @@ export function resettleMintedSheets(
 ): PageRecord[] {
   let sectionAnchorIndex: number | null = null;
   let changed = false;
-  const next = pages.map((page, position) => {
-    if (page.noteStream === undefined) {
-      sectionAnchorIndex = page.index;
-      return page;
+  const next = pages.map((minted, position) => {
+    if (minted.noteStream === undefined) {
+      sectionAnchorIndex = minted.index;
+      return minted;
     }
-    if (sectionAnchorIndex === null) return page;
-    const shell = overflowPageShellAt(layout, sectionAnchorIndex, position, page.box);
-    if (!shell) return page;
+    if (sectionAnchorIndex === null) return minted;
+    const shell = overflowPageShellAt(layout, sectionAnchorIndex, position, minted.box);
+    if (!shell) return minted;
+    // The side depends only on the number, so it moves even where the box below cannot.
+    const page = pageOnShellSide(minted, shell);
+    if (page !== minted) changed = true;
     const top = page.box.y + shell.insets.top;
     const settled =
       top === page.contentBox.y &&
@@ -179,22 +183,29 @@ export function resettleBodyFurniture(
   numbersBefore: ReadonlyMap<number, number>,
   layout: SemanticLayout
 ): PageRecord[] {
-  // Without alternating variants no page number picks a variant.
-  if (!layoutUsesEvenAndOddHeaders(layout)) return [...pages];
+  // Without alternating variants or sides no page number picks a variant or a side.
+  const sides = layoutHasPageSides(layout);
+  if (!layoutUsesEvenAndOddHeaders(layout) && !sides) return [...pages];
   let changed = false;
-  const next = pages.map((page) => {
-    if (page.noteStream !== undefined || page.parityBlank) return page;
-    const before = numbersBefore.get(page.index);
-    const after = page.pageFieldSource?.pageNumber;
-    if (before === undefined || after === undefined) return page;
+  let pageEdgeTables: ReadonlySet<string> | undefined;
+  const next = pages.map((numbered) => {
+    if (numbered.noteStream !== undefined || numbered.parityBlank) return numbered;
+    const before = numbersBefore.get(numbered.index);
+    const after = numbered.pageFieldSource?.pageNumber;
+    if (before === undefined || after === undefined) return numbered;
     const shift = after - before;
-    // An even move keeps every page on its parity, so no variant changes.
-    if (shift % 2 === 0) return page;
+    // An even move keeps every page on its parity, so no variant and no side changes.
+    if (shift % 2 === 0) return numbered;
     // Anchored furniture drawings can sit in the body's way; such a page keeps its shell.
     // Checked before the resolver, which lays the new variant out.
-    if (hasAnchoredDrawings(page.header) || hasAnchoredDrawings(page.footer)) return page;
-    const shell = overflowPageShellAt(layout, page.index, page.index, page.box, shift);
-    if (!shell) return page;
+    const anchored = hasAnchoredDrawings(numbered.header) || hasAnchoredDrawings(numbered.footer);
+    if (anchored && !sides) return numbered;
+    const shell = overflowPageShellAt(layout, numbered.index, numbered.index, numbered.box, shift);
+    if (!shell) return numbered;
+    // The side moves the whole page sideways, so it holds whatever the furniture does.
+    const page = pageOnShellSide(numbered, shell, (pageEdgeTables ??= pageEdgeTableIds(pages)));
+    if (page !== numbered) changed = true;
+    if (anchored) return page;
     if (
       shell.header?.variant === page.header?.variant &&
       shell.footer?.variant === page.footer?.variant

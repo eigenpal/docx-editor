@@ -187,6 +187,12 @@ export function createPageContentInsets(
  */
 export interface OverflowPageShell {
   readonly insets: PageContentInsets;
+  /**
+   * The content box's left edge from the sheet's left edge, for the number the sheet shows.
+   * A section with mirrored side margins or a gutter on facing pages (`w:mirrorMargins`
+   * §17.15.1.57, `w:pgMar/@w:gutter` §17.6.11) has two values; the template has only its own.
+   */
+  readonly contentLeft?: number;
   readonly header?: HeaderFooterStoryRecord;
   readonly footer?: HeaderFooterStoryRecord;
   /**

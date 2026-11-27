@@ -22,6 +22,7 @@ import type { ExclusionZone } from './drawing-exclusion.ts';
 import { furnitureDrawingExclusionsForPage } from './furniture-drawing-exclusion.ts';
 import { clipFurnitureFragments, furniturePaintLimit } from './furniture-overflow-clip.ts';
 import type { SectionPageBorders } from './page-borders.ts';
+import { geometryOnPage } from './page-geometry.ts';
 import type {
   HeaderFooterStoryRecord,
   LayoutBox,
@@ -40,6 +41,12 @@ export interface SectionPageFurnitureInputs {
   readonly pageIndexStart: number;
   /** Displayed number of local page zero. */
   readonly pageNumberStart?: number;
+  /**
+   * The displayed number of the sheet that a continued section joins. Local page 0 is that
+   * sheet, so it keeps the side of the host number, also when the section restarts numbering
+   * (`w:pgNumType/@w:start`, CT_PageNumber, ECMA-376 Part 1, 17.6.12).
+   */
+  readonly hostPageNumber?: number;
   /** Content width the stories were laid out at. */
   readonly contentWidth: number;
   /** This section's per-page content insets, by section-local index. */
@@ -99,6 +106,8 @@ interface StoryPlacement {
   readonly insets: PageContentInsets;
   /** The height the story may paint, when the page's furniture is too tall to show whole. */
   readonly paintLimit?: number;
+  /** Set on a page whose side margins are not the section's odd-page margins. */
+  readonly onEvenSide?: true;
 }
 
 function placeStory(at: StoryPlacement, laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord {
@@ -141,6 +150,9 @@ function layoutStoryForPage(at: StoryPlacement, fields: FieldPageContext): Heade
       contentInsetTop: at.insets.top,
       contentInsetBottom: at.insets.bottom,
       storyTop,
+      ...(at.onEvenSide
+        ? { marginLeft: geometry.margin.left, marginRight: geometry.margin.right }
+        : {}),
     };
     const next = story.withPageContext(context);
     if (Math.abs(next.flowHeight - laid.flowHeight) <= 0.001) return next;
@@ -176,18 +188,29 @@ export function createSectionPageFurniture(
     height: geometry.height,
   });
 
-  const variantFor = (index: number, pageNumberShift = 0): HeaderFooterVariantName =>
-    headerFooterVariantFor(
-      furniture,
-      (inputs.pageNumberStart ?? pageIndexStart + 1) + pageNumberShift,
-      index
+  const firstPageNumber = inputs.pageNumberStart ?? pageIndexStart + 1;
+  /**
+   * The geometry of section-local page `index`. Its side margins follow the displayed number
+   * (`PageGeometry.evenPageMargin`), so the content box, the header, the footer and the page
+   * borders of one page all take the same side.
+   */
+  const geometryAt = (index: number, pageNumberShift = 0): PageGeometry =>
+    geometryOnPage(
+      geometry,
+      ((index === 0 ? inputs.hostPageNumber : undefined) ?? firstPageNumber + index) +
+        pageNumberShift
     );
+
+  const variantFor = (index: number, pageNumberShift = 0): HeaderFooterVariantName =>
+    headerFooterVariantFor(furniture, firstPageNumber + pageNumberShift, index);
 
   const furnitureFor = (
     kind: 'header' | 'footer',
     index: number,
     box: LayoutBox,
-    pageNumberShift = 0
+    pageNumberShift = 0,
+    // The side follows the page's number even where the story keeps the page's own values.
+    sideShift = pageNumberShift
   ): HeaderFooterStoryRecord | undefined => {
     if (!furniture) return undefined;
     const variant = variantFor(index, pageNumberShift);
@@ -201,7 +224,7 @@ export function createSectionPageFurniture(
       header?.flowHeight ?? 0,
       footer?.flowHeight ?? 0
     );
-    const pageNumber = (inputs.pageNumberStart ?? pageIndexStart + 1) + pageNumberShift + index;
+    const pageNumber = firstPageNumber + pageNumberShift + index;
     const pageContext: FieldPageContext = {
       pageNumber,
       pageCount: Math.max(pageNumber, inputs.pageCount() + 1),
@@ -213,16 +236,21 @@ export function createSectionPageFurniture(
       variant,
       story,
       box,
-      geometry,
+      geometry: geometryAt(index, sideShift),
       headerDistance,
       footerDistance,
       contentWidth: inputs.contentWidth,
       insets: inputs.insetsFor(index),
       ...(paintLimit !== undefined ? { paintLimit } : {}),
+      ...(geometryAt(index, sideShift) !== geometry ? { onEvenSide: true as const } : {}),
     };
     const needs = story.pageFieldNeeds;
+    // A per-page layout gets the page's side margins (`onEvenSide`), so a drawing, a text
+    // frame or a floating table positioned from the page edge stays there on an even page.
     const needsPerPageLayout =
-      storyNeedsPageFields(needs) || (story.anchoredDrawings?.length ?? 0) > 0;
+      storyNeedsPageFields(needs) ||
+      (story.anchoredDrawings?.length ?? 0) > 0 ||
+      (placement.onEvenSide === true && story.positionedContent === true);
     const laid = needsPerPageLayout ? layoutStoryForPage(placement, pageContext) : story;
     const placed = placeStory(placement, laid);
     if (storyNeedsPageFields(needs)) {
@@ -242,11 +270,13 @@ export function createSectionPageFurniture(
     // `first` page stays `first`, because that variant follows the index. A header that
     // repeats running values is laid out per page index and is not re-resolved here.
     const shift = furniture && characterHeaderPageToken(furniture) ? 0 : pageNumberShift;
-    const header = furnitureFor('header', local, box, shift);
-    const footer = furnitureFor('footer', local, box, shift);
+    const header = furnitureFor('header', local, box, shift, pageNumberShift);
+    const footer = furnitureFor('footer', local, box, shift, pageNumberShift);
+    const onPage = geometryAt(local, pageNumberShift);
     // Same rule as a body page: `w:display` asks about the page's place in ITS section.
-    const pageBorders = pageBorderFrame(inputs.pageBorders, geometry, local === 0);
+    const pageBorders = pageBorderFrame(inputs.pageBorders, onPage, local === 0);
     return {
+      ...(geometry.evenPageMargin ? { contentLeft: onPage.margin.left } : {}),
       // Off the first page, insets depend only on the variant. A page that changes variant
       // takes the insets of the next local page, which shows the other parity's variant.
       insets: inputs.insetsFor(variantFor(local, shift) === variantFor(local) ? local : local + 1),
@@ -268,7 +298,7 @@ export function createSectionPageFurniture(
       {
         box,
         contentBox: {
-          x: box.x + geometry.margin.left,
+          x: box.x + geometryAt(index).margin.left,
           y: box.y + insets.top,
           width: inputs.contentWidth,
           height: insets.height,
@@ -285,13 +315,13 @@ export function createSectionPageFurniture(
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
     const insets = inputs.insetsFor(index);
-    const borderFrame = pageBorderFrame(inputs.pageBorders, geometry, index === 0);
+    const borderFrame = pageBorderFrame(inputs.pageBorders, geometryAt(index), index === 0);
     return {
       id: `page-${index}`,
       index,
       box,
       contentBox: {
-        x: box.x + geometry.margin.left,
+        x: box.x + geometryAt(index).margin.left,
         y: box.y + insets.top,
         width: inputs.contentWidth,
         height: insets.height,

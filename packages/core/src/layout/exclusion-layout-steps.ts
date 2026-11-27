@@ -38,7 +38,7 @@ import {
   takeSessionUnsettled,
 } from './unsettled-exclusion-layout.ts';
 import type { BlockLayoutResult } from './column-balance-layout.ts';
-import type { BlockLayoutOptions } from './semantic-layout.ts';
+import type { BlockLayoutOptions } from './semantic-layout-options.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;

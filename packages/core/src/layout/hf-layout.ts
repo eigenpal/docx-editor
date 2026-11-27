@@ -79,6 +79,12 @@ import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
 import { layoutStoryWithTextFrames } from './story-text-frames.ts';
 import { createBoundedContextCache } from './bounded-context-cache.ts';
+import {
+  pageContextOnSide,
+  storyHoldsPositionedContent,
+  type HeaderFooterLayoutPageContext,
+  type HeaderFooterPageContext,
+} from './hf-page-context.ts';
 
 /**
  * How many times a footer grows upward when text wrapped beside a page-framed table runs past
@@ -116,28 +122,7 @@ const HF_PAGE_CONTEXTS_PER_PAGE = 3;
 /** The adaptive bound's ceiling, so a hostile page count cannot size the cache. */
 const MAX_ADAPTIVE_HF_PAGE_CONTEXT_ENTRIES = 4096;
 
-/** Page geometry for header/footer anchored frame resolution (story-relative layout space). */
-export interface HeaderFooterPageContext {
-  readonly pageNumber: number;
-  readonly pageWidth: number;
-  readonly pageHeight: number;
-  readonly marginLeft: number;
-  readonly marginRight: number;
-  readonly marginTop: number;
-  readonly marginBottom: number;
-  /** `w:pgMar/@w:header` for a header, `@w:footer` for a footer: the story edge's distance. */
-  readonly storyDistance?: number;
-}
-
-/** Per-sheet geometry needed to resolve header/footer anchors before wrap and clipping. */
-export interface HeaderFooterLayoutPageContext extends FieldPageContext {
-  /** Effective content-box inset after this page's header/footer reserves are applied. */
-  readonly contentInsetTop?: number;
-  /** Effective bottom content-box inset after footer reserve. */
-  readonly contentInsetBottom?: number;
-  /** Story-box top measured from the physical sheet top. */
-  readonly storyTop?: number;
-}
+export type { HeaderFooterLayoutPageContext, HeaderFooterPageContext } from './hf-page-context.ts';
 
 export interface HeaderFooterStoryLayout {
   readonly partName: string;
@@ -174,6 +159,8 @@ export interface HeaderFooterStoryLayout {
   readonly pageFieldNeeds: StoryPageFieldNeeds;
   /** Anchored drawings owned by this story, in story-relative coordinates. */
   readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
+  /** The story holds a text frame or a floating table (`storyHoldsPositionedContent`). */
+  readonly positionedContent?: true;
   /**
    * Re-layout this story under page-field and optional attached-page geometry context.
    *
@@ -269,7 +256,7 @@ export function layoutHeaderFooterStory(
   inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext,
   drawingTokenForParagraph?: (paragraph: import('@docx-editor.dev/core/store').OoxmlNode) => string,
   drawingLayoutToken?: string,
-  hfPageContext?: HeaderFooterPageContext,
+  sectionPageContext?: HeaderFooterPageContext,
   documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties,
   inputs?: HeaderFooterStoryInputs
 ): HeaderFooterStoryLayout {
@@ -278,6 +265,7 @@ export function layoutHeaderFooterStory(
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const pageFrame = readHeaderPageFrame(part);
   const positionedFrames = readPositionedHeaderFrames(part);
+  const positionedContent = storyHoldsPositionedContent(part) || undefined;
   const detected = detectStoryPageFields(part.root);
   // An `inside`/`outside` frame moves with the sheet's parity, so the story needs a page
   // context even when no page field is detected in it.
@@ -318,9 +306,11 @@ export function layoutHeaderFooterStory(
       storyNeedsPageFields(needs) ||
       positionedFrames ||
       inlineDrawingLayout ||
-      ctx?.characterStyleValues
+      ctx?.characterStyleValues ||
+      (positionedContent && ctx?.marginLeft !== undefined)
         ? ctx
         : undefined;
+    const hfPageContext = pageContextOnSide(sectionPageContext, effectiveCtx);
     const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
     const topMarginOrigin = headerTopMarginOrigin(part, effectiveCtx, hfPageContext);
     const anchorPageToken =
@@ -336,6 +326,9 @@ export function layoutHeaderFooterStory(
         : '') +
       fieldPageContextToken(effectiveCtx, needs) +
       (inlineDrawingLayout ? `|pn:${pageNumber}|tm:${topMarginOrigin ?? ''}` : '') +
+      (effectiveCtx?.marginLeft !== undefined
+        ? `|sm:${effectiveCtx.marginLeft},${effectiveCtx.marginRight}`
+        : '') +
       anchorPageToken +
       (effectiveCtx?.characterStyleValues
         ? `|cs:${characterStyleValuesToken(effectiveCtx.characterStyleValues)}`
@@ -744,10 +737,12 @@ export function layoutHeaderFooterStory(
       ...(pendingAnchoredDrawings.length > 0
         ? { anchoredDrawings: sortStoryDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
+      ...(positionedContent ? { positionedContent } : {}),
       withPageContext: (next) => {
         if (
           !storyNeedsPageFields(needs) &&
           !positionedFrames &&
+          !(positionedContent && next.marginLeft !== undefined) &&
           !story.anchoredDrawings?.length &&
           !next.characterStyleValues &&
           !effectiveCtx?.characterStyleValues

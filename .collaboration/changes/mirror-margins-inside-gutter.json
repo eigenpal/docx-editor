@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The editor sized an inserted picture, an inserted table, and a watermark from the authored left and right page margins and the gutter of the section.",
+  "after": "The editor reads the same sizes through the shared text-area helper, which also honors a gutter placed at the top of the page. The inserted content and the operations are unchanged in form.",
+  "reason": "Only the computed default size of new content changes. The edits use the same operations and write the same elements, so shared state and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/mirrored-page-margins-surface.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-image-insert.test.ts"
+  ],
+  "changeset": "mirror-margins-inside-gutter",
+  "migration": null
+}

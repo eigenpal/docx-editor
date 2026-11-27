@@ -4969,6 +4969,7 @@ export interface SectionProperties {
         readonly heightTwips: number;
         readonly widthTwips: number;
     };
+    readonly rtlGutter?: true;
     // (undocumented)
     readonly titlePage: boolean;
     readonly verticalAlign?: SectionVerticalAlign;

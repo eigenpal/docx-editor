@@ -21,7 +21,7 @@ import { addParagraphFrameExclusions } from './paragraph-frame-exclusion.ts';
 
 /** The host sheet a continued section lays its first page onto. */
 export type ContinuedPageHost = ContinuedPageFurniture &
-  Partial<Pick<PageRecord, 'contentBox' | 'fragments' | 'anchoredDrawings'>>;
+  Partial<Pick<PageRecord, 'contentBox' | 'fragments' | 'anchoredDrawings' | 'pageFieldSource'>>;
 
 /**
  * Wrap zones of the floating tables and wrapping pictures already on the host sheet.

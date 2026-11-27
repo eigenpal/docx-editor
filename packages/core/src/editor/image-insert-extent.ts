@@ -1,4 +1,4 @@
-import { geometryOfSection } from '../layout/index.ts';
+import { geometryOfSection, pageMarginSettingsFrom } from '../layout/index.ts';
 import { verticalMarginInsets } from '../layout/page-body-margins.ts';
 import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -20,7 +20,10 @@ export function fitInsertExtent(
   widthPoints: number,
   heightPoints: number
 ): { readonly widthPoints: number; readonly heightPoints: number } {
-  const geometry = geometryOfSection(surface.sectionPropertiesAt(paragraphId));
+  const geometry = geometryOfSection(
+    surface.sectionPropertiesAt(paragraphId),
+    pageMarginSettingsFrom(surface.session.settingsRoot())
+  );
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
   const margins = verticalMarginInsets(geometry);
   const contentHeight = geometry.height - margins.top - margins.bottom;

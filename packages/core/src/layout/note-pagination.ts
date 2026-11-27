@@ -1334,7 +1334,11 @@ function cloneEmptyOverflowPage(
 ): PageRecord {
   const contentBox = shell
     ? {
-        x: template.contentBox.x,
+        // The side of the sheet's own number (`OverflowPageShell.contentLeft`).
+        x:
+          shell.contentLeft !== undefined
+            ? template.box.x + shell.contentLeft
+            : template.contentBox.x,
         y: template.box.y + shell.insets.top,
         width: template.contentBox.width,
         height: shell.insets.height,

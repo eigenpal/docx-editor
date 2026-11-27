@@ -139,6 +139,24 @@ export interface SectionProperties {
    * bottom of the text area. Absent means top alignment.
    */
   readonly verticalAlign?: SectionVerticalAlign;
+  /** `w:rtlGutter` (CT_OnOff, §17.6.16): the gutter of this section is on the right side. */
+  readonly rtlGutter?: true;
+}
+
+/**
+ * The document settings that place a section's side margins and its gutter.
+ *
+ * All three are `w:settings` children with the CT_OnOff content model. `evenAndOddHeaders`
+ * is here because a document with distinct even and odd pages has facing pages, and the
+ * gutter of a facing page is on its inside edge.
+ */
+export interface PageMarginSettings {
+  /** `w:mirrorMargins` (ECMA-376 Part 1 §17.15.1.57). */
+  readonly mirrorMargins?: boolean;
+  /** `w:gutterAtTop` (§17.15.1.50). */
+  readonly gutterAtTop?: boolean;
+  /** `w:evenAndOddHeaders` (§17.10.1). */
+  readonly evenAndOddHeaders?: boolean;
 }
 
 /** `w:sectPr/w:vAlign` values other than the default `top`. */
@@ -432,6 +450,7 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
     ...(pageNumbering !== undefined ? { pageNumbering } : {}),
     ...(pageBorders !== undefined ? { pageBorders } : {}),
     ...(verticalAlign !== undefined ? { verticalAlign } : {}),
+    ...(readOnOffChild(sectPr, 'rtlGutter') ? { rtlGutter: true as const } : {}),
   };
 }
 
@@ -706,18 +725,50 @@ function enumerateSectionsUncached(
 /**
  * Section properties as the geometry layout paginates against.
  *
- * The gutter is added to the LEFT margin: it is binding allowance, extra space on the inner
- * edge, and folding it into the content width instead would silently narrow every line.
+ * The gutter (`w:pgMar/@w:gutter`, CT_PageMar, ECMA-376 Part 1 §17.6.11) is binding allowance:
+ * extra space added to a margin, never taken out of the content width some other way. It is
+ * on the left side, or on the right side with `w:rtlGutter` (CT_OnOff, §17.6.16). With
+ * `w:gutterAtTop` (CT_OnOff, §17.15.1.50) it is added to the top margin instead, and the side
+ * margins are the same on every page. §17.15.1.50 says that the element shall not be used
+ * with `w:mirrorMargins`. A document that has both keeps the gutter at the top, and its side
+ * margins do not swap.
+ *
+ * Pages with an even displayed number differ in two cases, both in `evenPageMargin`:
+ * - `w:mirrorMargins` (CT_OnOff, §17.15.1.57) swaps the left and right margins.
+ * - On facing pages (`w:mirrorMargins` or `w:evenAndOddHeaders`, §17.10.1) the gutter stays
+ *   on the inside edge, which is the other side of the sheet.
  *
  * Top and bottom keep the authored sign of `w:pgMar`: a negative value is an exact inset that
  * header and footer height never moves. Read them through `page-body-margins.ts`.
+ *
+ * Without `settings` the result is the odd-page geometry with the gutter on a side. Pass
+ * `pageMarginSettingsFrom(settingsRoot)` with the document's `w:evenAndOddHeaders` state to
+ * get the geometry the layout uses, and read one page through `geometryOnPage`.
  */
-export function geometryOfSection(section: SectionProperties): PageGeometry {
+export function geometryOfSection(
+  section: SectionProperties,
+  settings?: PageMarginSettings
+): PageGeometry {
+  const { leftTwips, rightTwips, topTwips, gutterTwips } = section.margins;
   const width = twipsToPoints(asTwips(section.pageSize.widthTwips));
   const height = twipsToPoints(asTwips(section.pageSize.heightTwips));
-  const left = twipsToPoints(asTwips(section.margins.leftTwips + section.margins.gutterTwips));
-  const right = twipsToPoints(asTwips(section.margins.rightTwips));
-  const top = twipsToPoints(asTwips(section.margins.topTwips));
+  const atTop = settings?.gutterAtTop === true;
+  const sideGutter = atTop ? 0 : gutterTwips;
+  const mirrored = !atTop && settings?.mirrorMargins === true;
+  const facing = mirrored || (!atTop && settings?.evenAndOddHeaders === true);
+  const sides = (leftMargin: number, rightMargin: number, gutterOnRight: boolean) => ({
+    left: twipsToPoints(asTwips(leftMargin + (gutterOnRight ? 0 : sideGutter))),
+    right: twipsToPoints(asTwips(rightMargin + (gutterOnRight ? sideGutter : 0))),
+  });
+  const gutterOnRight = section.rtlGutter === true;
+  const { left, right } = sides(leftTwips, rightTwips, gutterOnRight);
+  const even = mirrored
+    ? sides(rightTwips, leftTwips, !gutterOnRight)
+    : sides(leftTwips, rightTwips, facing ? !gutterOnRight : gutterOnRight);
+  // The gutter adds to the size of the top margin and keeps its sign (see below). The gutter
+  // is unsigned (ST_TwipsMeasure): a negative value from a file adds nothing here.
+  const topGutter = atTop ? Math.max(0, gutterTwips) : 0;
+  const top = twipsToPoints(asTwips(topTwips + (topTwips < 0 ? -topGutter : topGutter)));
   const bottom = twipsToPoints(asTwips(section.margins.bottomTwips));
 
   // A page whose side margins exceed it has no content width at all. Fall back rather than
@@ -731,5 +782,6 @@ export function geometryOfSection(section: SectionProperties): PageGeometry {
     margin: { top, right, bottom, left },
     headerDistance: twipsToPoints(asTwips(Math.max(0, section.margins.headerTwips))),
     footerDistance: twipsToPoints(asTwips(Math.max(0, section.margins.footerTwips))),
+    ...(even.left !== left || even.right !== right ? { evenPageMargin: even } : {}),
   };
 }
