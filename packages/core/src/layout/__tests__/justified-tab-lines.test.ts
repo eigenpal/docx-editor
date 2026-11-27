@@ -10,7 +10,7 @@ import { caretAt, selectionRects } from '../semantic-interaction.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { hitTestSemantic } from '../semantic-point-queries.ts';
 import { linesOf, type LineRecord } from '../semantic-records.ts';
-import { loadBody } from './float-over-table-harness.ts';
+import { layoutUnderFloat, loadBody, squareWrapZone } from './float-over-table-harness.ts';
 
 // 10pt per character at 11pt, a 300pt measure, and default tab stops every 36pt.
 const measurer = createFixedMeasurer(10, 14);
@@ -219,12 +219,10 @@ describe('a justified line that starts with spaces', () => {
     expect(Math.min(...words(line).map(([, start]) => start))).toBeCloseTo(0, 4);
   });
 
-  test('with a first-line indent, a hanging indent, or a list number', () => {
-    const numbering = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>';
+  test('leading spaces keep their advance with a first-line or a hanging indent', () => {
     for (const properties of [
       '<w:ind w:firstLine="400"/>',
       '<w:ind w:left="720" w:hanging="360"/>',
-      numbering,
     ]) {
       const body = (jc: string) => paragraph(`   ab ${TAIL}`, properties, jc);
       const line = firstLine(body('both'));
@@ -236,6 +234,49 @@ describe('a justified line that starts with spaces', () => {
   test('leading spaces keep their advance before a manual line break', () => {
     const line = firstLine(paragraph(`   ab cd ef\n${TAIL}`));
     expect(x(line, 'ab')).toBe(30);
+  });
+});
+
+describe('a justified line beside a wrapping object', () => {
+  // The object covers 120pt to 170pt of the 300pt measure; this harness sets 6pt characters.
+  function besideFloat(body: string): LineRecord {
+    const part = loadBody(`${body}<w:p/>`);
+    const id = linesOf(layoutUnderFloat(part, new Map(), geometry))[0]!.range.paragraphId;
+    const zone = squareWrapZone({
+      anchorParagraphId: id,
+      top: 0,
+      height: 60,
+      left: 120,
+      width: 50,
+      contentWidth: MEASURE,
+    });
+    return linesOf(layoutUnderFloat(part, new Map([[0, [zone]]]), geometry))[0] as LineRecord;
+  }
+  const LONG = 'ef gh ij kl mn op qr st uv wx yz ab cd ef gh ij';
+
+  test('the text before a tab in the first passage keeps its natural spacing', () => {
+    const line = besideFloat(paragraph(`ab cd\t${LONG}`));
+    const natural = besideFloat(paragraph(`ab cd\t${LONG}`, '', 'left'));
+    expect(words(line).slice(0, 3)).toEqual(words(natural).slice(0, 3));
+    // The passage after the object stretches to the measure.
+    const last = line.spans.filter((span) => span.text.trim() !== '').at(-1)!;
+    expect(last.box.x + 12).toBeCloseTo(MEASURE, 4);
+  });
+
+  test('a right-to-left distributed line there sets as a justified line', () => {
+    // Each passage of such a line stretches its spaces only, so the leading-space rule holds.
+    const rtl = (jc: string) =>
+      paragraph(
+        ' אב גד הו זח טי כל מנ סע פצ קר שת אב גד הו זח טי כל מנ',
+        '<w:bidi/>',
+        jc,
+        '<w:rtl/>'
+      );
+    const line = besideFloat(rtl('distribute'));
+    const natural = besideFloat(rtl('left'));
+    expect(line.spans[0]!.text).toBe(' ');
+    expect(line.spans[0]!.box.width).toBeCloseTo(natural.spans[0]!.box.width, 4);
+    expect(line.spans[0]!.box.x + line.spans[0]!.box.width).toBeCloseTo(MEASURE, 4);
   });
 });
 

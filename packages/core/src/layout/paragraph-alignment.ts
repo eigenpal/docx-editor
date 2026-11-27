@@ -437,9 +437,16 @@ function tabPlacesText(
   return closedByBreak && tab.box.width > OVERFLOW_TOLERANCE_PT;
 }
 
-/** Whether a zero-width line or page break span closes the line. */
-function endsInBreak(spans: readonly StyleSpanRecord[]): boolean {
-  const last = spans[spans.length - 1];
+/**
+ * Whether a zero-width line or page break span closes the line. A table cell ignores its
+ * page breaks (`pageBreaksIgnored`), so there only a line break does.
+ */
+function endsInBreak(spans: readonly StyleSpanRecord[], pageBreaksIgnored = false): boolean {
+  let end = spans.length;
+  if (pageBreaksIgnored)
+    while (end > 0 && spans[end - 1]!.text === PAGE_BREAK_CHAR && spans[end - 1]!.box.width === 0)
+      end -= 1;
+  const last = spans[end - 1];
   return (
     last !== undefined &&
     last.box.width === 0 &&
@@ -475,12 +482,20 @@ function stretchJustifiedLine(
   eastAsianSpacing = true
 ): readonly StyleSpanRecord[] | null {
   // Spaces before the first character of a justified line's stretched text keep their
-  // advance, whichever rule below stretches the rest. Spaces after an inline object are
-  // not such spaces: the first span then starts past `origin`. A distributed line keeps
-  // them in the space rule only.
+  // advance, whichever rule below stretches the rest. A space after an inline object is not
+  // such a space: its span starts past `origin`, or past the space before it. A distributed
+  // line keeps them in the space rule only.
   let lead = 0;
-  if (distributed === undefined && Math.abs(spans[0]!.box.x - origin) <= OVERFLOW_TOLERANCE_PT)
-    while (lead < slotEnd - 1 && withoutTrailingSpaces(spans[lead]!.text) === '') lead += 1;
+  let leadEnd = origin;
+  while (
+    distributed === undefined &&
+    lead < slotEnd - 1 &&
+    withoutTrailingSpaces(spans[lead]!.text) === '' &&
+    Math.abs(spans[lead]!.box.x - leadEnd) <= OVERFLOW_TOLERANCE_PT
+  ) {
+    leadEnd = spans[lead]!.box.x + spans[lead]!.box.width;
+    lead += 1;
+  }
   if (lead > 0) {
     const rest = stretchJustifiedLine(
       spans.slice(lead),
@@ -714,7 +729,7 @@ export function alignSpans(
       pendingLine?.compressesSpaces,
       keepsBalancedSpaces,
       // Bidi alignment passes the content without the break that closes the line.
-      endsInBreak(split)
+      endsInBreak(split, pageBreaksIgnored)
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {
