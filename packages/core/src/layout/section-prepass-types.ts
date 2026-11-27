@@ -50,7 +50,13 @@ export type PreparedBlock =
       readonly listItem?: ResolvedListItem;
       readonly key: string;
     }
-  | { readonly kind: 'table'; readonly table: OoxmlElement; readonly key: string };
+  | {
+      readonly kind: 'table';
+      readonly table: OoxmlElement;
+      readonly key: string;
+      /** Where the table starts in the view of the flow (`table-opening.ts`). */
+      readonly opening?: import('./table-opening.ts').TableOpening;
+    };
 
 /**
  * One section's whole prepass — prepared entries, cache keys, flow keys and document

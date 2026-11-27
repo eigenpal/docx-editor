@@ -123,6 +123,72 @@ describe('w:contextualSpacing survives an incremental pass', () => {
     expect(incremental).toEqual(heights(reopened));
   });
 
+  test('editing beside a table keeps the answer for the same bytes reopened', async () => {
+    // The paragraph before the table and the first cell paragraph share the style, so the
+    // 8pt between them goes. The table edge does not stop the comparison (17.3.1.9).
+    const cell = `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc>${styled('cell')}</w:tc></w:tr></w:tbl>`;
+    const editor = mount(docx(styled('lead') + cell + styled('tail')));
+    const surface = editor.surface!;
+    const tops = (instance: DocxEditorInstance) =>
+      instance
+        .surface!.layout()
+        .pages[0]!.fragments.map((fragment) => Math.round(fragment.box.y * 100) / 100);
+    const onOpen = tops(editor);
+    // The last paragraph keeps its 8pt. The paragraph before the table does not.
+    const dropped = (instance: DocxEditorInstance) => {
+      const all = heights(instance);
+      return all.at(-1)! - all[0]!;
+    };
+    expect(dropped(editor)).toBe(8);
+
+    const ids = surface.session.paragraphIds();
+    // Type in the paragraph before the table, in the cell, and split the cell paragraph.
+    surface.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 4 },
+      head: { paragraphId: ids[0]!, offset: 4 },
+    });
+    surface.type('s');
+    surface.setSelection({
+      anchor: { paragraphId: ids[1]!, offset: 4 },
+      head: { paragraphId: ids[1]!, offset: 4 },
+    });
+    surface.splitParagraph();
+    surface.type('more');
+    const edited = tops(editor);
+    expect(dropped(editor)).toBe(8);
+    const reopened = mount(new Uint8Array(await editor.save()));
+    expect(edited).toEqual(tops(reopened));
+    expect(heights(editor)).toEqual(heights(reopened));
+
+    // Undo returns the layout on open.
+    surface.undo();
+    surface.undo();
+    surface.undo();
+    expect(tops(editor)).toEqual(onOpen);
+  });
+
+  test('restyling the first cell paragraph re-places the paragraph before the table', async () => {
+    const cell = `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc>${styled('cell')}</w:tc></w:tr></w:tbl>`;
+    const editor = mount(docx(styled('lead') + cell + styled('tail')));
+    const surface = editor.surface!;
+    const leadHeight = () => heights(editor)[0]!;
+    const onOpen = leadHeight();
+
+    // The cell paragraph leaves the style, so the paragraph before the table keeps its 8pt.
+    const ids = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: ids[1]!, offset: 1 },
+      head: { paragraphId: ids[1]!, offset: 1 },
+    });
+    expect(editor.exec({ type: 'setParagraphStyle', styleId: 'Normal' }).ok).toBe(true);
+    expect(leadHeight() - onOpen).toBe(8);
+    const reopened = mount(new Uint8Array(await editor.save()));
+    expect(heights(editor)).toEqual(heights(reopened));
+
+    surface.undo();
+    expect(leadHeight()).toBe(onOpen);
+  });
+
   test('a paragraph of a DIFFERENT style below still leaves the space standing', () => {
     const editor = mount(docx(styled('one') + '<w:p><w:r><w:t>plain</w:t></w:r></w:p>'));
     const [tight, plain] = heights(editor);

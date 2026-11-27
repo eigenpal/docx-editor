@@ -691,8 +691,9 @@ export function listMarkerFlowKeys(
  * depends on is whether each side matches, so a rename that moves both sides together must
  * not re-place a block whose spacing is identical.
  *
- * `styleAt` answers null for a block that can never match — a table, or a paragraph with no
- * style — which is what makes an unstyled run of paragraphs keep its spacing.
+ * `styleAt` answers null for a block with no style of its own — a table, or a paragraph with
+ * no style — which is what makes an unstyled run of paragraphs keep its spacing. A table as a
+ * neighbour answers through `neighbourStyleAt` (`contextual-paragraph-spacing.ts`).
  */
 export function contextualSpacingFlowKeys(
   keys: string[],

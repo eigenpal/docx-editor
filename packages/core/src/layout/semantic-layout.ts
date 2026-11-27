@@ -233,6 +233,7 @@ import {
 } from './layout-steps.ts';
 import { preparedBlocks } from './prepared-block-memo.ts';
 import { tableTopLeads } from './cell-edge-neighbours.ts';
+import { tableOpening } from './table-opening.ts';
 import {
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
   type BlockLayoutResult,
@@ -780,6 +781,7 @@ function* layoutBlocksPass(
       entry = {
         kind: 'table',
         table: block,
+        opening: tableOpening(block, options),
         key: keyFor({
           paragraph: block,
           properties: [
@@ -1341,7 +1343,7 @@ function* layoutBlocksPass(
       pageIndexStart === 0 && flowStartY === 0
         ? documentOpeningCellParagraph(bodies[0])
         : undefined,
-    tableTopLeads: tableTopLeads(prepared),
+    tableTopLeads: tableTopLeads(prepared, styleCascade),
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     compatibilityMode: options.compatibilityMode,

@@ -1,5 +1,5 @@
 import { withStoryLineGrid } from './line-grid.ts';
-import { cellEdgeNeighbours } from './cell-edge-neighbours.ts';
+import { cellEdgeNeighbours, withNestedTableLead } from './cell-edge-neighbours.ts';
 import { listLayoutToken } from './list-marker-reuse.ts';
 import { reuseParagraphAtWidth } from './paragraph-cache-width-reuse.ts';
 import { cellParagraphInputs, cellParagraphBreakInputs } from './cell-paragraph-inputs.ts';
@@ -459,7 +459,7 @@ function placeCellParagraph(
     layoutInputs.contextualSpacing,
     styleId,
     contextualCellNeighbours(paragraph, options?.borderNeighbours),
-    deps.styleCascade,
+    deps,
     options?.tableCellStyle,
     options?.inTableCell === true ? deps.cellEdges?.get(paragraph.id) : undefined
   );
@@ -493,7 +493,7 @@ function placeCellParagraph(
     }
   );
   // A cell paragraph breaks like a body paragraph: same line spacing, same first-line
-  // offset. Contextual spacing compares neighbours within this cell.
+  // offset. Contextual spacing compares across cell and table edges (`cell-edge-neighbours.ts`).
   // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
   // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
   // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
@@ -1182,7 +1182,7 @@ function flowBlocksInBoxBounded(
         right,
         y,
         depth + 1,
-        deps,
+        withNestedTableLead(deps, blocks, blockIndex, inTableCell, tableCellStyle),
         maxBottom,
         nestedTable,
         !fitted && deps.rowAtPageStart === true
@@ -1407,7 +1407,7 @@ export function layoutRowFragmentBounded(
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   // Exact rows clip to their authored box; never flow past it even when the page allows more.
   const { flowMaxBottom, pageBottom } = rowFlowBounds(maxBottom, rowTop, exactHeightPt);
-  const cellEdges = cellEdgeNeighbours(row, deps.styleCascade, deps.tableTopLeads?.get(row.id));
+  const cellEdges = cellEdgeNeighbours(row, deps, deps.tableTopLeads?.get(row.id));
   const { rowDeps, flushDeferred } = rowDepsForAnchors(
     { ...deps, cellPageBottom: pageBottom, cellEdges },
     deferredRowAnchors
