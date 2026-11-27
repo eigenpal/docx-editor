@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Some parameter defaults named a constant declared later in the same scope.",
+  "after": "Those constants are declared before the functions that default to them, or are read in the function body.",
+  "reason": "Only declaration order changes. The values, shared nodes, operations, review items, and package serialization stay the same.",
+  "tests": [
+    "packages/core/src/__tests__/parameter-default-order.test.ts",
+    "packages/core/src/store/__tests__/revision-paragraph-merge-scaling.test.ts"
+  ],
+  "changeset": "table-row-height-minified-bundles",
+  "migration": null
+}
