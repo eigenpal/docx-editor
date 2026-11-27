@@ -520,7 +520,6 @@ function* layoutBlocksPass(
     (furniture?.evenAndOddHeaders || geometry.evenPageMargin
       ? `|fp:${furniturePageNumberStart & 1}${hostNumber === undefined ? '' : hostNumber & 1}`
       : '');
-  // The side follows the displayed number; page 0 of a continued section is the host sheet.
   const geometryAt = (i: number) =>
     geometryOnPage(geometry, (i ? undefined : hostNumber) ?? furniturePageNumberStart + i);
   const flowStartY = options.flowStartY ?? 0;
@@ -608,6 +607,7 @@ function* layoutBlocksPass(
     footerDistance,
     pageIndexStart,
     pageNumberStart: furniturePageNumberStart,
+    hostPageNumber: hostNumber,
     contentWidth: contentWidthForReflow,
     insetsFor,
     pageCount: () => pages.length,

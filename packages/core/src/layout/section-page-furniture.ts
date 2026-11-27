@@ -41,6 +41,12 @@ export interface SectionPageFurnitureInputs {
   readonly pageIndexStart: number;
   /** Displayed number of local page zero. */
   readonly pageNumberStart?: number;
+  /**
+   * The displayed number of the sheet that a continued section joins. Local page 0 is that
+   * sheet, so it keeps the side of the host number, also when the section restarts numbering
+   * (`w:pgNumType/@w:start`, CT_PageNumber, ECMA-376 Part 1, 17.6.12).
+   */
+  readonly hostPageNumber?: number;
   /** Content width the stories were laid out at. */
   readonly contentWidth: number;
   /** This section's per-page content insets, by section-local index. */
@@ -189,7 +195,11 @@ export function createSectionPageFurniture(
    * borders of one page all take the same side.
    */
   const geometryAt = (index: number, pageNumberShift = 0): PageGeometry =>
-    geometryOnPage(geometry, firstPageNumber + pageNumberShift + index);
+    geometryOnPage(
+      geometry,
+      ((index === 0 ? inputs.hostPageNumber : undefined) ?? firstPageNumber + index) +
+        pageNumberShift
+    );
 
   const variantFor = (index: number, pageNumberShift = 0): HeaderFooterVariantName =>
     headerFooterVariantFor(furniture, firstPageNumber + pageNumberShift, index);
