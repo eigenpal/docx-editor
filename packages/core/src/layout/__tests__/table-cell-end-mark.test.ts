@@ -200,3 +200,18 @@ test('reused mark styles still read current font availability and metrics', () =
   expect(cellEndMarkHeight(cell, 100, deps)).toBe(24);
   expect(cellEndMarkHeight({ ...cell, hideEndMark: true }, 100, deps)).toBe(0);
 });
+
+test('a superscript or subscript end mark keeps the line of its full size', () => {
+  // `w:vertAlign` does not alter the font size of the run properties (ECMA-376 17.3.2.42).
+  for (const align of ['superscript', 'subscript']) {
+    const mark = `<w:p><w:pPr><w:rPr><w:sz w:val="40"/><w:vertAlign w:val="${align}"/></w:rPr></w:pPr></w:p>`;
+    const part = load(table(mark));
+    const body = part.root.children[0]!;
+    if (body.kind === 'textValue') throw Error('Missing body');
+    const node = body.children.find((child) => child.kind === 'table')!;
+    const cell = readTableStructure(node, 100, 0)!.rows[0]!.cells[0]!;
+    const deps = { producer: 'script-end-mark', nextLineId: () => 'line', measurer };
+    expect(cellEndMarkHeight(cell, 100, deps)).toBe(20);
+    expect(rows(run(table(mark)))[0]!.box.height).toBe(20);
+  }
+});

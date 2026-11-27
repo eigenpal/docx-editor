@@ -42,7 +42,7 @@ import {
 import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { graphemeContinuationWidth } from './grapheme-continuation-width.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
-import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
+import { growScriptLineMetrics, lineBoxStyleOf } from './paragraph-mark-metrics.ts';
 import { raiseLineToMarker, spacedLine } from './positioned-run-spacing.ts';
 import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
 import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
@@ -300,7 +300,6 @@ export function breakParagraph(
   const {
     empty: emptyStyle,
     cascade: cascadeStyle,
-    unstyledMark: unstyledMarkStyle,
     lineStart: lineStartStyle,
   } = paragraphMarkStyles(
     flow?.markRunProperties ?? inheritedRunProperties,
@@ -814,7 +813,7 @@ export function breakParagraph(
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
     } else {
-      glyphBaseline += growScriptLineMetrics(line, unstyledMarkStyle.verticalAlign, measurer);
+      glyphBaseline += growScriptLineMetrics(line, measurer);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
     // face reserves space above it like the run the marker is in Word. The descent is the
@@ -1137,7 +1136,8 @@ export function breakParagraph(
         ...(piece.link ? { link: piece.link } : {}),
         ...paragraphSpanMetadata(piece),
       });
-      growLineMetrics(line, breakMetrics);
+      // A break of a superscript or subscript run keeps the full-size line (17.3.2.42).
+      growLineMetrics(line, measurer.lineMetrics(lineBoxStyleOf(piece.style)));
       line.end = piece.end;
       const cleared = piece.breakClear ? breakClearOnLine(piece.breakClear) : undefined;
       closeLine();

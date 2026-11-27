@@ -6,6 +6,7 @@ import {
   type ParagraphLayoutInputs,
   type StyleCascadeTable,
 } from './style-cascade.ts';
+import { lineBoxStyleOf } from './paragraph-mark-metrics.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import { measuresWithAdmittedFace } from './text-measurer.ts';
@@ -27,7 +28,8 @@ function endMarkStyle(inputs: ParagraphLayoutInputs, deps: TableFlowDeps) {
   const theme = deps.styleCascade?.themeFonts;
   const known = markStyles.get(mark);
   if (known && known.theme === theme) return known.style;
-  const style = resolveRunStyle(mark, theme);
+  // A superscript or subscript mark keeps the line of its full size (ECMA-376 17.3.2.42).
+  const style = lineBoxStyleOf(resolveRunStyle(mark, theme));
   markStyles.set(mark, { theme, style });
   return style;
 }

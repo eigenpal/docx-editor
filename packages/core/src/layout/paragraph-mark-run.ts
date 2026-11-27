@@ -22,9 +22,9 @@
 // by direct size or by style, in body text or in a table cell, a 12pt text line does not grow
 // in the reference, and neither do superscript, subscript, inline-picture and equation lines.
 // `paragraph-mark-metrics.ts` keeps the mark's size off a line with content. The readers of a
-// DIRECT mark next to content (the floor of a script line in `paragraph-flow.ts`, which takes
-// the size of the content, and the end-mark row floor in `table-cell-end-mark.ts`) take the
-// mark WITHOUT its character style from {@link markRunPropertiesWithoutCharacterStyle}.
+// DIRECT mark next to content (the line-start estimate in `paragraph-mark-styles.ts` and the
+// end-mark row floor in `table-cell-end-mark.ts`) take the mark WITHOUT its character style
+// from {@link markRunPropertiesWithoutCharacterStyle}.
 
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
