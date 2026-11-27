@@ -11,7 +11,7 @@ import {
   applyDocumentFontSubstitutions,
 } from '../document-font-substitution.ts';
 import { composeFontConfiguration } from '../font-composition.ts';
-import type { FontSource } from '../../contracts/editor.ts';
+import type { FontSource, FontSourceSubstitution } from '../../contracts/editor.ts';
 import { openFontBackedDocumentForExport } from '../../export/document-export-shaping.ts';
 import { sha256FontBytes } from '../font-resource.ts';
 
@@ -64,6 +64,13 @@ function source(family: string, weight = 400, style: 'normal' | 'italic' = 'norm
   };
 }
 
+/**
+ * Substitutions to another family. A supplied family's own missing faces stand in through its
+ * supplied faces; those stand-ins are not what these tests check.
+ */
+const otherFamilies = (configuration: { substitutions?: readonly FontSourceSubstitution[] }) =>
+  (configuration.substitutions ?? []).filter(({ from, to }) => from.family !== to.family);
+
 test('punctuation remains part of one safe font name', () => {
   for (const value of ['Georgia;Verdana', 'Georgia,Verdana', '宋体;SimSun'])
     expect(fontFamilyName(value)).toBe(value);
@@ -102,7 +109,7 @@ test('known primary faces win over whole alternate names', () => {
   const fonts = composeFontConfiguration({
     sources: [source('Georgia;Verdana'), source('Courier New')],
   });
-  expect(applyDocumentFontSubstitutions(fonts, plan).substitutions).toBeUndefined();
+  expect(otherFamilies(applyDocumentFontSubstitutions(fonts, plan))).toEqual([]);
 });
 
 test('unused script defaults do not spend the resolver request bound', () => {
@@ -123,7 +130,7 @@ test('unknown primary uses the whole alternate, never a listed primary candidate
   const fonts = composeFontConfiguration({
     sources: [source('Georgia'), source('Verdana'), source('Courier New')],
   });
-  expect(applyDocumentFontSubstitutions(fonts, plan).substitutions).toEqual([
+  expect(otherFamilies(applyDocumentFontSubstitutions(fonts, plan))).toEqual([
     {
       from: { family: 'Georgia;Verdana', weight: 400, style: 'normal' },
       to: { family: 'Courier New', weight: 400, style: 'normal' },
@@ -158,7 +165,7 @@ test('whole alternate wins before an explicit generic stand-in', () => {
 test('face variants do not claim bytes that the host never supplied', () => {
   const plan = documentFontSubstitutionPlan(view(), ['Georgia;Verdana']);
   const fonts = composeFontConfiguration({ sources: [source('Courier New', 700, 'italic')] });
-  const result = applyDocumentFontSubstitutions(fonts, plan).substitutions!;
+  const result = otherFamilies(applyDocumentFontSubstitutions(fonts, plan));
   expect(result).toHaveLength(1);
   expect(result[0]?.from).toEqual({ family: 'Georgia;Verdana', weight: 700, style: 'italic' });
 });
@@ -242,7 +249,7 @@ test('script defaults stay distinct when one unknown name occupies different slo
   const fonts = composeFontConfiguration({
     sources: [source('Times New Roman'), source('SimSun')],
   });
-  expect(applyDocumentFontSubstitutions(fonts, plan).substitutions).toBeUndefined();
+  expect(otherFamilies(applyDocumentFontSubstitutions(fonts, plan))).toEqual([]);
 });
 
 test('new aliases cannot exceed the snapshot substitution budget', () => {

@@ -40,12 +40,15 @@ import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import { bulletMarkerStyle } from './marker-symbol-face.ts';
 import { withListMarkerSource } from './cell-list-marker.ts';
 import type { TextMeasurer } from './semantic-records.ts';
-import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
+import type { ResolvedRunStyle } from './run-style.ts';
+import { listMarkerRunStyle } from './list-marker-lane.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
 import type { LayoutSession } from './layout-session.ts';
-import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
+import { listCountingBlocks } from './hidden-paragraph-mark.ts';
 import { numPrFieldsOf, paragraphListPrelude, readNumPr } from './list-paragraph-prelude.ts';
+import { isBareSectionMark } from './section-mark-break.ts';
+import { paragraphSectionNode } from './section-properties.ts';
 import {
   listNumFieldsOf,
   listNumSignatureOf,
@@ -274,6 +277,8 @@ interface ListSequenceResolve {
   readonly states: readonly ListCounterSnapshot[];
   /** A LISTNUM field counted in the walk; a resume then cannot start mid-story. */
   readonly usesListNum: boolean;
+  /** The walk read a numbered paragraph with a section break; see `ParagraphListPrelude`. */
+  readonly readsNumberedSectionMarks: boolean;
 }
 
 /**
@@ -301,6 +306,10 @@ function resolveListSequence(
   // A LISTNUM field reads the paragraphs before it (the last numbered one, the last heading),
   // which a saved counter state does not hold: such a walk starts from the top.
   const usesListNum = paragraphs.some((paragraph) => listNumFieldsOf(paragraph).length > 0);
+  // A text edit can give such a paragraph content, or take its content away, and so its number.
+  const readsNumberedSectionMarks = paragraphs.some(
+    (paragraph) => paragraphListPrelude(paragraph, styleCascade).numberedSectionMark
+  );
   let start = 0;
   if (resume && !usesListNum && !resume.previous.usesListNum) {
     const checkpoint = Math.min(
@@ -340,7 +349,7 @@ function resolveListSequence(
       );
       // A marker never draws in small capitals; `w:caps` still applies.
       const resolved = {
-        ...resolveRunStyle(markerProps, styleCascade?.themeFonts),
+        ...listMarkerRunStyle(markerProps, prelude.paragraphProperties, styleCascade?.themeFonts),
         smallCaps: false,
       };
       levelDerived = {
@@ -442,7 +451,7 @@ function resolveListSequence(
     map.set(paragraph.id, item);
   }
   listNum.finish(map);
-  return { items: map, states, usesListNum };
+  return { items: map, states, usesListNum, readsNumberedSectionMarks };
 }
 
 interface ResolvedListItemsMemoEntry {
@@ -588,8 +597,9 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
-  // Paragraphs a hidden mark took out of the flow still count; see `hidden-paragraph-mark.ts`.
-  const blocks = numberingFlowBlocks(flowBlocks);
+  // Paragraphs a hidden mark took out of the flow still count, but field-code paragraphs do
+  // not; see `hidden-paragraph-mark.ts`.
+  const blocks = listCountingBlocks(flowBlocks);
   const isFontAvailable = listFontAvailability(options);
   if (options.listItems === undefined && options.listCounterSeed) {
     return {
@@ -726,6 +736,7 @@ function numberedBlockMemo(
     if (prelude.numPr !== null) numbered.push(paragraph);
     if (
       prelude.numPr !== null ||
+      prelude.numberedSectionMark ||
       prelude.outlineLevel !== null ||
       listNumFieldsOf(paragraph).length > 0
     )
@@ -807,7 +818,12 @@ function sameNumberedParagraph(paragraph: OoxmlElement, previous: OoxmlElement |
   const previousProperties = previous.children.find(
     (child) => child.kind === 'paragraphProperties'
   );
-  return properties === previousProperties;
+  if (properties !== previousProperties) return false;
+  // A numbered section mark takes its number only while it holds content.
+  return (
+    paragraphSectionNode(paragraph) === undefined ||
+    isBareSectionMark(paragraph) === isBareSectionMark(previous)
+  );
 }
 
 function sameNumberingSequence(a: readonly OoxmlElement[], b: readonly OoxmlElement[]): boolean {
@@ -843,8 +859,10 @@ function resolveStoryListItemsStable(
   if (
     evidence?.preservesNumberedSequence &&
     last &&
-    // A text edit can change a LISTNUM field's instruction; compare the walked paragraphs.
+    // A text edit can change a LISTNUM field's instruction, or give a numbered section mark
+    // content or take it away; compare the walked paragraphs.
     !last.walk?.resolve.usesListNum &&
+    !last.walk?.resolve.readsNumberedSectionMarks &&
     last.rawIndex === rawIndex &&
     last.styleCascade === styleCascade &&
     last.isFontAvailable === isFontAvailable

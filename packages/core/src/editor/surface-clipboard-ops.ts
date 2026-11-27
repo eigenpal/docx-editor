@@ -19,6 +19,7 @@ import {
   TEXT_BOX_PASTE_REASON,
 } from './surface-drawing-clipboard.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import { FIELD_CODE_PASTE_NOTICE, fieldCodePasteRefusal } from './hidden-mark-joins.ts';
 import type { DrawingPasteTarget } from './drawing-paste-target.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
@@ -196,6 +197,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
    * downgrade a LATER ordinary Cmd+V.
    */
   let forcePlainPasteArmedAt: number | null = null;
+  /** Set when a rich paste refused at field codes, so the plain fallback can say so. */
+  let pasteKeptOnlyText = false;
 
   const refuse = (reason: string): void =>
     deps.commit(
@@ -467,7 +470,10 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         // through `applyFragmentPaste`, past `applyOps`, so without this a disconnected
         // replica landed a rich paste locally and never replicated it. The selection-
         // clearing plan is the op-shaped half of the write, so it is what the gate sees.
-        const collaborationRefusal = deps.collaborationGate(priorOps, { kind: 'body' });
+        const fieldCode = fieldCodePasteRefusal((id) => partOfNodeId(session, id), target);
+        pasteKeptOnlyText ||= fieldCode !== null;
+        const collaborationRefusal =
+          deps.collaborationGate(priorOps, { kind: 'body' }) ?? fieldCode;
         if (collaborationRefusal) {
           return {
             committed: false,
@@ -593,6 +599,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
   ): boolean {
     // Read again: a paste into a text box takes the text box's plain lane.
     const richStory = (deps.richPasteAllowed?.() ?? true) && deps.storyScope().kind === 'body';
+    pasteKeptOnlyText = false;
     const lane = routePaste(
       {
         richLaneOpen:
@@ -621,6 +628,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       );
       return false;
     }
+    // A rich paste that would split field codes landed as plain text: an informational
+    // rejection tells the host that the formatting and paragraphs were dropped.
+    if (pasteKeptOnlyText && lane !== 'none') refuse(FIELD_CODE_PASTE_NOTICE);
     return lane !== 'none';
   }
 

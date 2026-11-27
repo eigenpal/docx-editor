@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The editor measured a missing font family, and a character that a font lacks, in a font that the browser picked. PDF export used its own fallback faces.",
+  "after": "The editor and the exports apply one set of font fallback rules. Each editor asks its own font host for the fallback faces that its text needs.",
+  "reason": "Fonts are local to each client. The change adds no operation, no shared field, and no awareness state, so released clients share rooms as before.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/glyph-fallback-fonts-editors.test.ts",
+    "packages/core/src/editor/__tests__/shared-fallback-fonts.test.ts",
+    "packages/docx-to-pdf/test/editor-font-parity.test.ts"
+  ],
+  "changeset": "shared-font-fallback-rules",
+  "migration": null
+}

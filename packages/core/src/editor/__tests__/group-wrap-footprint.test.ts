@@ -40,11 +40,10 @@ const PICTURE_MEMBER =
   '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="762000" cy="762000"/></a:xfrm>' +
   '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>';
 
-const TEXTBOX_MEMBER =
-  '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="889000" y="0"/>' +
-  '<a:ext cx="2540000" cy="762000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-  '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Group label</w:t></w:r></w:p>' +
-  '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
+/** A member that paint cannot represent. Alone in a group, the group paints nothing. */
+const FRAME_MEMBER =
+  '<wpg:graphicFrame><wpg:cNvPr id="9" name="Frame"/><wpg:cNvFrPr/><wpg:xfrm>' +
+  '<a:off x="0" y="0"/><a:ext cx="100" cy="100"/></wpg:xfrm></wpg:graphicFrame>';
 
 interface GroupOptions {
   /** Wrap the drawing in `mc:AlternateContent`, as Word does. Defaults to true. */
@@ -74,7 +73,7 @@ function groupRun(options: GroupOptions = {}): string {
     `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>` +
     `<a:xfrm><a:off x="0" y="0"/><a:ext cx="3810000" cy="${cy}"/>` +
     `<a:chOff x="0" y="0"/><a:chExt cx="3810000" cy="${cy}"/></a:xfrm></wpg:grpSpPr>` +
-    `${options.members ?? PICTURE_MEMBER + TEXTBOX_MEMBER}</wpg:wgp></a:graphicData></a:graphic>` +
+    `${options.members ?? FRAME_MEMBER}</wpg:wgp></a:graphicData></a:graphic>` +
     '</wp:anchor></w:drawing>';
   const run =
     options.alternateContent === false
@@ -289,7 +288,7 @@ describe('an MC group that cannot paint', () => {
     });
     const xml = strFromU8(unzipSync(saved!)['word/document.xml']!);
     expect(xml).toContain('First line!');
-    expect(xml).toMatch(/<wpg:wgp>.*<pic:pic>.*<wps:txbx>.*Group label.*<\/wpg:wgp>/s);
+    expect(xml).toMatch(/<wpg:wgp>.*<wpg:graphicFrame>.*name="Frame".*<\/wpg:wgp>/s);
     expect(xml).toContain('<mc:Fallback><w:pict><v:group id="Group 1"/></w:pict></mc:Fallback>');
     await withMounted(saved!, (surface) => {
       expect(anchored(surface.layout().pages[0]!)[0]!.accessibility.hidden).toBe(false);

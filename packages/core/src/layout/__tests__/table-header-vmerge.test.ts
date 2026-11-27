@@ -177,17 +177,6 @@ describe('a vertical merge inside the header rows', () => {
     }
   });
 
-  test('a merge that goes on into the body keeps sizing its own header row', () => {
-    // The chain crosses the header/body boundary, so its head is never detached from the
-    // header group: it sizes header row 0 exactly as before.
-    const table = tablesOn(
-      layoutOn(`${p('Lead')}${headerTable({ headLines: 5, mergeIntoBody: true })}`),
-      0
-    )[0]!;
-    expect(table.rows[0]!.box.height).toBe(5 * LINE_PT);
-    expectContentInsideItsTable(table);
-  });
-
   test('exact header rows hold a merged head that fits them', () => {
     const exact = '<w:trHeight w:val="280" w:hRule="exact"/>';
     const table = tablesOn(
@@ -334,4 +323,106 @@ describe('a merged header head under a wrap band', () => {
       for (const word of HEAD_TEXT.split(' ')) expect(painted).toContain(word);
     });
   }
+});
+
+// A merge from a header row that goes on into the body rows extends the repeated group through
+// its last row (17.4.49 `w:tblHeader`, 17.4.84 `w:vMerge`): the covered body rows lay out, move,
+// and repeat with the header rows, and the merged text spans every row it covers.
+describe('a vertical merge from the header rows into the body', () => {
+  test('each row keeps the height of its own cells', () => {
+    // Column 0 merges the three header rows and body row 3; five lines over four rows.
+    const table = tablesOn(
+      layoutOn(`${p('Lead')}${headerTable({ headLines: 5, mergeIntoBody: true })}`),
+      0
+    )[0]!;
+    expect(rowHeights(table)).toEqual([14, 14, 14, 28, 14]);
+    const head = table.rows[0]!.cells[0]!;
+    expect(head.rowSpan).toBe(4);
+    expect(head.box.height).toBe(5 * LINE_PT);
+    expect(table.rows[4]!.box.y).toBe(head.box.y + head.box.height);
+    expectContentInsideItsTable(table);
+  });
+
+  test('exact rows keep the merged text that fits them', () => {
+    // One header row and one body row, both exact one line: the two-line head needs both.
+    const rowPr = (extra = '') => `${extra}<w:trHeight w:val="280" w:hRule="exact"/>`;
+    const xml =
+      `<w:tbl>${tblPr()}` +
+      tr(`${tc(lines('M', 2), RESTART)}${tc(p('H0'))}${tc(p('c0'))}`, rowPr(HEADER)) +
+      tr(`${tc(p(''), CONTINUE)}${tc(p('b1'))}${tc(p('c1'))}`, rowPr()) +
+      tr(`${tc(p('a2'))}${tc(p('b2'))}${tc(p('c2'))}`) +
+      '</w:tbl>';
+    const layout = layoutOn(`${p('Lead')}${xml}`);
+    const table = tablesOn(layout, 0)[0]!;
+    expect(rowHeights(table)).toEqual([14, 14, 14]);
+    expect(table.rows[0]!.cells[0]!.box.height).toBe(2 * LINE_PT);
+    const painted = paintedText(layout);
+    expect(painted).toContain('M0');
+    expect(painted).toContain('M1');
+    expectContentInsideItsTable(table);
+  });
+
+  test('each repeated copy holds the covered body rows and the merged text', () => {
+    // Ten lines per page: the lead line, four group rows and five body rows fill page 1.
+    const layout = layoutOn(
+      `${p('Lead')}${headerTable({ headLines: 4, mergeIntoBody: true, bodyRows: 12 })}`,
+      10 * LINE_PT
+    );
+    expect(rowHeights(tablesOn(layout, 0)[0]!)).toEqual(Array.from({ length: 9 }, () => 14));
+    const repeat = tablesOn(layout, 1)[0]!;
+    expect(repeat.rows.slice(0, 4).every((row) => row.isHeaderRepeat === true)).toBe(true);
+    expect(repeat.rows[4]!.isHeaderRepeat).not.toBe(true);
+    expect(rowHeights(repeat).slice(0, 4)).toEqual([14, 14, 14, 14]);
+    const head = repeat.rows[0]!.cells[0]!;
+    expect(head.rowSpan).toBe(4);
+    expect(head.box.height).toBe(4 * LINE_PT);
+    // The covered body row repeats with its own cells.
+    const covered = repeat.rows[3]!.cells.map((cell) =>
+      cell.blocks.flatMap((block) =>
+        block.kind === 'paragraph'
+          ? block.lines.flatMap((line) => line.spans.map((s) => s.text))
+          : []
+      )
+    );
+    expect(covered.flat()).toContain('b0');
+    for (const pageIndex of layout.pages.keys()) {
+      for (const table of tablesOn(layout, pageIndex)) expectContentInsideItsTable(table);
+    }
+  });
+
+  test('the extended group moves to the next page whole', () => {
+    // Six lines per page: three lead lines leave three, and the group needs four. The covered
+    // body row is part of the group, so it never stays behind on the first page.
+    const layout = layoutOn(
+      `${p('Lead0')}${p('Lead1')}${p('Lead2')}${headerTable({ headLines: 4, mergeIntoBody: true })}`,
+      6 * LINE_PT
+    );
+    expect(tablesOn(layout, 0)).toHaveLength(0);
+    const table = tablesOn(layout, 1)[0]!;
+    expect(rowHeights(table).slice(0, 5)).toEqual([14, 14, 14, 14, 14]);
+    expect(table.rows[0]!.cells[0]!.box.height).toBe(4 * LINE_PT);
+  });
+
+  test('an extended group taller than a page degrades and keeps every merged line', () => {
+    const layout = layoutOn(
+      headerTable({ headLines: 9, mergeIntoBody: true, bodyRows: 4 }),
+      6 * LINE_PT
+    );
+    const repeats = layout.pages
+      .flatMap((_, pageIndex) => tablesOn(layout, pageIndex))
+      .flatMap((table) => table.rows)
+      .filter((row) => row.isHeaderRepeat === true);
+    expect(repeats).toHaveLength(0);
+    const painted = paintedText(layout);
+    for (let index = 0; index < 9; index += 1) expect(painted).toContain(`M${index}`);
+  });
+
+  test('a body row the merge does not cover stays a body row', () => {
+    const layout = layoutOn(
+      `${p('Lead')}${headerTable({ headLines: 3, mergeIntoBody: true, bodyRows: 12 })}`,
+      10 * LINE_PT
+    );
+    const repeat = tablesOn(layout, 1)[0]!;
+    expect(repeat.rows.filter((row) => row.isHeaderRepeat === true)).toHaveLength(4);
+  });
 });

@@ -1,5 +1,24 @@
 # @docx-editor.dev/i18n
 
+## 2.41.1
+
+No changes in this release.
+
+## 2.41.0
+
+No changes in this release.
+
+## 2.40.0
+
+### Minor Changes
+
+- f5cc27d: The React and Vue editors show the translated reason when they refuse to copy, cut, or paste on a selected drawing, in the same dialog as a refused picture insert. The `imageInsertError` dialog takes an optional `title` that names the refused action. Fixes #2087
+
+### Patch Changes
+
+- 42a0d83: Pasting an image file while a drawing is selected inserts it as an inline picture before the selected drawing's anchor. In suggesting mode, the editor refuses that paste and shows the reason, and the stale insert-target reasons no longer mention a drop. Fixes #2074
+- 2e9fe30: Previous change and Next change now explain in the reader's language that there are no changes to review, as Accept all and Reject all already did.
+
 ## 2.39.0
 
 ### Patch Changes

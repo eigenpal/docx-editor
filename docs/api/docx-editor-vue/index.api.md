@@ -4245,8 +4245,12 @@ export interface DocxEditorExportDialogProps {
     style?: CSSProperties;
 }
 
-// @public (undocumented)
+// @public
 export const DocxEditorFontNotice: vue.DefineComponent<vue.ExtractPropTypes<{
+    children: {
+        default: undefined;
+        type: PropType<DocxEditorFontNoticeProps['children']>;
+    };
     className: {
         default: undefined;
         type: StringConstructor;
@@ -4259,9 +4263,13 @@ export const DocxEditorFontNotice: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<TFunction>;
     };
-}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+}>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
-}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+}>[] | DocxEditorChildren | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    children: {
+        default: undefined;
+        type: PropType<DocxEditorFontNoticeProps['children']>;
+    };
     className: {
         default: undefined;
         type: StringConstructor;
@@ -4275,13 +4283,24 @@ export const DocxEditorFontNotice: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<TFunction>;
     };
 }>> & Readonly<{}>, {
+    children: ((context: DocxEditorFontNoticeContext) => DocxEditorChildren) | undefined;
     className: string;
     style: CSSProperties;
     t: TFunction;
-}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+}, SlotsType<{
+    default?: (context: DocxEditorFontNoticeContext) => VNode[];
+}>, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorFontNoticeContext {
+    readonly dismiss: () => void;
+    readonly fonts: readonly string[];
+    readonly message: string;
+}
 
 // @public
 export interface DocxEditorFontNoticeProps {
+    children?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -4708,6 +4727,7 @@ export interface DocxEditorNamespace {
     (props: DocxEditorProps, context?: {
         slots: {
             default?: () => VNode[];
+            fontNotice?: (context: DocxEditorFontNoticeContext) => VNode[];
             loadingIndicator?: () => VNode[];
             openFailureActions?: (context: DocxEditorOpenFailureContext) => VNode[];
             titleBarLeft?: () => VNode[];
@@ -5604,7 +5624,9 @@ export interface DocxEditorProps {
     contextMenu?: boolean | DocxEditorContextMenuProps;
     // (undocumented)
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
+    fontNotice?: boolean | DocxEditorFontNoticeProps;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
     // (undocumented)
@@ -5794,6 +5816,11 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<DocumentSource>;
     };
+    fieldDate: {
+        default: undefined;
+        type: PropType<Date>;
+        validator: (value: unknown) => value is Date | undefined;
+    };
     fieldResults: {
         default: undefined;
         type: PropType<FieldResultsMode>;
@@ -5869,6 +5896,11 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<DocumentSource>;
     };
+    fieldDate: {
+        default: undefined;
+        type: PropType<Date>;
+        validator: (value: unknown) => value is Date | undefined;
+    };
     fieldResults: {
         default: undefined;
         type: PropType<FieldResultsMode>;
@@ -5930,6 +5962,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     colorMode: "dark" | "light" | "system";
     contentLockPolicy: ContentLockPolicy;
     document: DocumentSource;
+    fieldDate: Date;
     fieldResults: FieldResultsMode;
     fontShaping: _docx_editor_dev_core.FontShapingOptions | undefined;
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
@@ -5965,6 +5998,7 @@ export interface DocxEditorRootProps {
     contentLockPolicy?: ContentLockPolicy;
     // (undocumented)
     document?: DocumentSource;
+    fieldDate?: Date;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;

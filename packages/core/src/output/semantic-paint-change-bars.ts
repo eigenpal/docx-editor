@@ -45,6 +45,7 @@ import {
 } from '../layout/semantic-record-queries.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
 import { isCarriedHeadRow } from '../layout/table-carried-head-row.ts';
+import { turnStoryBox, type StoryTurn } from '../layout/story-turns.ts';
 
 export const CHANGE_BARS_CLASS = 'docx-change-bars';
 const CHANGE_BAR_CLASS = 'docx-change-bar';
@@ -118,6 +119,15 @@ interface StoryFrame {
    * at the text; every other story is bounded by the paper.
    */
   readonly limit: number;
+  /**
+   * Turns of a text-box story whose text paints turned, with the page-stack point of the
+   * story origin and the sheet's page-stack y. A line's band turns with the text.
+   */
+  readonly turned?: {
+    readonly turns: readonly StoryTurn[];
+    readonly originX: number;
+    readonly sheetY: number;
+  };
 }
 
 function collectParagraph(
@@ -188,11 +198,24 @@ function pushLine(
   // spacing before to the top of whatever comes next, so two changed paragraphs in a row
   // draw one unbroken rule. Line boxes alone left the spacing after as a gap at every
   // paragraph boundary.
-  const top = (index === 0 ? fragment.box.y : line.box.y) + frame.dy;
-  const bottom = Math.min(
-    (index === last ? fragment.box.y + fragment.box.height : lines[index + 1]!.box.y) + frame.dy,
-    frame.limit
-  );
+  let top = (index === 0 ? fragment.box.y : line.box.y) + frame.dy;
+  let bottom =
+    (index === last ? fragment.box.y + fragment.box.height : lines[index + 1]!.box.y) + frame.dy;
+  if (bottom <= top) return;
+  if (frame.turned) {
+    // Turned text: the rule covers the rows the line's band reaches once it turns. The sheet
+    // bounds the turned band, not the upright one, which may lie off the sheet.
+    const { turns, originX, sheetY } = frame.turned;
+    const band = turnStoryBox(turns, {
+      x: originX + fragment.box.x,
+      y: sheetY + top,
+      width: fragment.box.width,
+      height: bottom - top,
+    });
+    top = Math.max(0, band.y - sheetY);
+    bottom = band.y + band.height - sheetY;
+  }
+  bottom = Math.min(bottom, frame.limit);
   if (bottom <= top) return;
   const run: BarRun = {
     top,
@@ -342,9 +365,18 @@ export function collectPageChangeBars(
       root.host,
       (fragment, context) => {
         if (context.textboxDepth === 0) return;
+        const turns = context.storyTurns;
         collectParagraph(
           fragment,
-          { mode, story: root.story, dy: context.storyOrigin.y - page.box.y, limit: sheetHeight },
+          {
+            mode,
+            story: root.story,
+            dy: context.storyOrigin.y - page.box.y,
+            limit: sheetHeight,
+            ...(turns
+              ? { turned: { turns, originX: context.storyOrigin.x, sheetY: page.box.y } }
+              : {}),
+          },
           runs
         );
       },

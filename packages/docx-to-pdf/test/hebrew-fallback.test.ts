@@ -15,7 +15,7 @@ import { docx } from './fixture.ts';
 // the first fallback to it, and it has no Hebrew either. A symbol face registered under that
 // name reproduces such a host without depending on the machine's fonts.
 const symbolFace = createFontSource(
-  new Uint8Array(readFileSync(new URL('../assets/NotoSansSymbols2-Regular.ttf', import.meta.url))),
+  new Uint8Array(readFileSync(new URL('../../fonts/assets/NotoSansSymbols2-Regular.ttf', import.meta.url))),
   { family: 'Segoe UI Symbol', weight: 400, style: 'normal' }
 );
 if ('failure' in symbolFace) throw new Error(JSON.stringify(symbolFace.failure));

@@ -2,7 +2,7 @@ import { capturePointPosition, createEditorPointMembers } from './editor-point-t
 import { createUnsupportedElementState } from './unsupported-element-state.ts';
 import { createEditorEvents } from './editor-events.ts';
 import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnostics.ts';
-import { surfaceFieldResultsScope } from './field-results-scope.ts';
+import { copyValidFieldDate } from '../layout/field-date.ts';
 import { createReviewDialogs } from './review-dialogs.ts';
 import { withCompareOutcome } from './compare-documents-state.ts';
 import * as replacing from './replace-document-command.ts';
@@ -144,7 +144,7 @@ import { proposalCapabilityRefusal } from './proposal-capability.ts';
 import { drawingPasteRefusal } from './drawing-paste-target.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
-import { configSurfaceOptions } from './docx-editor-surface-config.ts';
+import { configSurfaceOptions, editorFieldScope } from './docx-editor-surface-config.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   customNodeDiagnosticReporter,
@@ -186,17 +186,16 @@ import {
 } from './docx-editor-images.ts';
 import {
   createLayoutShaping,
-  disposeLayoutShaping,
   sampleFontShapingOptions,
   toEditorFontError,
 } from './font-configuration.ts';
 import {
-  composeFontConfiguration,
   normalizeFontResolverResult,
   type FontConfigurationBase,
   type FontConfigurationFragment,
 } from './font-composition.ts';
 import { splitDeferredAnswer } from '../layout/font-deferred.ts';
+import { createEditorFallbackFonts } from './shared-fallback-fonts.ts';
 import {
   createLateFontArrival,
   lateFacesInstalled,
@@ -217,6 +216,7 @@ import {
   embeddedFontDropError,
   embeddedFontSourcesAfterExplicit,
   explicitFontBudgetError,
+  noUsableFontSourcesError,
 } from './embedded-font-sources.ts';
 import {
   coveredFontFamiliesOf,
@@ -478,8 +478,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const defaultFamily = liveFontDefaultFamily();
       return {
         generation: fontLifetime.generation,
-        dynamic: typeof configuredFonts === 'function',
-        families: () => liveFontFamilies(session, caret?.fontFamily, defaultFamily),
+        dynamic: typeof configuredFonts === 'function' || fallbackFonts.pending(),
+        families: () =>
+          fallbackFonts.families(liveFontFamilies(session, caret?.fontFamily, defaultFamily)),
         faces: () =>
           requestFaces(laidOut ? usedFontFacesOf(laidOut) : undefined, defaultFamily, caret),
         defaultFamily,
@@ -495,6 +496,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
     }
   );
+  // Glyph fallback faces load when a character needs one. A resolver is asked for them; a
+  // fixed configuration installs again when it already holds one.
+  const fallbackFonts = createEditorFallbackFonts(
+    (held) => (held || typeof configuredFonts === 'function') && liveFonts.schedule()
+  );
+  // The alias lookup of paint and the canvas measurer, with the glyph fallback aliases.
+  const paintFontAlias = () =>
+    fallbackFonts.paintAlias(fontHold.alias(embeddedFaces?.alias), (family) =>
+      embeddedFaces?.alias(family)
+    );
   let fontsResolving = false;
   let installedFontKey: string | undefined;
   const fontsDone = (): void => ((fontsResolving = false), bump());
@@ -575,11 +586,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     throw new TypeError('Invalid reviewDisplayMode');
   if (config.reviewDisplayMode && config.reviewDisplayMode !== 'proposed' && !reviewEnabled)
     throw new TypeError('reviewDisplayMode requires a review module');
-  // Refused, not approximated: a collaboration session shares one unit per field.
-  const fieldScope = surfaceFieldResultsScope({
-    fieldResults: config.fieldResults,
-    collaborationModel: modules.collaboration ?? undefined,
-  });
+  const fieldScope = editorFieldScope(config, modules.collaboration ?? undefined);
   // Closures only: every dependency is read when a command runs, not at construction.
   const protection = createDocumentProtectionCommands({
     surface: () => surface,
@@ -734,7 +741,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
-      ...(embeddedFaces ? { fontAlias: fontHold.alias(embeddedFaces.alias) } : {}),
+      ...(embeddedFaces ? { fontAlias: paintFontAlias() } : {}),
       ...configSurfaceOptions(config),
       ...(fieldScope.mode === 'editable' ? { fieldResults: fieldScope.mode } : {}),
     };
@@ -989,6 +996,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     shapedProducer = undefined;
     resolvedFontConfiguration = undefined;
     coveredFontFamilies = new Set();
+    fallbackFonts.reset();
     documentSubstitutedFamilies = new Set();
     disposeEmbeddedFaces();
     disposeShapedFonts();
@@ -1035,6 +1043,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const current = () => !destroyed && seq === loadSeq && lifetime.current();
     const reportForLoad = (error: EditorFontError) =>
       reportFontError(error, seq, lifetime.generation);
+    // A newer load, or a destroy, landed while this one awaited: its answer must not install.
+    const stale = (): boolean => {
+      if (current()) return false;
+      if (seq === loadSeq && lifetime.current()) fontsResolving = false;
+      return true;
+    };
     const configured = configuredFonts;
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
@@ -1078,27 +1092,38 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               )
             : await configured(request);
       const { now: raw, later } = answer ? splitDeferredAnswer(answer) : { now: answer };
-      const explicit: FontConfigurationBase | undefined =
+      const hostExplicit: FontConfigurationBase | undefined =
         typeof configured === 'function' || late ? normalizeFontResolverResult(raw) : raw;
       // Awaiting handed control back: this load may have been superseded (or the editor
       // destroyed) while the resolver ran; installing its answer would overwrite newer fonts.
-      if (!current()) {
-        if (seq === loadSeq && lifetime.current()) fontsResolving = false;
-        return;
-      }
+      if (stale()) return;
       resolvedFontConfiguration = raw;
       if (later) lateFonts.track(later, raw, lifetime.generation, current);
       if (
         embedded.length === 0 &&
-        (!explicit || (raw?.supportedFamilies?.length && !normalizeFontResolverResult(raw)))
+        (!hostExplicit || (raw?.supportedFamilies?.length && !normalizeFontResolverResult(raw)))
       ) {
         fontsDone();
         emitSelectionChange();
         return;
       }
       const maxFontBytes =
-        (explicit && 'maxFontBytes' in explicit ? explicit.maxFontBytes : undefined) ??
+        (hostExplicit && 'maxFontBytes' in hostExplicit ? hostExplicit.maxFontBytes : undefined) ??
         HARD_MAX_FONT_BYTES;
+      // The shared fallback rules answer for the families that are still missing. An export
+      // of this document applies the same rules, so both use one face for each family.
+      const shared = await fallbackFonts.resolve({
+        epoch: seq,
+        key: `${seq}/${lifetime.generation}`,
+        host: typeof configured === 'function' ? configured : hostExplicit,
+        explicit: hostExplicit,
+        embedded: { fonts: embedded, maxFontBytes },
+        request: { ...request, families: documentFonts.families },
+        installed: canProbe ? probeLocalFont : undefined,
+        compose: (composed) => applyDocumentFontSubstitutions(composed, documentFonts, fallbacks),
+      });
+      if (stale()) return;
+      const explicit = shared.explicit;
       const boundedExplicit = boundedExplicitFontSources(explicit?.sources ?? [], maxFontBytes);
       const initialExplicitSources = boundedExplicit.sources;
       for (const source of boundedExplicit.dropped) {
@@ -1109,6 +1134,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         initialExplicitSources,
         maxFontBytes
       );
+      const shapeFonts = async (composed: typeof fonts) =>
+        fallbackFonts.shaping(
+          await createLayoutShaping(composed, undefined, fontShaping),
+          canProbe,
+          typeof configured !== 'function'
+        );
       // Once, on whatever path this load exits by. The set is not final until the refusal
       // loop settles — a rejected explicit source hands budget back and un-drops an
       // embedded face — so it cannot be reported eagerly, and the loop `await`s twice, so
@@ -1122,16 +1153,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           reportForLoad(embeddedFontDropError(drop));
         }
       };
-      let fonts = applyDocumentFontSubstitutions(
-        composeFontConfiguration(
-          { epoch: seq, ...explicit, sources: initialExplicitSources },
-          fromDocument
-        ),
-        documentFonts,
-        fallbacks
-      );
+      let fonts = shared.compose(initialExplicitSources, fromDocument);
       // A face request that brought no new bytes keeps the installed fonts: no relayout.
-      const installKey = `${seq}\u0001${lifetime.generation}\u0001${fontInstallKey(fonts)}`;
+      const installKey = `${seq}\u0001${lifetime.generation}\u0001${fontInstallKey(fonts)}\u0001${fallbackFonts.key(fonts)}`;
       if (installKey === installedFontKey)
         return (reportDocumentDrops(), fontsDone(), emitSelectionChange());
       // Nothing to shape: the fixed measurer stays. An app that DID supply a
@@ -1141,33 +1165,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (fonts.sources.length === 0) {
         reportDocumentDrops();
         fontsDone();
-        if (explicit) {
-          reportForLoad(
-            new EditorFontError(
-              'missing',
-              'the supplied font configuration contains no usable sources; the fixed measurer stays in effect'
-            )
-          );
-        }
+        if (explicit) reportForLoad(noUsableFontSourcesError());
         return;
       }
-      let shaping = await createLayoutShaping(fonts, undefined, fontShaping);
-      // A newer load (or a destroy) landed while this one awaited: the shaping can never
-      // be installed, so release its wasm objects rather than dropping it unreferenced,
-      // and clear the in-flight flag only if this load is still the current one. Reads
-      // `shaping` at call time, so it disposes whichever snapshot the caller just built.
-      const supersededNow = (): boolean => {
-        if (current()) return false;
-        disposeLayoutShaping(shaping);
-        if (seq === loadSeq && lifetime.current()) fontsResolving = false;
-        return true;
-      };
+      let shaping = await shapeFonts(fonts);
+      // Superseded while it awaited: the shaping can never be installed, so release its wasm
+      // objects. Reads `shaping` at call time, so it disposes the snapshot just built.
+      const supersededNow = (): boolean => stale() && (fallbackFonts.dispose(shaping), true);
       if (supersededNow()) return;
       // Every "nothing survived" exit: report the drops, release the shaping that will
       // never be installed, and leave the fixed measurer in place.
       const bailToFixed = (superseded?: typeof shaping): void => {
         reportDocumentDrops();
-        if (superseded) disposeLayoutShaping(superseded);
+        if (superseded) fallbackFonts.dispose(superseded);
         fontsDone();
       };
       // Per-face degradation, reported: an embedded face the validator refused still
@@ -1204,17 +1214,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             (source) => rejectedExplicit || !refusedRequests.has(fontRequestKey(source.request))
           );
           const superseded = shaping;
-          fonts = applyDocumentFontSubstitutions(
-            composeFontConfiguration(
-              { epoch: seq, ...explicit, sources: explicitSurvivors },
-              { sources: embeddedSurvivors }
-            ),
-            documentFonts,
-            fallbacks
-          );
+          fonts = shared.compose(explicitSurvivors, { sources: embeddedSurvivors });
           if (fonts.sources.length === 0) return bailToFixed(superseded);
-          shaping = await createLayoutShaping(fonts, undefined, fontShaping);
-          disposeLayoutShaping(superseded);
+          shaping = await shapeFonts(fonts);
+          fallbackFonts.dispose(superseded);
           if (supersededNow()) return;
           const refusedAfterRebuild = refusedIn(shaping, fonts);
           if (refusedAfterRebuild.size > 0) {
@@ -1225,17 +1228,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
             );
             const rejected = shaping;
-            fonts = applyDocumentFontSubstitutions(
-              composeFontConfiguration(
-                { epoch: seq, ...explicit, sources: admittedExplicit },
-                { sources: admittedEmbedded }
-              ),
-              documentFonts,
-              fallbacks
-            );
+            fonts = shared.compose(admittedExplicit, { sources: admittedEmbedded });
             if (fonts.sources.length === 0) return bailToFixed(rejected);
-            shaping = await createLayoutShaping(fonts, undefined, fontShaping);
-            disposeLayoutShaping(rejected);
+            shaping = await shapeFonts(fonts);
+            fallbackFonts.dispose(rejected);
             if (supersededNow()) return;
           }
         }
@@ -1268,14 +1264,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         embeddedFaces = registration;
         if (container) registration.showIn(container.ownerDocument); // it may have moved meanwhile
         coveredFontFamilies = coveredFontFamiliesOf(admitted, fonts.substitutions ?? []);
-        documentSubstitutedFamilies = admittedDocumentSubstitutions(
-          fonts,
-          documentFonts,
-          shaping.fonts,
-          explicit?.substitutions
-        );
+        documentSubstitutedFamilies = new Set([
+          ...admittedDocumentSubstitutions(
+            fonts,
+            documentFonts,
+            shaping.fonts,
+            hostExplicit?.substitutions
+          ),
+          ...shared.substituted,
+        ]);
         fontHold.release(fontFamilyCovered); // a picked family whose face arrived shows in it
-        const paintAlias = fontHold.alias(embeddedFaces?.alias);
+        const paintAlias = paintFontAlias();
         const fallbackResolution = browserFallbackMeasurer(
           container,
           scaleOf(),
@@ -1304,7 +1303,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         if (!current()) {
           registration.dispose();
-          disposeLayoutShaping(shaping);
+          fallbackFonts.dispose(shaping);
           return;
         }
       } catch (error) {
@@ -1319,10 +1318,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           } = previous);
         }
         registration.dispose();
-        disposeLayoutShaping(shaping);
+        fallbackFonts.dispose(shaping);
         throw error;
       }
-      disposeShapedFonts = () => disposeLayoutShaping(shaping);
+      disposeShapedFonts = () => fallbackFonts.dispose(shaping);
       installedFontKey = installKey;
       previous.disposeShapedFonts();
       previous.embeddedFaces?.dispose();
@@ -2260,6 +2259,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     isReviewPaneOpen: () => reviewPaneOpen,
 
     getEditingMode: () => editingMode,
+    getFieldDate: () => copyValidFieldDate(fieldScope.layout.fieldDate),
     getReviewAuthors: () =>
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
     ...createReviewAuthorCommands(reviewAuthorVisibility, {

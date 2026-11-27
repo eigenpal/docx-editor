@@ -46,6 +46,7 @@ For generated signatures, see the [Vue API reference](/docs/2.x/api/vue).
 | `zoom` | `number` | Numeric display scale. Updates without a rebuild. |
 | `zoomMode` | `ZoomMode \| 'auto'` | Zoom source. `'auto'` fits the page width. |
 | `fieldResults` | `'atomic' \| 'editable'` | `'editable'` allows editing saved field results. Defaults to `'atomic'`. See [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results). |
+| `fieldDate` | `Date` | DATE and TIME fields with a `\@` picture show this date instead of their saved results. The saved document keeps saved results. Print and PDF export pass the date to the PDF handler. Create the date once, for example as a `const` in `setup`. An inline `new Date()` in the template makes a new value on each render, and a changed time warns in development. See [Show the current date](/docs/2.x/guides/fields#show-the-current-date). |
 | `contentLockPolicy` | `ContentLockPolicy` | `{ allowFormattingInLockedContent: true }` allows formatting in content-locked controls. See [Formatting content-locked controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls). |
 | `lockedControlNavigation` | `'characters' \| 'atomic'` | Caret movement through a locked inline control: per character (default) or as one unit. See [Caret movement](/docs/2.x/guides/content-controls#caret-movement-in-content-locked-controls). |
 | `modules` | `readonly EditorModule[]` | Capability modules from [`@docx-editor.dev/pro/vue`](/docs/2.x/pro), such as `reviewModule()`. |
@@ -79,6 +80,7 @@ Wrap resolvers such as `packagedFonts()` in `useFonts()` to keep one identity. F
 | `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
 | `popups` | `DocxEditorPopups` | Replaces automatic popups with `definePopup(MyPopup)` or render callbacks. See [Customize popups](/docs/2.x/guides/customize-dialogs). |
 | `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Configures the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
+| `fontNotice` | `boolean \| DocxEditorFontNoticeProps` | Toggles or configures the bar that lists substituted font families. See [the font notice](/docs/2.x/guides/fonts#customize-the-font-notice). |
 | `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
 | `i18n` | `Translations` | Live chrome and drawing labels for this editor. See [i18n](/docs/2.x/i18n). |
 
@@ -102,6 +104,7 @@ Wrap resolvers such as `packagedFonts()` in `useFonts()` to keep one identity. F
 | `#titleBarRight` | none | Host content after the title. |
 | `#loadingIndicator` | none | Replaces the loading spinner. See [loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator). |
 | `#openFailureActions` | `{ failure, message, dismiss }` | Adds buttons to the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
+| `#fontNotice` | `{ fonts, message, dismiss }` | Replaces the bar that lists substituted font families. See [the font notice](/docs/2.x/guides/fonts#customize-the-font-notice). |
 
 ## Use the ref
 
@@ -125,8 +128,9 @@ editorRef.value?.focus();
 
 ## Limits
 
-- `fieldResults`, `contentLockPolicy`, `lockedControlNavigation`, and `modules` apply at creation. To change them, remount with a different `:key`.
+- `fieldResults`, `fieldDate`, `contentLockPolicy`, `lockedControlNavigation`, and `modules` apply at creation. To change them, remount with a different `:key`. A new `fieldDate` object with the same time does not warn.
 - Collaboration refuses `fieldResults="editable"` with a `TypeError`.
+- `fieldDate` with `fieldResults="editable"` throws a `TypeError`.
 - The drawing renderers from `drawingModule()` and `reviewModule()` serve every editor in the page. A remount does not remove them. See [Advanced drawing rendering](/docs/2.x/pro/drawing).
 - `DocxEditorRoot` emits only `ready`, `change`, `font-error`, and `revision-markup-change`. File and title events belong to `<DocxEditor>`.
 - If you hide `hyperlinkPopup`, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls stay disabled.

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Merged text that moved wholly to the next page filled from the top, and the closing rule of a continued merged cell sat above the rule beside it.",
+  "after": "The text keeps its vertical alignment in the part of the merge where it starts, and the closing rules line up at the page break.",
+  "reason": "Only derived layout geometry changes. Shared operations and stored document content remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-carried-paint.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vmerge-fixed-rows-page-break.test.ts"
+  ],
+  "changeset": "carried-merge-rule-valign",
+  "migration": null
+}

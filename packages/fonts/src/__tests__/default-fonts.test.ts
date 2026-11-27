@@ -20,6 +20,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import {
   ALL_DEFAULT_FONT_FAMILIES,
+  GLYPH_FALLBACK_FACE_FAMILIES,
   ALL_WORD_DEFAULT_FAMILIES,
   DEFAULT_FONT_FAMILIES,
   FONT_ASSET_MANIFEST,
@@ -59,8 +60,9 @@ describe('packaged manifest', () => {
 
   test('every Word family has its faces packaged: four, or two for an upright-only plan', () => {
     expect(ALL_DEFAULT_FONT_FAMILIES).toHaveLength(7);
-    // Six four-face families and Segoe UI's two upright Selawik faces.
-    expect(FONT_ASSET_MANIFEST).toHaveLength(26);
+    // Six four-face families, Segoe UI's two upright Selawik faces, and one face for each of
+    // the five glyph fallback families.
+    expect(FONT_ASSET_MANIFEST).toHaveLength(26 + GLYPH_FALLBACK_FACE_FAMILIES.length);
   });
 
   test('the omitted-families default carries only Word DOCUMENT defaults', () => {

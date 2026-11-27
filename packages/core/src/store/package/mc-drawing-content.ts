@@ -87,6 +87,12 @@ export function projectMcDrawingContent(
   if (projection.hidden) {
     return projection.chartSummary || holdsChartGraphic(drawing) ? projection : null;
   }
+  // A group that paints without some members is not the whole drawing: a fallback that
+  // paints stands for it.
+  if (projection.diagnostics.some((diagnostic) => diagnostic.code === 'group-member-not-shown')) {
+    const whole = paintableMcFallback(wrapper, context.ownerPartName);
+    if (whole) return whole;
+  }
   // Prefer a paintable fallback when the selected modern drawing cannot paint.
   // Otherwise retain its geometry and diagnostic for the unsupported-content API.
   if (

@@ -15,6 +15,7 @@ import { PICTURE_CHAR } from './line-picture-alignment.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 import { itemizeScriptFontSlots } from './script-itemization.ts';
+import { runBorderGapBeside, runBorderGapBetween } from './run-border-advance.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -753,14 +754,27 @@ export function reorderBidiSpans(
     }
   }
   const result = [...spans];
-  let x = spans.reduce((min, s) => Math.min(min, s.box.x), Infinity);
+  // Character borders take their room between spans in logical order (`w:bdr`, ECMA-376
+  // Part 1, 17.3.2.4). That room is no part of a span's advance: it goes back between the
+  // spans in their visual order.
+  const borderBefore = spans.map((s, i) => runBorderGapBetween(spans[i - 1], s));
+  let x = spans.reduce((min, s) => Math.min(min, s.box.x), Infinity) - borderBefore[0]!;
   const advances = spans.map(
     (s, i) =>
       s.box.width +
-      Math.max(0, (spans[i + 1]?.box.x ?? s.box.x + s.box.width) - s.box.x - s.box.width)
+      Math.max(
+        0,
+        (spans[i + 1]?.box.x ?? s.box.x + s.box.width) -
+          s.box.x -
+          s.box.width -
+          (borderBefore[i + 1] ?? 0)
+      )
   );
+  let beside: StyleSpanRecord | undefined;
   for (const index of order) {
     const span = spans[index]!;
+    x += runBorderGapBeside(beside, span);
+    beside = span;
     const direction = levels[index]! % 2 ? 'rtl' : 'ltr';
     const gap = advances[index]! - span.box.width;
     const spaces = span.text.split(' ').length - 1;
@@ -838,6 +852,18 @@ export function splitBidiTrailingWhitespace(
       range: { ...span.range, start: span.range.start + from },
       box: { ...span.box, x: span.box.x + span.box.width - width, width },
     };
+    // The spaces a character border leaves outside it at a wrap are in the tail.
+    const trim = span.borderEndTrimPt;
+    if (trim !== undefined) {
+      const { borderEndTrimPt: _trim, ...text } = textSpan;
+      const kept = trim - width;
+      return [
+        ...spans.slice(0, index),
+        kept > 0.001 ? { ...text, borderEndTrimPt: kept } : text,
+        { ...tailSpan, borderEndTrimPt: Math.min(trim, width) },
+        ...spans.slice(index + 1),
+      ];
+    }
     return [...spans.slice(0, index), textSpan, tailSpan, ...spans.slice(index + 1)];
   }
   return spans;

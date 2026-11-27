@@ -1518,6 +1518,121 @@ A body `LISTNUM` field SHALL display the next number of its list, computed from 
 - **WHEN** a `LISTNUM` field that names the list at level 1 follows it, and then another numbered paragraph of the list
 - **THEN** the field displays `S2.` and the paragraph shows `S3.`
 
+### Requirement: Paragraphs inside a field instruction take no line
+
+A paragraph that starts and ends inside the field codes of one closed complex field SHALL take no line box, spacing, or list marker. The field codes run from `begin` to `separate`, or to `end` without one (ECMA-376 §17.16.18, `CT_FldChar`; §17.18.29, `ST_FldCharType`). The paragraph SHALL stay in the tree. It SHALL NOT advance list counters, in a table cell or a content control too. A join SHALL NOT absorb it.
+
+#### Scenario: An IF field's text spans paragraphs
+
+- **GIVEN** an `IF` field whose quoted text holds empty paragraphs and list paragraphs, with or without a `separate` and a saved result
+- **WHEN** the story lays out
+- **THEN** one line shows the text before the field, then the saved result with the text after the field
+- **AND** a nested field's saved result inside those paragraphs adds no line
+- **AND** Backspace at the saved result and Delete before the field each remove the character beside the caret and keep the paragraphs of the field codes
+
+#### Scenario: A content control wraps a field-code paragraph
+
+- **GIVEN** a list paragraph inside the field codes, wrapped in a block content control, at the top level of a story or in a table cell
+- **WHEN** the story lays out
+- **THEN** the paragraph takes no line and the list after the field continues as if it were absent, in both places
+
+#### Scenario: A field nested past the nesting cap
+
+- **GIVEN** a story with a field nested more than four levels deep, and an ordinary `IF` field whose field codes span paragraphs
+- **WHEN** the story lays out
+- **THEN** only the field past the cap is left out
+- **AND** the fields around it and the ordinary `IF` field still hide their field-code paragraphs
+
+#### Scenario: The mergeParagraphs command meets a field-code mark
+
+- **GIVEN** a selection whose `mergeParagraphs` join would remove a paragraph mark inside a field instruction, or the mark of the paragraph that holds `begin`
+- **WHEN** `can` or `exec` answers the command
+- **THEN** it refuses with the `unsupported` code and a reason that starts with `field-code-mark`
+- **AND** the document does not change
+
+#### Scenario: A structural insert inside the field codes
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** the user presses Enter, runs `splitParagraph`, or inserts a section break, in a paragraph inside them, or at the start of the paragraph where they end while the two sides do not share one line
+- **THEN** the write is refused with a reason that starts with `field-code-mark`
+- **AND** the document does not change
+- **AND** a table or a table of contents inserted with the caret in the paragraph where they end goes before the paragraph that holds `begin`
+- **AND** a rich paste there is refused, and its plain text lands after the field's `separate`
+
+#### Scenario: An automation write splits inside the field codes
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** an automation write would add a paragraph mark or a table in a paragraph inside them, or at the start of the paragraph where they end
+- **THEN** the planner refuses with `unsupported-capability` and the detail `field-code-mark`, which the editor API reports as `NotSupported`
+- **AND** the document does not change
+
+#### Scenario: An automation delete removes a field-code mark
+
+- **GIVEN** field codes that hold paragraph marks
+- **WHEN** an automation delete of a paragraph or a range, tracked or not, would remove one of those marks, or the mark of the paragraph that holds `begin`, and is not an untracked range delete over the whole field
+- **THEN** the planner refuses with `unsupported-capability` and the detail `field-code-mark`, which the editor API reports as `NotSupported`
+- **AND** the document does not change
+
+#### Scenario: An untracked automation range delete covers the whole field
+
+- **GIVEN** a complex field whose field codes hold paragraph marks (ECMA-376 §17.16.18, `CT_FldChar`; §17.16.23, `instrText`)
+- **WHEN** an untracked automation range delete or replacement spans paragraphs and holds every field character of the field, from `begin` through `end`
+- **THEN** the planner removes the field characters, the field codes with the paragraphs inside them, and the result, and joins what is left of the outer paragraphs, as for any range delete
+- **AND** it composes existing operations: `deleteBlock`, `joinParagraphs`, and `deleteText`
+- **AND** a range that holds only some of the field's characters, or any tracked range delete, is still refused with the detail `field-code-mark`
+
+#### Scenario: A malformed field keeps its paragraphs
+
+- **GIVEN** a field without an `end`, or a field whose field codes hold `w:t` text outside a nested field's result
+- **WHEN** the story lays out
+- **THEN** every paragraph between its characters keeps its line
+
+### Requirement: The text on either side of multi-paragraph field codes shares one line
+
+When field codes hold paragraph marks, the paragraph that holds `begin` and the paragraph where the field codes end SHALL lay out as one paragraph, with the first one's properties and the last one's direct space after (ECMA-376 §17.16.18). The tree SHALL keep both paragraphs, and each span SHALL map to its own paragraph. The first SHALL NOT advance a list counter. When the two cannot be addressed as one, each SHALL keep its line.
+
+#### Scenario: Editing on both sides of the shared line
+
+- **GIVEN** the shared line of an `IF` field whose field codes span paragraphs
+- **WHEN** a participant types, moves the caret, or presses Backspace or Delete on either side of the field codes, and a second participant edits the other side at the same time
+- **THEN** each edit lands in the paragraph that holds the text beside the caret
+- **AND** both participants converge on one line through undo, redo, save, and reopen
+
+#### Scenario: Caret stops where the two sides meet
+
+- **GIVEN** the shared line of an `IF` field whose field codes span paragraphs
+- **WHEN** the start of the result side paints at the end of the first side
+- **THEN** the caret has one stop there, and a caret at the start of the result side shows at the end of the first side
+- **AND** when the result side starts a wrapped line, or runs in the other direction, each side keeps its own stop and the caret shows where it is
+
+#### Scenario: An insert at the start of the result side
+
+- **GIVEN** a collapsed caret at the start of the result side of the shared line
+- **WHEN** the user types, composes text, presses Enter, pastes lines, inserts a section break, inserts a table, or proposes a tracked insertion, with or without a format armed there
+- **THEN** the insert lands before the field's `begin`, or before the whole line for a table
+- **AND** the field codes keep exactly their paragraph marks
+
+#### Scenario: An insert at the start of a result side that keeps its own line
+
+- **GIVEN** field codes that hold paragraph marks, where the paragraph that holds `begin` ends a section, so the two sides keep their own lines
+- **WHEN** the user presses Enter, inserts a section break, or inserts a table at the start of the result side
+- **THEN** nothing redirects the insert, and it is refused with a reason that starts with `field-code-mark`
+- **AND** the field codes keep exactly their paragraph marks
+
+#### Scenario: Vertical motion and presses past the end of a merged line
+
+- **GIVEN** a line that draws two paragraphs, from shared field codes or a resolved revision view
+- **WHEN** the caret moves Up or Down onto or off the line, or a press lands right of the line end
+- **THEN** Up and Down leave the line and land at the nearest position on the target line, in whichever paragraph holds it
+- **AND** a press past the end puts the caret at the end of the last paragraph on the line
+
+#### Scenario: List items on the shared line
+
+- **GIVEN** the paragraph that holds `begin`, or the paragraph where the field codes end, is a list item
+- **WHEN** the story lays out
+- **THEN** the shared line shows no list marker
+- **AND** only the list item of the last paragraph advances its counter
+
 ### Requirement: Header and footer lists share one count
 
 Header and footer stories SHALL count list items on one shared count that the body and notes do not join. The count SHALL run over the sections in order and, within a section, over the parts that section references itself: even header, default header, even footer, default footer, first-page header, first-page footer. An inherited part SHALL keep the numbers of its referencing section.

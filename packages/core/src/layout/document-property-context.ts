@@ -55,7 +55,9 @@ export function documentProjectionProducer(
   tocToken: string
 ): string {
   const shown = options.showFieldCodes ? `${options.producer ?? ''}|field-codes` : options.producer;
-  const base = shown === undefined ? shown : withFieldResultsProducer(shown);
+  // The field-results mode and the field date key the cache also without a producer.
+  const folded = withFieldResultsProducer(shown ?? '');
+  const base = shown === undefined && folded === '' ? undefined : folded;
   // Coordinated hosts already invalidate only paragraphs whose projected values changed.
   // A partial projection contract must retain the document-wide fallback.
   const properties =

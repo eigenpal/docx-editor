@@ -14,6 +14,8 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 type CopyFlavours = ReturnType<PaginatedSurface['copyFlavours']>;
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
+import { rememberEditorCopy } from './clipboard-editor-copy.ts';
+import { hostWindowOf, isDomNode } from './host-realm.ts';
 import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
@@ -512,6 +514,9 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
   const write = (event: ClipboardEvent, flavours: CopyFlavours): void => {
     event.clipboardData?.setData('text/plain', flavours.text);
     if (flavours.html) event.clipboardData?.setData('text/html', flavours.html);
+    // A menu Paste uses this copy when the browser refuses its clipboard read.
+    const target = event.target;
+    rememberEditorCopy(isDomNode(target) ? hostWindowOf(target) : undefined, flavours);
   };
 
   const onCopy = (event: ClipboardEvent): void => {

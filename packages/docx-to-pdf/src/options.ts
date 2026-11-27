@@ -58,6 +58,16 @@ export function validateOptions(options: PdfExportOptions): {
       throw new TypeError(`${name} is not supported by exportPdf`);
   }
   if (options.revisionMarkup !== undefined) resolveRevisionMarkup(options.revisionMarkup);
+  if (options.fieldDate !== undefined) {
+    // No `instanceof`: a valid Date from another realm is accepted.
+    let time = Number.NaN;
+    try {
+      time = Date.prototype.getTime.call(options.fieldDate);
+    } catch {
+      // Not a Date: refused below.
+    }
+    if (Number.isNaN(time)) throw new TypeError('Invalid fieldDate: use a valid Date');
+  }
   if (options.revisionAuthorSlots !== undefined) {
     if (
       !options.revisionAuthorSlots ||

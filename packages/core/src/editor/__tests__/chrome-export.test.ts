@@ -168,3 +168,24 @@ test('PDF print settings reach the handler from an editor without a snapshot', a
     revisionMarkup: DEFAULT_REVISION_MARKUP,
   });
 });
+
+test('PDF export passes the editor field date, also without a snapshot', async () => {
+  const fieldDate = new Date(2026, 2, 5, 14, 7);
+  const bytes = new TextEncoder().encode('%PDF-1.7\n');
+  let received: unknown;
+  await runChromeExport(
+    { save: async () => new ArrayBuffer(1), getFieldDate: () => fieldDate },
+    'pdf',
+    {
+      pdf: async (_source, view) => {
+        received = view;
+        return { bytes };
+      },
+    }
+  );
+  expect(received).toEqual({
+    displayMode: 'proposed',
+    revisionMarkup: DEFAULT_REVISION_MARKUP,
+    fieldDate,
+  });
+});

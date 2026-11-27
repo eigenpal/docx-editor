@@ -19,6 +19,7 @@ import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { FieldAtomMarker } from './field-pieces.ts';
 import { parseButtonInstruction, type ButtonFieldSpec } from './field-button.ts';
+import { parseDateFieldInstruction, type DateFieldSpec } from './field-date.ts';
 import { parseDocPropertyInstruction, type DocPropertyField } from './field-doc-property.ts';
 import { normalizeFieldInstruction } from './field-instruction.ts';
 import { allowlistedPageField } from './field-instruction.ts';
@@ -65,6 +66,8 @@ export interface CapturedInstructionSpecs {
   formSpec: FormFieldKind | null;
   buttonSpec: ButtonFieldSpec | null;
   docPropertySpec: DocPropertyField | null;
+  /** DATE or TIME with a `\@` picture; shows the layout's field date when it has one. */
+  dateSpec?: DateFieldSpec | null;
   refSpec: RefFieldSpec | null;
   autonumSpec: AutonumFieldSpec | null;
   /** Recognized LISTNUM instruction; its number comes from the story's list walk. */
@@ -89,6 +92,8 @@ export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: 
   if (pending.buttonSpec) return;
   pending.docPropertySpec = parseDocPropertyInstruction(raw);
   if (pending.docPropertySpec) return;
+  pending.dateSpec = parseDateFieldInstruction(raw);
+  if (pending.dateSpec) return;
   pending.linkSpec = parseRefLinkInstruction(raw);
   pending.refSpec = parseRefInstruction(raw);
   if (pending.refSpec) return;

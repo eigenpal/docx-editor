@@ -34,6 +34,10 @@ import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 import type { DocxEditorNavigationProps } from './editor/navigation';
 import type {
+  DocxEditorFontNoticeContext,
+  DocxEditorFontNoticeProps,
+} from './editor/DocxEditorFontNotice';
+import type {
   DocxEditorOpenFailureContext,
   DocxEditorOpenFailureProps,
 } from './editor/DocxEditorOpenFailure';
@@ -102,6 +106,24 @@ export interface DocxEditorProps {
    * ```
    */
   readonly renderOpenFailureActions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
+  /**
+   * Your own font notice, in place of the packaged bar. It renders in the same row, only
+   * while the document has substituted families that the reader has not dismissed. It is
+   * the same as `fontNotice.children`; pass only one. The function can call hooks. It
+   * renders nothing with
+   * `fontNotice={false}`, and nothing with `chrome={false}`: compose `DocxEditor.FontNotice`
+   * yourself there.
+   *
+   * ```tsx
+   * <DocxEditor
+   *   document={bytes}
+   *   renderFontNotice={({ fonts, dismiss }) => (
+   *     <MyBanner onClose={dismiss}>Substituted fonts: {fonts.join(', ')}</MyBanner>
+   *   )}
+   * />
+   * ```
+   */
+  readonly renderFontNotice?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
   /**
    * Your own loading indicator, in place of the packaged spinner. It shows centered on a
    * blank page before the document arrives, then on the document's first page while a large
@@ -241,6 +263,17 @@ export interface DocxEditorProps {
    */
   openFailure?: boolean | DocxEditorOpenFailureProps;
   /**
+   * The bar that names the font families the document renders in substitute faces, on by
+   * default with the packaged chrome. It shows only when there are such families. Requires
+   * `chrome`; without it, compose `DocxEditor.FontNotice` yourself.
+   *
+   * `false` removes it, for a host that does not want it or reports the families itself
+   * from `useEditorState((snapshot) => snapshot.fontSubstitutions)`. An object is
+   * `DocxEditorFontNoticeProps`, passed straight through: restyle the bar with
+   * `className` and `style`, or replace it with `children`.
+   */
+  fontNotice?: boolean | DocxEditorFontNoticeProps;
+  /**
    * Horizontal and vertical rulers, on by default with the packaged chrome.
    *
    * They are part of the frame rather than an extra: every editor this
@@ -292,6 +325,16 @@ export interface DocxEditorProps {
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
+   * The saved document keeps the saved results. Print and PDF export from the File menu pass the
+   * date to the PDF handler as `ChromeExportView.fieldDate`. Absent (the default), fields show
+   * their saved results. Read once, when the editor is created: a later
+   * change to a different time is ignored, with a development warning. A new `Date` with the same
+   * time does nothing. Refused with a `TypeError` when it is not a valid `Date`, or with
+   * `fieldResults: 'editable'`.
+   */
+  fieldDate?: Date;
   /**
    * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
    * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays

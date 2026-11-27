@@ -352,7 +352,10 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     // asserted in layout/__tests__/textbox-story-layout.test.ts; this oracle pins the
     // package-wide projection census and body-only paint.
     drawingCount: 15,
-    pageCount: 62,
+    // With the fixed measurer, a "label<tab>[word]" line meets a custom left stop near the
+    // right edge: the tab moves to the next line with the word, and the word breaks at the
+    // edge after the stop (`w:tab`, 17.3.3.32). That adds one page here.
+    pageCount: 63,
     readyCount: 2,
     placeholderCount: 0,
     assertProjections: (projections) => {

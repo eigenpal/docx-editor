@@ -7,6 +7,10 @@ import {
   vectorShapeHit,
 } from './vector-shape-hit.ts';
 import { vectorShapeInkClip } from './vector-shape-ink.ts';
+import {
+  groupPictureInkReach,
+  pointOnGroupPicturePastExtent,
+} from './drawing-group-picture-layers.ts';
 export {
   findDrawingOverlayFrameInLayout,
   type DrawingOverlayFrame,
@@ -754,7 +758,9 @@ function hitBoundsContainDrawing(
   const ink = drawing.vectorShape?.overflowVisible
     ? vectorShapeInkClip(drawing, drawing.paintBounds)
     : null;
-  const near = unionBox(unionBox(box, turnedShapeBounds(drawing)), ink);
+  // A group picture that paints past the extent takes a press where it paints.
+  const pictures = drawing.groupPicture ? groupPictureInkReach(drawing, box) : box;
+  const near = unionBox(unionBox(pictures, turnedShapeBounds(drawing)), ink);
   if (
     point.x < near.x - reach ||
     point.x > near.x + near.width + reach ||
@@ -764,13 +770,12 @@ function hitBoundsContainDrawing(
     return false;
   const vector = vectorShapeHit(drawing, point);
   if (vector !== null) return vector;
-  if (
-    point.x < box.x ||
-    point.x >= box.x + box.width ||
-    point.y < box.y ||
-    point.y >= box.y + box.height
-  )
-    return false;
+  const inside = (area: LayoutBox) =>
+    point.x >= area.x &&
+    point.x < area.x + area.width &&
+    point.y >= area.y &&
+    point.y < area.y + area.height;
+  if (!inside(box)) return inside(pictures) && pointOnGroupPicturePastExtent(drawing, point);
   // A text box that paints past its frame takes a press on its frame, its text, or the shape
   // it paints there, whatever its effect extent reserves; the gesture follows the same rule.
   if (textboxPaintsPastFrame(drawing)) return textboxPressReaches(drawing, point);
@@ -907,7 +912,10 @@ function offsetOnLine(
   return gapOffset(line, spans, x, context);
 }
 
-function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): LineOffset {
+function endOfLine(merged: LineRecord, rightEdge: number, context: HitContext): LineOffset {
+  // A merged line ends in its last paragraph, in that paragraph's own offsets; `line.range`
+  // names only the first one (see `remapMergedLines`).
+  const line = lineForSegment(merged, lineSegments(merged).at(-1));
   const offset = lineEndOffset(context.layout, line);
   if (offset === line.range.end) return { offset, x: rightEdge, withinSpan: false };
   // The end moved back over a break, so the caret's x moves back with it — into whichever

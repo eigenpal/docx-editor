@@ -213,7 +213,9 @@ describe('a section mark that stays in flow', () => {
     expect(byText(layout, 'two').box.y).toBeGreaterThan(14 + 24 + 100);
   });
 
-  test('keeps its line when the mark paragraph shows a list number', () => {
+  // A bare section mark shows no list number, even when it resolves numbering (see
+  // `paragraphListPrelude`), so it collapses like any other empty mark.
+  test('collapses when the mark paragraph resolves a list number', () => {
     const numbering = readOoxmlPart(
       `<w:numbering xmlns:w="${W}"><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>` +
         '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/>' +
@@ -229,7 +231,8 @@ describe('a section mark that stays in flow', () => {
       measurer,
       numberingIndex: buildNumberingIndex(numbering.part.root),
     });
-    expect(markOf(layout).outOfFlow).toBeUndefined();
-    expect(byText(layout, 'two').box.y).toBe(14 + 24 + 100);
+    expect(markOf(layout).outOfFlow).toBe(true);
+    expect(markOf(layout).marker).toBeUndefined();
+    expect(byText(layout, 'two').box.y).toBe(14);
   });
 });

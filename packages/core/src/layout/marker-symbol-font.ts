@@ -10,11 +10,13 @@
 // The oracle is derived from the measurer rather than passed in by every host, because the
 // measurer is the one thing that already knows which faces were admitted AND is already
 // folded into every layout cache key through `SemanticLayoutOptions.producer`. A measurer
-// with no `hasResolvedFont` (the canvas path, a fixed-metric test double) answers "nothing
-// is available", which is the pre-font-resolution behaviour: translate and keep going.
+// with no `hasMeasurableFont` or `hasResolvedFont` (the canvas path, a fixed-metric test
+// double) answers "nothing is available", which is the pre-font-resolution behaviour:
+// translate and keep going.
 //
-// SCOPE: this answers "was a face admitted under this family name", not "does that face
-// carry this codepoint". A host that admits a Unicode-cmap face under the name `Symbol`
+// SCOPE: this answers "can a face admitted under this family name measure it" (a synthesized
+// stand-in through another face of the family counts: `measuresWithAdmittedFace`), not "does
+// that face carry this codepoint". A host that admits a Unicode-cmap face under the name `Symbol`
 // asserts it can draw Symbol's own glyphs. Even then nothing breaks apart: `lineMetrics`
 // shapes the real marker text, so measurement and paint fall to the same substitute face
 // together and the line stays self-consistent.
@@ -22,6 +24,7 @@
 import { SYMBOL_ENCODED_FAMILIES } from './symbol-encoding.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { measuresWithAdmittedFace } from './text-measurer.ts';
 
 /** One probe style per symbol family; the closed family list bounds this at five. */
 const probeStyles = new Map<string, ResolvedRunStyle>();
@@ -59,15 +62,14 @@ const oraclesByMeasurer = new WeakMap<TextMeasurer, ((family: string) => boolean
 export function markerSymbolFontAvailability(
   measurer: TextMeasurer | undefined
 ): ((family: string) => boolean) | undefined {
-  const hasResolvedFont = measurer?.hasResolvedFont;
-  if (!measurer || !hasResolvedFont) return undefined;
+  if (!measurer || (!measurer.hasMeasurableFont && !measurer.hasResolvedFont)) return undefined;
   const remembered = oraclesByMeasurer.get(measurer);
   if (remembered !== undefined) return remembered ?? undefined;
   const available: string[] = [];
   for (const family of SYMBOL_ENCODED_FAMILIES) {
     let resolved = false;
     try {
-      resolved = hasResolvedFont.call(measurer, probeStyle(family)) === true;
+      resolved = measuresWithAdmittedFace(measurer, probeStyle(family)) === true;
     } catch {
       // A measurer that refuses a probe is treated as not having the face.
       resolved = false;

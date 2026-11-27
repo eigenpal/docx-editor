@@ -27,6 +27,7 @@ For both formats from one layout, see [Compare PDF and Markdown conversion](mark
 | `fidelityPolicy` | `'strict'` | Reject unsupported or approximate PDF content. `'best-effort'` returns available output with diagnostics. |
 | `displayMode` | `'proposed'` | Choose `'proposed'`, `'original'`, or `'all-markup'` for tracked changes. |
 | `comments` | `true` | Include native PDF annotations. |
+| `fieldDate` | — | Show this valid `Date` in DATE and TIME fields that have a `\@` picture. Omit to show saved results. Set it when you open a reusable session. |
 | `useSystemFonts` | `true` | Search supported installed font files. Disable for consistent font selection across hosts. |
 | `fonts` | — | Resolve these font sources before installed and packaged sources. |
 | `fallbackFonts` | — | Resolve missing faces after packaged substitutes. |

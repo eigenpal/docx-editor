@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "In WebKit, the pages layer kept its stale DOM range when it took focus again, and the browser scrolled to that range.",
+  "after": "The surface removes the stale DOM range before it focuses the pages layer, then writes the local model selection back to the DOM.",
+  "reason": "The change touches only the local DOM selection and browser focus. It writes no shared state, no operations, and no presence data.",
+  "tests": [
+    "packages/core/src/editor/__tests__/surface-focus.test.ts",
+    "e2e/focus-return-scroll.interaction.spec.ts"
+  ],
+  "changeset": "safari-refocus-scroll",
+  "migration": null
+}

@@ -26,6 +26,7 @@ import {
   runBorderStrokesForLine,
   spacedTableFrameBorders,
   tableSpacingShadingRegions,
+  regionCutClipBox,
   type BlockFragmentRecord,
   type LayoutBox,
   type SemanticSpanVisit,
@@ -742,11 +743,26 @@ export async function paint(
       ];
       if (text.length > 0) body.push(...openMemberClip(member, x, y, height), ...text, 'Q');
     }
+    // As on screen: turned text, overflowing text, or text whose turned members or groups paint
+    // past the frame goes past the group bounds, inside each member's own clip.
+    const open =
+      d.vectorShape?.overflowVisible === true ||
+      (d.groupTextboxStories ?? []).some(
+        (member) => member.story.overflowVisible || member.rotationDegrees !== 0
+      );
+    let unclipped = open ? body.splice(0) : [];
+    // A region that cut the drawing, such as a table cell, still cuts the text on that side.
+    const regionBox = unclipped.length > 0 ? regionCutClipBox(d, bounds, visit.page.box) : null;
+    if (regionBox) {
+      const region = rect(regionBox, -visit.page.box.x, -visit.page.box.y, height);
+      unclipped = [`q ${region} W n`, ...unclipped, 'Q'];
+    }
     // Ink the walk could not tie to one member stays inside the group's bounds.
     body.push(...(buffers?.get(d) ?? []));
-    if (body.length === 0) return base;
+    if (body.length === 0 && unclipped.length === 0) return base;
     const clip = rect(bounds, -visit.page.box.x, -visit.page.box.y, height);
-    return [base, `q ${clip} W n`, ...body, 'Q'].filter(Boolean).join('\n');
+    const clipped = body.length > 0 ? [`q ${clip} W n`, ...body, 'Q'] : [];
+    return [base, ...unclipped, ...clipped].filter(Boolean).join('\n');
   };
   const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {
     const page = pages[visit.page.index]!;

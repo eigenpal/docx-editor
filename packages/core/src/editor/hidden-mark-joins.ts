@@ -34,11 +34,20 @@ import type {
   SemanticPosition,
   SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { paragraphsInsideFieldInstructions } from '../layout/field-instruction-paragraphs.ts';
 import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
-import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
+import { paragraphLinesFor, positionPastDeletion } from '../layout/paragraph-lines.ts';
+import { joinStartShared } from '../layout/field-code-join-stop.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
-import { mergedFlowBlocks } from '../layout/story-roots.ts';
+import { mergedFlowBlocks, paragraphMergeGroupOf } from '../layout/story-roots.ts';
+import { mergedPredecessorsOf } from '../layout/line-segments.ts';
+import {
+  blockAnchorOutsideFieldCodes,
+  blockBeforeInsideFieldCodes,
+  markIsFieldCode,
+  splitInsideFieldCodes,
+} from '../layout/field-code-marks.ts';
 
 /** The revision view the page is laid out in. */
 export interface RevisionView {
@@ -49,9 +58,42 @@ export interface RevisionView {
 const NONE: ReadonlySet<string> = new Set();
 
 /**
+ * The reason an editor write gives when it would add a paragraph mark or a table inside field
+ * codes that hold paragraph marks: inside a paragraph wholly in the field codes, or at the start
+ * of the paragraph where they end. A new mark there would change the field instruction
+ * (`w:fldChar`, ECMA-376 Part 1, 17.16.18) and show no change, so the write is refused.
+ */
+export const FIELD_CODE_SPLIT_REFUSAL =
+  'field-code-mark: this would add a paragraph mark inside a field instruction';
+
+/**
+ * The informational rejection a rich paste leaves when it would have added paragraph marks
+ * inside field codes and landed as plain text instead (`surface-clipboard-ops.ts`).
+ */
+export const FIELD_CODE_PASTE_NOTICE =
+  'field-code-mark: the paste kept only its text, because its paragraphs would land inside a field instruction';
+
+/**
+ * Ids of the paragraphs a container's laid-out blocks draw: each block, and each member of a
+ * merged paragraph. The paragraphs on either side of a field's field codes lay out as one
+ * merged paragraph, and both still show.
+ */
+function laidOutIds(flow: readonly OoxmlNode[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const block of flow) {
+    if (block.kind === 'textValue') continue;
+    ids.add(block.id);
+    for (const member of paragraphMergeGroupOf(block)?.members ?? []) ids.add(member.id);
+  }
+  return ids;
+}
+
+/**
  * Ids of the paragraphs among `children` that layout removes under a hidden mark in `view`.
  *
- * Asks the same collector layout uses for that container, so the two cannot disagree.
+ * Asks the same collector layout uses for that container, so the two cannot disagree. A
+ * paragraph inside a field instruction is left out: its mark is part of the field code
+ * (§17.16.18), so a join never absorbs it.
  */
 export function hiddenMarkRemovedIds(
   children: readonly OoxmlNode[],
@@ -60,8 +102,11 @@ export function hiddenMarkRemovedIds(
   const flow = mergedFlowBlocks(children, view.displayMode, view.authorFilter);
   const all = numberingFlowBlocks(flow);
   if (all === flow) return NONE;
-  const laidOut = new Set(flow.map((block) => block.id));
-  return new Set(all.flatMap((block) => (laidOut.has(block.id) ? [] : [block.id])));
+  const laidOut = laidOutIds(flow);
+  const fieldCode = paragraphsInsideFieldInstructions(all);
+  return new Set(
+    all.flatMap((block, index) => (laidOut.has(block.id) || fieldCode.has(index) ? [] : [block.id]))
+  );
 }
 
 /**
@@ -78,7 +123,7 @@ function joinTargetOf(
   const flow = mergedFlowBlocks(children, view.displayMode, view.authorFilter);
   const all = numberingFlowBlocks(flow);
   if (all === flow) return null;
-  const laidOut = new Set(flow.map((block) => block.id));
+  const laidOut = laidOutIds(flow);
   if (laidOut.has(paragraphId)) return null;
   const index = all.findIndex((block) => block.id === paragraphId);
   if (index === -1) return null;
@@ -114,6 +159,32 @@ export function hiddenParagraphsBetween(
 }
 
 /**
+ * True when `firstId` and `secondId` are siblings and only paragraphs inside a field instruction
+ * stand between them. Those marks are field code (ECMA-376 Part 1, 17.16.18), so no join
+ * crosses them; Delete moves the caret over them instead, as Backspace does.
+ */
+export function onlyFieldCodeBetween(
+  part: OoxmlPart,
+  firstId: string,
+  secondId: string,
+  view: RevisionView
+): boolean {
+  const parent = parentNodeOf(part, firstId);
+  if (parent === null || parentNodeOf(part, secondId)?.id !== parent.id) return false;
+  const all = numberingFlowBlocks(
+    mergedFlowBlocks(parent.children, view.displayMode, view.authorFilter)
+  );
+  const first = all.findIndex((block) => block.id === firstId);
+  const second = all.findIndex((block) => block.id === secondId);
+  if (first === -1 || second <= first + 1) return false;
+  const fieldCode = paragraphsInsideFieldInstructions(all);
+  for (let index = first + 1; index < second; index += 1) {
+    if (!fieldCode.has(index)) return false;
+  }
+  return true;
+}
+
+/**
  * The ops that join `secondId` onto `firstId`, absorbing any removed paragraphs between them
  * first, or `null` when the two are not siblings that such a join can reach.
  */
@@ -135,6 +206,9 @@ export function joinAcrossHiddenMarks(
 /**
  * Where a position shows on the page.
  *
+ * The start of a field's result side shows as the end of the first side, its one caret stop on
+ * the shared line (see {@link fieldCodeJoinStart}).
+ *
  * A position in a paragraph that layout removed shows at the start of the laid-out paragraph
  * that takes its join. Any other position, and one whose container holds nothing laid out
  * after it, shows where it is.
@@ -145,6 +219,8 @@ export function shownPosition(
   position: SemanticPosition,
   view: RevisionView
 ): SemanticPosition {
+  const join = fieldCodeJoinStart(layout, part, position);
+  if (join) return join;
   if (paragraphLinesFor(layout, position.paragraphId).length > 0) return position;
   const parent = parentNodeOf(part, position.paragraphId);
   if (parent === null) return position;
@@ -224,6 +300,131 @@ export function absorbRemovedAfter(
   return ops.length > 0 ? ops : null;
 }
 
+/**
+ * Whether `ops` add a paragraph mark, or a table, inside field codes that hold paragraph marks
+ * (see `layout/field-code-marks.ts`). The surface's journaled write asks this for every batch
+ * (`surface-journaled-apply.ts`), so Enter, a section break, a table, and a table of contents
+ * all refuse in one place; a rich paste asks {@link fieldCodePasteRefusal} before its package
+ * transaction. The check reads the tree before the batch, where a collapsed caret's ops point.
+ * An op that a batch moves after an earlier op, such as a split behind inserted text, is read
+ * at its pre-batch offset. That can only miss a refusal, never refuse a write wrongly: the
+ * offsets this refuses sit before the field codes in the pre-batch tree.
+ */
+export function opsAddFieldCodeMark(
+  partOf: (paragraphId: string) => OoxmlPart | null,
+  ops: readonly TreeDocOp[]
+): boolean {
+  const inside = (id: string, offset: number) => {
+    const part = partOf(id);
+    return part !== null && splitInsideFieldCodes(part, id, offset);
+  };
+  return ops.some((op) => {
+    switch (op.op) {
+      case 'splitParagraph':
+        return inside(op.paragraphId, op.offset);
+      case 'splitParagraphMany':
+        return op.offsets.some((offset) => inside(op.paragraphId, offset));
+      case 'insertFragment':
+        // One paragraph's inline content adds no mark; anything more splits at the offset.
+        return (
+          (op.blocks.length > 1 || op.blocks.some((block) => block.kind !== 'paragraph')) &&
+          inside(op.paragraphId, op.offset)
+        );
+      case 'insertTable':
+      case 'insertToc': {
+        const part = partOf(op.beforeParagraphId);
+        return part !== null && blockBeforeInsideFieldCodes(part, op.beforeParagraphId);
+      }
+      default:
+        return false;
+    }
+  });
+}
+
+/**
+ * {@link FIELD_CODE_SPLIT_REFUSAL} when a rich paste at `position` could add a paragraph mark
+ * inside field codes, else null. Its blocks are not known before the merge, so any paste at
+ * such a position is refused; the plain text flavour then lands outside the field codes.
+ */
+export function fieldCodePasteRefusal(
+  partOf: (paragraphId: string) => OoxmlPart | null,
+  position: SemanticPosition
+): string | null {
+  const part = partOf(position.paragraphId);
+  return part !== null && splitInsideFieldCodes(part, position.paragraphId, position.offset)
+    ? FIELD_CODE_SPLIT_REFUSAL
+    : null;
+}
+
+/**
+ * The paragraph that opens the field when `paragraphId` is the result side of a field's shared
+ * line, or null. A field-code merge has exactly these two members (a paragraph that closes one
+ * field's codes never opens another merge), so the member drawn directly before is the first.
+ */
+function fieldCodeLineOpener(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  paragraphId: string
+): string | null {
+  const before = mergedPredecessorsOf(layout, paragraphId);
+  const opener = before.at(-1);
+  return before.length === 1 && opener !== undefined && markIsFieldCode(part, opener)
+    ? opener
+    : null;
+}
+
+/**
+ * Where an insert at `position` belongs when the position is the start of the result side of a
+ * field's shared line (see `layout/field-code-paragraph-merge.ts`), or null anywhere else.
+ *
+ * That offset sits before the field codes that continue into the paragraph, so a split there
+ * would add a paragraph mark inside the field instruction (ECMA-376 Part 1, 17.16.18) and the
+ * page would not change. The end of the first side's text, before the field's `begin`, is
+ * outside the field codes, so every insert there lands there instead, also when the result
+ * side starts a wrapped line.
+ */
+export function fieldCodeInsertLanding(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition
+): SemanticPosition | null {
+  // The stored tree decides that the position is inside field codes; the merged line only
+  // decides where the insert can go instead. With no merge, nothing redirects, and the
+  // surface's one field-code check (`opsAddFieldCodeMark`) refuses the insert.
+  if (position.offset !== 0 || !splitInsideFieldCodes(part, position.paragraphId, 0)) return null;
+  const opener = fieldCodeLineOpener(layout, part, position.paragraphId);
+  return opener === null
+    ? null
+    : { paragraphId: opener, offset: (paragraphTextOf(part, opener) ?? '').length };
+}
+
+/**
+ * Where the caret shows for `position`: the {@link fieldCodeInsertLanding} while the result
+ * side's start paints at the end of the first side (`layout/field-code-join-stop.ts`), where
+ * the line has one caret stop. Null anywhere else, so a caret at the start of a wrapped result
+ * line, or of a result that runs in the other direction, stays where it is.
+ */
+export function fieldCodeJoinStart(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition
+): SemanticPosition | null {
+  const landing = fieldCodeInsertLanding(layout, part, position);
+  return landing && joinStartShared(layout, position.paragraphId) ? landing : null;
+}
+
+/**
+ * Where an insert at `position` lands: past a deletion the caret rests in
+ * (`positionPastDeletion`), after {@link fieldCodeInsertLanding} moves it out of the field codes.
+ */
+export function insertPointOf(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  position: SemanticPosition
+): SemanticPosition {
+  return positionPastDeletion(layout, fieldCodeInsertLanding(layout, part, position) ?? position);
+}
+
 /** The editing surface's view of the rules above, over its live layout, story, and view. */
 export function createHiddenMarkEditing(deps: {
   readonly layout: () => SemanticLayout;
@@ -232,10 +433,17 @@ export function createHiddenMarkEditing(deps: {
 }): {
   /** Ops joining two neighbours in paragraph order; see {@link joinAcrossHiddenMarks}. */
   joinOps(firstId: string, secondId: string): TreeDocOp[] | null;
-  /** Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. */
-  forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | null;
+  /**
+   * Delete's join: {@link joinOps}, else {@link absorbRemovedAfter}. The ops Delete applies at the end of `firstId`, or `'step'` when only field-code paragraphs
+   * stand between: the caret then steps over them, the mirror of Backspace at the field result.
+   */
+  forwardJoinOps(firstId: string, nextId: string): TreeDocOp[] | 'step' | null;
   /** See {@link shownPosition}. */
   shown(position: SemanticPosition): SemanticPosition;
+  /** See {@link insertPointOf}: where an insert, or a format armed for it, lands. */
+  insertPoint(position: SemanticPosition): SemanticPosition;
+  /** Where a table or a table of contents at `position` goes: `blockAnchorOutsideFieldCodes`. */
+  lineFirst(position: SemanticPosition): string;
   /** A collapsed selection moved to where it shows; a range is left alone. */
   shownSelection(selection: SemanticSelection): SemanticSelection;
   /** The same for an ordered range: moved only when it is collapsed. */
@@ -256,8 +464,11 @@ export function createHiddenMarkEditing(deps: {
       joinAcrossHiddenMarks(deps.part(), firstId, secondId, deps.view()),
     forwardJoinOps: (firstId, nextId) =>
       joinAcrossHiddenMarks(deps.part(), firstId, nextId, deps.view()) ??
-      absorbRemovedAfter(deps.part(), firstId, deps.view()),
+      absorbRemovedAfter(deps.part(), firstId, deps.view()) ??
+      (onlyFieldCodeBetween(deps.part(), firstId, nextId, deps.view()) ? 'step' : null),
     shown,
+    insertPoint: (position) => insertPointOf(deps.layout(), deps.part(), position),
+    lineFirst: (position) => blockAnchorOutsideFieldCodes(deps.part(), position.paragraphId),
     removedCaretEdit: (position, direction) =>
       removedCaretParagraphEdit(deps.layout(), deps.part(), position, deps.view(), direction),
     shownRange: (range) => {

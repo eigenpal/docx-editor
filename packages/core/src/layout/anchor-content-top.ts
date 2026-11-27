@@ -6,9 +6,10 @@
 // (`wrapNone`, in front of or behind the text) keeps its offset. Legacy modes keep it too.
 //
 // The bottom limit mirrors it. In modern modes the object moves up to end at the content box
-// bottom, unless that would lift it above its own line: then it keeps its offset, and the flow
-// moves the line to the next page instead (see `paragraph-own-anchors.ts`). Legacy modes move it
-// up to end at the sheet bottom, never above the sheet top, and never move the line.
+// bottom, unless that would lift it into or above its own line: the lifted object must start at
+// or below the line's bottom. Otherwise it keeps its offset, and the flow moves the line to the
+// next page instead (see `paragraph-own-anchors.ts`). Legacy modes move it up to end at the
+// sheet bottom, never above the sheet top, and never move the line.
 //
 // In a table cell the same object, laid out in the cell, stops at the cell box top in every
 // mode, and the row grows to hold it (see `cell-anchor-extent.ts`).
@@ -72,8 +73,11 @@ interface ContentBottomContext extends ContentTopContext {
   readonly contentBandHeight: number;
   readonly contentInsetTop: number;
   readonly contentInsetBottom: number;
-  readonly anchorLineBox: { readonly y: number };
+  readonly anchorLineBox: { readonly y: number; readonly height: number };
 }
+
+/** Points a lifted object may reach into its line's bottom and still count as below it. */
+const LINE_BOTTOM_TOLERANCE = 0.01;
 
 /** The resolved top `y` after the bottom limit of a wrapping body object (see the header). */
 export function wrappedParagraphAnchorBottomTop(
@@ -94,7 +98,10 @@ export function wrappedParagraphAnchorBottomTop(
     return y;
   if (limit === 'margin') {
     const lifted = ctx.contentHeight - height;
-    return y + height > ctx.contentHeight && lifted >= ctx.anchorLineBox.y ? lifted : y;
+    const lineBottom = ctx.anchorLineBox.y + ctx.anchorLineBox.height;
+    return y + height > ctx.contentHeight && lifted >= lineBottom - LINE_BOTTOM_TOLERANCE
+      ? lifted
+      : y;
   }
   const sheetBottom = ctx.contentBandHeight + ctx.contentInsetBottom;
   return y + height > sheetBottom ? Math.max(-ctx.contentInsetTop, sheetBottom - height) : y;

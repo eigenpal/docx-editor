@@ -29,6 +29,7 @@ import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 import type { DocxEditorNavigationProps } from './editor/navigation';
 import type { DocxEditorOpenFailureProps } from './editor/DocxEditorOpenFailure';
+import type { DocxEditorFontNoticeProps } from './editor/DocxEditorFontNotice';
 
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
@@ -74,6 +75,13 @@ export interface DocxEditorProps {
    * the `openFailureActions` slot.
    */
   openFailure?: boolean | DocxEditorOpenFailureProps;
+  /**
+   * The bar that names the font families the document renders in substitute faces, on by
+   * default with the packaged chrome. `false` removes it. An object is
+   * `DocxEditorFontNoticeProps`, passed straight through. For your own notice, use the
+   * `fontNotice` slot. Requires `chrome`; without it, compose `DocxEditorFontNotice` yourself.
+   */
+  fontNotice?: boolean | DocxEditorFontNoticeProps;
   rulers?: boolean;
   document?: DocumentSource;
   /** Live host mode. */
@@ -95,6 +103,16 @@ export interface DocxEditorProps {
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
+   * The saved document keeps the saved results. Print and PDF export from the File menu pass the
+   * date to the PDF handler as `ChromeExportView.fieldDate`. Absent (the default), fields show
+   * their saved results. Read once, when the editor is created: a later
+   * change to a different time is ignored, with a development warning. A new `Date` with the same
+   * time does nothing. Refused with a `TypeError` when it is not a valid `Date`, or with
+   * `fieldResults: 'editable'`.
+   */
+  fieldDate?: Date;
   /**
    * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
    * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays

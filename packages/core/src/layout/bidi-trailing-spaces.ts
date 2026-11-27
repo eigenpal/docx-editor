@@ -2,6 +2,7 @@ import { unchangedLtrLine } from './unchanged-ltr-line.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 import { reorderBidiSpans } from './rtl-paragraph.ts';
+import { closingRunBorderPad, runBorderGapBetween } from './run-border-advance.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 
 const EDGE_TOLERANCE_PT = 1e-6;
@@ -122,10 +123,18 @@ export function alignBidiTrailingSpaces(
   const { from, side, hangs } = trailing;
   const content = split.slice(0, from);
   const spacesWidth = split.slice(from).reduce((width, span) => width + span.box.width, 0);
+  // The flow let the closing side of a character border (`w:bdr`, ECMA-376 Part 1, 17.3.2.4)
+  // take the room of the spaces of its passage. Those spaces hang, so the side takes its own
+  // room in the aligned text.
+  const closing = closingRunBorderPad(content[from - 1]);
+  const sharedRoom =
+    hangs && closing > 0 && runBorderGapBetween(content[from - 1], split[from]!) === 0
+      ? Math.min(closing, spacesWidth)
+      : 0;
   const aligned = align(
     content,
     hangs ? available : Math.max(0, available - spacesWidth),
-    lineUsedWidth === undefined ? undefined : Math.max(0, lineUsedWidth - spacesWidth)
+    lineUsedWidth === undefined ? undefined : Math.max(0, lineUsedWidth - spacesWidth + sharedRoom)
   );
   // CJK justification may split the content into more spans, so count them after alignment.
   const count = aligned.length;
@@ -149,7 +158,17 @@ export function alignBidiTrailingSpaces(
     alignedEnd = Math.max(alignedEnd, end(aligned[index]!));
     reorderedStart = Math.min(reorderedStart, reordered[index]!.box.x);
   }
-  const shift = alignedStart - reorderedStart;
+  // A character border keeps its room on both sides of the text. Alignment gave the line the
+  // room in logical order, the opening side before the first span; in visual order the left
+  // side takes its room first.
+  let leftmost = reordered[passageStart]!;
+  for (let index = passageStart; index < count; index++)
+    if (reordered[index]!.box.x < leftmost.box.x) leftmost = reordered[index]!;
+  const shift =
+    alignedStart -
+    runBorderGapBetween(undefined, content[passageStart]!) +
+    runBorderGapBetween(undefined, leftmost) -
+    reorderedStart;
   // Hanging spaces stop at the line's edge on their side, or at the start of the passage
   // that holds them.
   const leftEdge = Math.min(

@@ -9,6 +9,7 @@ import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts'
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { LineRecord, StyleSpanRecord } from './semantic-records.ts';
 import { clipInlineDrawingRecordVertically, type InlineDrawingRecord } from './drawing-layout.ts';
+import { inlineDrawingBottom } from './inline-drawing-baseline.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
 import type { WrapSegment } from './line-wrap-passages.ts';
@@ -317,6 +318,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   tabAlignment: true,
   link: true,
   wrapAdvanceBefore: true,
+  borderEndTrimPt: true,
   revisions: true,
   changeSites: true,
   fieldAtom: true,
@@ -598,7 +600,7 @@ export function markPendingLineWrapAdvances(line: PendingLine): void {
 /** Include each inline drawing's final baseline-adjusted extent in its line. */
 export function growPendingLineDrawingExtent(line: PendingLine): void {
   for (const drawing of line.drawings)
-    line.height = Math.max(line.height, drawing.y + drawing.height + drawing.distB);
+    line.height = Math.max(line.height, inlineDrawingBottom(drawing) + drawing.distB);
 }
 
 /**

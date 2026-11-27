@@ -257,6 +257,24 @@ export function preservesShapingFace(shaper: TextShaper): boolean {
   return facePreservingShapers.has(shaper);
 }
 
+const missingGlyphFallbackShapers = new WeakSet<TextShaper>();
+
+/**
+ * Record that `shaper` substitutes a face only for a glyph that the environment's own face
+ * lacks: the engine's glyph fallback over a face preserving shaper. Text that the face's cmap
+ * maps completely keeps that face. A host's own shaper is never marked.
+ * @internal
+ */
+export function markMissingGlyphFallbackShaper<T extends TextShaper>(shaper: T): T {
+  missingGlyphFallbackShapers.add(shaper);
+  return shaper;
+}
+
+/** Whether `shaper` was marked by {@link markMissingGlyphFallbackShaper}. @internal */
+export function substitutesOnlyMissingGlyphs(shaper: TextShaper): boolean {
+  return missingGlyphFallbackShapers.has(shaper);
+}
+
 /**
  * A font reduced to the values that identify it for fingerprinting.
  *

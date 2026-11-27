@@ -8,6 +8,7 @@ import {
 } from './cjk-typography.ts';
 import type { SourceRange, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
+import { measuresWithAdmittedFace } from './text-measurer.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import {
   kanaFitCells,
@@ -177,7 +178,7 @@ function cellsOf(
         (tracked && foreign) ||
         authored.horizontalScalePercent !== 100 ||
         authored.shaping !== undefined ||
-        measurer.hasResolvedFont?.(face) !== true
+        measuresWithAdmittedFace(measurer, face) !== true
       )
         return undefined;
       // Keep a qualified mathematical run opaque. Its existing shaped advance is

@@ -199,6 +199,8 @@ let written: string[] = [];
 
 beforeEach(() => {
   written = [];
+  // A new window focus period: an earlier test's copy is not the clipboard content.
+  window.dispatchEvent(new Event('blur'));
   Object.defineProperty(globalThis.navigator, 'clipboard', {
     value: {
       writeText: async (text: string) => {
@@ -210,7 +212,11 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // Leave no copy behind for the next test file in a serial run.
+  window.dispatchEvent(new Event('blur'));
+});
 
 describe('opening', () => {
   test('right-click opens the panel and suppresses the browser menu', () => {

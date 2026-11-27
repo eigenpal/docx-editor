@@ -19,6 +19,8 @@ import {
 import { runOutsideSharedUndo } from '../store/package/canonical-primitive-capture.ts';
 import { isDocumentSetupEdit } from '../store/package/style-definition-edit.ts';
 import { duplicateSetupStylesEdit } from '../store/package/setup-style-repair.ts';
+import { FIELD_CODE_SPLIT_REFUSAL, opsAddFieldCodeMark } from './hidden-mark-joins.ts';
+import { partOfNodeId } from './surface-scope.ts';
 
 type ApplyTreeOps = TreeDocxSessionView['applyTreeOps'];
 type PackageEdits = NonNullable<Parameters<ApplyTreeOps>[4]>['packageEdits'];
@@ -60,7 +62,9 @@ export function createJournaledApply(deps: JournaledApplyDeps) {
     );
 
   /**
-   * Gate and attribute a write the way typing does, without the TOC-read-only rule.
+   * Gate and attribute a write the way typing does, without the TOC-read-only rule. Every
+   * write refuses here when it would add a paragraph mark inside field codes
+   * (`opsAddFieldCodeMark`).
    *
    * Refresh rewrites TOC result paragraphs, so the surface's `applyOps` would refuse the write
    * that exists to update them. The collaboration gate and the actor still apply.
@@ -72,7 +76,11 @@ export function createJournaledApply(deps: JournaledApplyDeps) {
     scope: StoryScope = deps.defaultScope(),
     packageEdits?: PackageEdits
   ): ReturnType<ApplyTreeOps> {
-    const refusal = collaboration?.gateOperations(ops, scope);
+    const refusal =
+      collaboration?.gateOperations(ops, scope) ??
+      (opsAddFieldCodeMark((id) => partOfNodeId(session, id), ops)
+        ? FIELD_CODE_SPLIT_REFUSAL
+        : null);
     if (refusal) return { committed: false, rejected: true, opCount: 0, reason: refusal };
     const setup = collaboration ? (packageEdits ?? []).filter(isDocumentSetupEdit) : [];
     if (setup.length > 0) {

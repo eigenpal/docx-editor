@@ -30,6 +30,12 @@ Create `exporters.ts` with browser Markdown conversion and a PDF endpoint:
 
 ```ts
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
+
+/** The local wall-clock time without an offset, for example `2026-03-05T14:07:00.000`. */
+function localDateTime(date: Date): string {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, -1);
+}
+
 export const exporters: ChromeExportHandlers = {
   async markdown(source) {
     const { exportMarkdown } = await import('@docx-editor.dev/docx-to-markdown');
@@ -40,7 +46,12 @@ export const exporters: ChromeExportHandlers = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/octet-stream',
-        'X-Revision-Markup': encodeURIComponent(JSON.stringify(view ?? {})),
+        'X-Revision-Markup': encodeURIComponent(
+          JSON.stringify({
+            ...view,
+            fieldDate: view?.fieldDate ? localDateTime(view.fieldDate) : undefined,
+          })
+        ),
       },
       body: source.slice().buffer,
     });
@@ -103,16 +114,21 @@ Your endpoint calls `exportPdf` and returns `result.bytes` as `application/pdf`.
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
 import type { ChromeExportView } from '@docx-editor.dev/core/editor';
 
+/** The view as JSON: `fieldDate` arrives as local wall-clock text without an offset. */
+type ExportViewJson = Omit<Partial<ChromeExportView>, 'fieldDate'> & { fieldDate?: string };
+
 export async function POST(request: Request): Promise<Response> {
   const source = new Uint8Array(await request.arrayBuffer());
   const view = JSON.parse(
     decodeURIComponent(request.headers.get('X-Revision-Markup') ?? '{}')
-  ) as Partial<ChromeExportView>;
+  ) as ExportViewJson;
   const result = await exportPdf(source, {
     displayMode: view.displayMode ?? 'proposed',
     revisionMarkup: view.revisionMarkup,
     revisionAuthorSlots: view.revisionAuthorSlots,
     comments: view.comments,
+    // A date-time string without an offset parses as the same wall-clock time here.
+    fieldDate: view.fieldDate ? new Date(view.fieldDate) : undefined,
     fidelityPolicy: 'strict',
     useSystemFonts: false,
   });
@@ -125,7 +141,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-The handler's second argument is a `ChromeExportView`. Forward all four fields to `exportPdf`:
+The handler's second argument is a `ChromeExportView`. Forward all five fields to `exportPdf`:
 
 | Field                 | Holds                                                              |
 | --------------------- | ------------------------------------------------------------------ |
@@ -133,6 +149,9 @@ The handler's second argument is a `ChromeExportView`. Forward all four fields t
 | `revisionMarkup`      | The resolved markup preferences captured before conversion.        |
 | `revisionAuthorSlots` | Stable author color slots from the editor session.                 |
 | `comments`            | Whether comments print. When absent, the converter shows comments. |
+| `fieldDate`           | The editor's `fieldDate`. When absent, fields show saved results.  |
+
+Fields show `fieldDate` in the local time of the process that lays out the PDF. A server in another time zone would show other dates and times. So the handler sends the browser's wall-clock time without an offset, and the server rebuilds the same wall-clock time. Run the server with `TZ=UTC`, so that every wall-clock time exists there. `TZ` sets the local time of the whole Node.js process.
 
 A one-argument handler still works but uses its own export defaults. The converter validates the display mode and markup preferences.
 

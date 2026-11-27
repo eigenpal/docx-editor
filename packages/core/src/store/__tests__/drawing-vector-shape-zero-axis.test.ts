@@ -1,6 +1,6 @@
 // A straight vertical or horizontal line has zero width or height. Such lines appear as
 // standalone shapes and as `wpg:wgp` group children, so a zero axis must not refuse the
-// drawing (#972), while invalid sizes still do.
+// drawing (#972), while a member with an invalid size paints nothing.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, WML_NAMESPACE_URI } from '../index.ts';
@@ -26,6 +26,10 @@ const freeformRule = (pathSize: string) =>
   '</wps:spPr></wps:wsp>';
 
 function shapeOf(children: string, cx = 600000) {
+  return groupOf(children, cx).vectorShape;
+}
+
+function groupOf(children: string, cx = 600000) {
   const drawing =
     '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
     `<wp:extent cx="${cx}" cy="1000000"/><wp:docPr id="5" name="Group 5"/>` +
@@ -34,7 +38,7 @@ function shapeOf(children: string, cx = 600000) {
     `<a:chOff x="0" y="0"/><a:chExt cx="${cx}" cy="1000000"/></a:xfrm></wpg:grpSpPr>` +
     children +
     '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing>';
-  return project(drawing);
+  return projectionOf(drawing);
 }
 
 /** A standalone `wps:wsp` line, as Insert > Shapes > Line writes it. */
@@ -51,6 +55,10 @@ function standaloneLine(cx: number, cy: number) {
 }
 
 function project(drawing: string) {
+  return projectionOf(drawing).vectorShape;
+}
+
+function projectionOf(drawing: string) {
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
       `xmlns:wps="${WPS}" xmlns:wpg="${WPG}"><w:body><w:p><w:r>${drawing}</w:r></w:p>` +
@@ -62,7 +70,7 @@ function project(drawing: string) {
     }
   );
   if (!parsed.ok) throw new Error(parsed.reason);
-  return [...indexInlineDrawingProjectionsInPart(parsed.part).values()][0]!.vectorShape;
+  return [...indexInlineDrawingProjectionsInPart(parsed.part).values()][0]!;
 }
 
 describe('zero-width and zero-height group children', () => {
@@ -244,8 +252,26 @@ describe('zero-width and zero-height group children', () => {
     expect(squashed?.components[0]!.strokeInset).toBeUndefined();
   });
 
-  test('negative sizes stay invalid, although a clamped read would make them zero', () => {
-    expect(shapeOf(lineChild(0, 0, 1000000) + lineChild(0, '-5000', 1000000))).toBeNull();
+  test('a member with a negative size paints nothing, and the valid rule still paints', () => {
+    // A clamped read would make the negative width zero, and paint a second rule.
+    const group = groupOf(lineChild(100000, 0, 1000000) + lineChild(0, '-5000', 1000000));
+    expect(group.vectorShape?.components.map((component) => component.subpathsEmu)).toEqual([
+      [
+        [
+          { x: 100000, y: 0 },
+          { x: 100000, y: 1000000 },
+        ],
+      ],
+    ]);
+    // The invalid member is the third child of the group, after its properties and the rule.
+    expect(group.diagnostics).toEqual([
+      {
+        code: 'group-member-not-shown',
+        nodeId: expect.stringMatching(/\.3$/),
+        detail: null,
+      },
+    ]);
+    // A group whose only member is invalid keeps its placeholder.
     expect(shapeOf(freeformRule(' w="-5" h="1000000"'))).toBeNull();
   });
 

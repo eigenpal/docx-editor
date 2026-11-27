@@ -49,7 +49,7 @@ import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.t
 import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import { findContentControl } from '../store/store/tree-op-nodes.ts';
 import { enclosedBookmarkDeletions } from '../store/store/tree-op-bookmarks.ts';
-import type { RevisionView } from './hidden-mark-joins.ts';
+import { fieldCodeInsertLanding, type RevisionView } from './hidden-mark-joins.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
   orderedRangeOf,
@@ -132,8 +132,12 @@ export interface SurfaceRangeEditOps {
   promptIsSelected(): boolean;
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
-  /** Typing keeps an ending prompt when the range starts outside that prompt. */
-  typingSelectionPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string };
+  /**
+   * Typing keeps an ending prompt when the range starts outside that prompt. `composesAsTyping`
+   * says a composition there must commit through typing: past such a prompt, or at the start of
+   * a field's result side, where the insert lands at the end of the first side instead.
+   */
+  typingSelectionPlan(): TypingSelectionPlan;
   retainPromptBoundary(controlId?: string): void;
   clearPromptBoundary(): void;
   promptBoundary(): string | undefined;
@@ -146,8 +150,24 @@ export interface SurfaceRangeEditOps {
   replacementOffset(from: SemanticPosition, to: SemanticPosition, trackedAuthor?: string): number;
 }
 
+/** {@link SurfaceRangeEditOps.typingSelectionPlan}'s answer. */
+export type TypingSelectionPlan = RangeDeletionPlan & {
+  readonly outsidePromptId?: string;
+  readonly composesAsTyping?: true;
+};
+
 export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRangeEditOps {
   const { session } = deps;
+  /**
+   * Where an insert at a collapsed position belongs instead, or null: the start of a field's
+   * result side moves to the end of the first side (`fieldCodeInsertLanding`).
+   */
+  const insertLanding = (position: SemanticPosition): SemanticPosition | null =>
+    fieldCodeInsertLanding(
+      deps.layout(),
+      partOfNodeId(session, position.paragraphId) ?? session.part(),
+      position
+    );
   /**
    * The range a plan is built for in place of the selection, set only inside
    * {@link deleteRangePlan}. The selection itself never moves, so nothing is published.
@@ -406,22 +426,26 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // mode is, and under an author who may not be the configured one. Normalized here so
     // every reader below sees either a non-empty author or undefined, never a blank.
     const author = trackedAuthor?.trim() || undefined;
-    const plan = withEnclosedBookmarks(
+    const planned = withEnclosedBookmarks(
       rangeDeletionPlan(author !== undefined || deps.trackedAuthorOrNone() !== undefined),
       !author && deps.editingMode() !== 'suggest'
     );
+    // A collapsed caret at the start of a field's result side inserts at the end of the first
+    // side instead, so no lane splits inside the field codes.
+    const landing = planned.ops.length === 0 ? insertLanding(planned.collapseTo) : null;
+    const plan = landing ? { ...planned, collapseTo: landing } : planned;
     // A GETTER, so delete-only lanes — Backspace, Delete, proposeDeletion — never pay for a
     // landing they do not read. Replacing lanes read it once, before the ops apply, which is
     // the only window where the pre-edit layout it consults is the right oracle. The
     // rectangle is captured NOW, not read at getter time: `commit` nulls `cellSelection` at
     // its head, so a late read would answer for a selection the plan was not built from.
     const rectangle = planCells();
-    let landing: SemanticPosition | null = null;
+    let replaceLanding: SemanticPosition | null = null;
     return {
       ...plan,
       get replaceAt(): SemanticPosition {
-        landing ??= replacementTarget(plan, author, rectangle);
-        return landing;
+        replaceLanding ??= replacementTarget(plan, author, rectangle);
+        return replaceLanding;
       },
     };
   }
@@ -444,7 +468,18 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     );
   }
 
-  function typingSelectionPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string } {
+  function typingSelectionPlan(): TypingSelectionPlan {
+    const plan: TypingSelectionPlan = promptTypingPlan();
+    const { anchor, head } = deps.selection();
+    const collapsed = anchor.paragraphId === head.paragraphId && anchor.offset === head.offset;
+    const landed = collapsed && !planCells() && insertLanding(head) !== null;
+    // Assigned, not spread: a spread would read the plan's lazy `replaceAt` getter.
+    if (plan.outsidePromptId !== undefined || landed)
+      Object.assign(plan, { composesAsTyping: true });
+    return plan;
+  }
+
+  function promptTypingPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string } {
     const { from, to } = orderedRange();
     if (planCells()) return deleteSelectionPlan();
     if (typingOutsidePrompt()) return { ...deleteSelectionPlan(), outsidePromptId };

@@ -29,8 +29,8 @@ import {
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingGeometry } from './drawing-geometry.ts';
 import {
-  availableTextIntervalsOnScanline,
-  squareExclusionBounds,
+  paragraphTextIntervalsOverBand,
+  verticalBandOfExclusion,
   type ScanlineInterval,
   type WrapExclusionInput,
   wrapExclusionFromProjection,
@@ -261,23 +261,7 @@ export function wrapExclusionInputForProjection(options: {
   });
 }
 
-export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
-  if (input.mode === 'topAndBottom' || input.mode === 'square') {
-    return squareExclusionBounds(input.contentBounds, input.effectInsets, input.wrapDistances);
-  }
-  const ys = [input.contentBounds.y, input.contentBounds.y + input.contentBounds.height];
-  if (input.polygon) {
-    for (const point of input.polygon) ys.push(point.y);
-  }
-  const top = Math.min(...ys) - input.effectInsets.top - input.wrapDistances.top;
-  const bottom = Math.max(...ys) + input.effectInsets.bottom + input.wrapDistances.bottom;
-  return Object.freeze({
-    x: input.contentLeft,
-    y: top,
-    width: Math.max(0, input.contentRight - input.contentLeft),
-    height: Math.max(0, bottom - top),
-  });
-}
+export { verticalBandOfExclusion };
 
 /** Vertical frames whose resolved origin does not depend on where the anchor flows. */
 export function pageFramedVertically(frame: AnchoredDrawingRecord['verticalFrame']): boolean {
@@ -342,15 +326,21 @@ export function mergeAvailableIntervalsAtY(
   let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
-    // Square wrap excludes the whole glyph band; polygon wrap keeps its contour probe.
-    const rectangular = zone.input.mode === 'square' && lineHeight > 0;
+    // Square wrap excludes the glyph band; polygon wrap clears its contour across the band.
+    const banded = zone.input.mode !== 'topAndBottom' && lineHeight > 0;
     if (
       y > band.y + band.height - WRAP_EDGE_TOUCH_PT ||
-      (rectangular ? y + lineHeight <= band.y + WRAP_EDGE_TOUCH_PT : y < band.y)
+      (banded ? y + lineHeight <= band.y + WRAP_EDGE_TOUCH_PT : y < band.y)
     )
       continue;
-    const probeY = rectangular ? Math.max(y, band.y) : y;
-    const atY = availableTextIntervalsOnScanline(probeY, zone.input);
+    const probeY = banded ? Math.max(y, band.y) : y;
+    const atY = paragraphTextIntervalsOverBand(
+      probeY,
+      banded ? y + lineHeight : y,
+      zone.input,
+      contentLeft,
+      contentRight
+    );
     if (
       zone.sourceKind === 'table' &&
       !atY.some((interval) => interval.start <= contentLeft && interval.end >= contentRight)
@@ -421,6 +411,7 @@ function shiftWrapInput(input: WrapExclusionInput, dx: number, dy: number): Wrap
     }),
     contentLeft: input.contentLeft + dx,
     contentRight: input.contentRight + dx,
+    ...(input.contourFoot === undefined ? {} : { contourFoot: input.contourFoot + dy }),
     ...(input.polygon
       ? {
           polygon: input.polygon.map((point) =>

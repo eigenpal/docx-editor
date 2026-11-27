@@ -1,5 +1,7 @@
 /** Word characters for motion purposes: letters, digits and the marks that join them. */
 const WORD_CHARACTER = /[\p{L}\p{N}_'\u2019]/u;
+/** No stops. Shared so the common call allocates nothing. */
+const EMPTY_STOPS: ReadonlySet<number> = new Set<number>();
 
 /**
  * The next word boundary from `offset`, in `direction`.
@@ -50,6 +52,3 @@ export function wordBoundary(
   }
   return index;
 }
-
-/** No stops. Shared so the common call allocates nothing. */
-const EMPTY_STOPS: ReadonlySet<number> = new Set<number>();

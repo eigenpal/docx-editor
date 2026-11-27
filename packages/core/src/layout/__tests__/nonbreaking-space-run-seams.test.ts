@@ -144,8 +144,10 @@ describe('seam break opportunities that must remain', () => {
   });
 
   test('a tab run after the glue still lets the next text open a line', () => {
+    // The line still breaks after the glue. The word after the tab overflows after the stop, so
+    // the tab opens the next line with it (`w:tab`, 17.3.3.32) and the word breaks at the edge.
     const lines = linesOf(runs(`aa${NBSP}bb`, '\t', 'cccccc'));
-    expect(lines).toEqual([`aa${NBSP}bb\t`, 'cccccc']);
+    expect(lines).toEqual([`aa${NBSP}bb`, '\tcccc', 'cc']);
   });
 
   test('a dash ending a run still breaks when glue follows later', () => {

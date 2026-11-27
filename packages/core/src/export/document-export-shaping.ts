@@ -7,6 +7,7 @@ import {
   documentFontSubstitutionPlan,
   applyDocumentFontSubstitutions,
   hostChainedDocumentFallbacks,
+  synthesizedServedFaces,
 } from '../layout/document-font-substitution.ts';
 import { symbolFontFamily, validFontFamily } from '../store/package/run-defaults.ts';
 import {
@@ -44,6 +45,7 @@ import {
   simpleFieldInstructionMaySynthesizeGlyph,
 } from '../layout/field-form.ts';
 import { parseSymbolInstruction } from '../layout/field-symbol.ts';
+import { isInsideOpenFieldInstruction } from '../layout/field-instruction-scope.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import { noteIdOf, noteTypeOf, type NoteKind } from '../store/package/note-nodes.ts';
 import { hasLegacyFormFieldData } from '../store/package/field-nodes.ts';
@@ -84,6 +86,7 @@ import {
   type ExportLaidOutTextApi,
 } from './export-laid-out-text.ts';
 import { createSessionExportShaping, type SessionExportShaping } from './shared-export-shaping.ts';
+import { copyValidFieldDate } from '../layout/field-date.ts';
 
 export type {
   ExportDroppedEmbeddedFont,
@@ -108,6 +111,7 @@ export interface DocumentExportShapingOptions extends DocumentExportFontResoluti
   readonly glyphFallbacks?: readonly FontRequest[];
   /** Origins composed after the document-embedded font origin. */
   readonly lastResortFonts?: readonly FontOrigin[];
+  readonly reportsStandIn?: (family: string, sourceFamily: string) => boolean;
   readonly signal?: AbortSignal;
   /** Maximum time for font origins and shaping initialization. Default: 60 seconds. */
   readonly timeoutMs?: number;
@@ -156,6 +160,12 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
    * `resolvedFaces`, so a stand-in it offers cannot shadow a face the document carries.
    */
   readonly lastResortFonts?: FontOrigin | readonly FontOrigin[];
+  /**
+   * Tells a substitution that is a stand-in with another font's widths, such as a generic
+   * face for a family that no origin supplies. The report counts such a family as uncovered,
+   * so a strict font policy refuses it. Absent: a substitution covers its family.
+   */
+  readonly reportsStandIn?: (family: string, sourceFamily: string) => boolean;
   /** Font provisioning deadline; defaults to `resourceTimeoutMs`, then 60 seconds. */
   readonly fontResolutionTimeoutMs?: number;
   /** Ordered admitted faces used when a complete text span lacks glyph coverage. Maximum 16. */
@@ -248,12 +258,16 @@ export async function openFontBackedDocumentForExport(
         'document-aware byte sessions are immutable'
     );
   }
+  // Refuse an invalid date before parsing and font resolution, and copy it now: a caller that
+  // mutates its own `Date` while fonts resolve cannot change the session's date.
+  const fieldDate = copyValidFieldDate(options.fieldDate);
   if (options.signal?.aborted) return { ok: false, reason: 'aborted' };
   const opened = openHeadlessDocument(source);
   if (!opened.ok) return opened;
   const {
     fonts,
     lastResortFonts,
+    reportsStandIn,
     fontResolutionTimeoutMs,
     fontPolicy,
     onFontResolution,
@@ -280,6 +294,7 @@ export async function openFontBackedDocumentForExport(
       documentLigatures,
       fontShaping,
       lastResortFonts: lastResort,
+      reportsStandIn,
       onFontResolution: (report) => {
         fontResolution = report;
         return onFontResolution?.(report);
@@ -302,6 +317,7 @@ export async function openFontBackedDocumentForExport(
   try {
     result = openDocumentForExport(opened.view, {
       ...sessionOptions,
+      fieldDate,
       reuseAcrossRevisions: false,
       ...(shaping
         ? {
@@ -442,7 +458,13 @@ export async function acquireDocumentExportShaping(
         throwIfAborted(controller.signal);
         const composed = composeFontConfiguration(resolved ?? {});
         const configuration = applyDocumentFontSubstitutions(composed, documentFonts);
-        const standIns = hostChainedDocumentFallbacks(composed, configuration, documentFonts);
+        const standIns = new Set(
+          hostChainedDocumentFallbacks(composed, configuration, documentFonts)
+        );
+        for (const { from, to } of configuration.substitutions ?? [])
+          if (options.reportsStandIn?.(from.family, to.family))
+            standIns.add(from.family.trim().toLowerCase());
+        const synthesized = synthesizedServedFaces(composed, configuration);
         if (configuration.sources.length === 0) {
           const report = fontResolutionReport(
             families,
@@ -469,7 +491,8 @@ export async function acquireDocumentExportShaping(
           originFailures,
           shaping.resolveFont,
           embeddedFontDiagnostics.dropped,
-          standIns
+          standIns,
+          synthesized
         );
         publishFontResolutionReport(report, options);
         enforceStrictFontPolicy(report, options, options.glyphFallbacks);
@@ -675,6 +698,9 @@ function collectParagraphSynthesizedFieldGlyphIds(
   let instruction = '';
   let instructionOverflow = false;
   let hadSeparate = false;
+  let pageField = false;
+  /** A page field or formula live in the outermost field's result (`{ QUOTE {= {PAGE}} }`). */
+  let nestedPageField = false;
   let hasLegacyFormData = false;
   let resultVisibility = 0;
   const stack: Array<{
@@ -727,18 +753,31 @@ function collectParagraphSynthesizedFieldGlyphIds(
           instruction = '';
           instructionOverflow = false;
           hadSeparate = false;
+          pageField = false;
+          nestedPageField = false;
           hasLegacyFormData = hasLegacyFormFieldData(node);
           resultVisibility = 0;
         }
       } else if (kind === 'separate') {
         const outermost = state.nesting === 1;
-        onFldCharSeparate(state);
+        const pageMatch = onFldCharSeparate(state);
         if (outermost) {
+          // Also true for an `=` formula that wraps a page field, which no instruction text shows.
+          pageField = pageMatch !== null;
           const effective = effectiveFieldInstruction(state);
           instruction = effective.instruction;
           instructionOverflow = effective.overflow || state.nestingOverflow;
           separateRunId = runId;
           hadSeparate = true;
+        } else if (
+          pageMatch !== null &&
+          state.phase === 'result' &&
+          !state.nestingOverflow &&
+          !isInsideOpenFieldInstruction(state)
+        ) {
+          // Layout paints a nested page field's value into the outermost field's atom, in that
+          // atom's face, as it does for a page field at level 1.
+          nestedPageField = true;
         }
       } else if (kind === 'end') {
         if (state.nesting === 1) {
@@ -747,16 +786,18 @@ function collectParagraphSynthesizedFieldGlyphIds(
             instruction = effective.instruction;
             instructionOverflow = effective.overflow || state.nestingOverflow;
           }
+          const allowPageFields = context === 'body' || context === 'furniture';
           const synthesizes =
             !instructionOverflow &&
-            complexFieldInstructionMaySynthesizeGlyph(instruction, {
-              hasSeparate: hadSeparate,
-              hasLegacyFormData,
-              allowPageFields: context === 'body' || context === 'furniture',
-              allowRefFields: context === 'body' || context === 'note',
-              allowPageRef: context === 'body',
-              allowAutonum: context === 'body' || context === 'note',
-            });
+            (((pageField || nestedPageField) && allowPageFields) ||
+              complexFieldInstructionMaySynthesizeGlyph(instruction, {
+                hasSeparate: hadSeparate,
+                hasLegacyFormData,
+                allowPageFields,
+                allowRefFields: context === 'body' || context === 'note',
+                allowPageRef: context === 'body',
+                allowAutonum: context === 'body' || context === 'note',
+              }));
           if (synthesizes && resultVisibility !== ALL_REVISION_VIEWS) {
             const projectedRunId = separateRunId ?? beginRunId;
             if (projectedRunId) ids.add(projectedRunId);

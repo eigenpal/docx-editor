@@ -60,6 +60,8 @@ function indexFramesByHost(
   const mutable = new Map<string, TextboxStoryRoot[]>();
   const frames = textboxStoriesOf(part);
   for (const frame of frames) {
+    // Layout lays out no text of a group that paints a placeholder, so it has nothing to select.
+    if (frame.unplaced) continue;
     const atHost = mutable.get(frame.hostParagraphId);
     if (atHost) atHost.push(frame);
     else mutable.set(frame.hostParagraphId, [frame]);

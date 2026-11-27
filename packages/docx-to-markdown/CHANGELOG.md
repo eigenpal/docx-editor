@@ -1,5 +1,24 @@
 # @docx-editor.dev/docx-to-markdown
 
+## 2.41.1
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/fonts@2.41.1
+
+## 2.41.0
+
+### Patch Changes
+
+- 59794d2: `exportMarkdown` now releases the document it converted before it returns. Before, consecutive exports of in-memory files kept each earlier document in memory until the calling task ended, about 200 MB per 500-page document.
+- Updated dependencies: @docx-editor.dev/core@2.41.0, @docx-editor.dev/fonts@2.41.0
+
+## 2.40.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.40.0, @docx-editor.dev/fonts@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

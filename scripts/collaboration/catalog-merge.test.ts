@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { catalogMergeState, COLLABORATION_SHARDS, REQUIRED } from './catalog-merge.mjs';
+import {
+  catalogFiles,
+  catalogMergeState,
+  COLLABORATION_SHARDS,
+  REQUIRED,
+} from './catalog-merge.mjs';
 
 const repository = 'eigenpal/docx-editor';
 const version = '2.19.0';
@@ -24,6 +29,7 @@ function pullRequest() {
     files: [
       '.collaboration/releases.json',
       'docs/site/content/pro/collaboration-versions.mdx',
+      'docs/site/data/collaboration-releases.json',
       ...['fixture.json', 'package.json', 'package-lock.json'].map(
         (file) => `.collaboration/releases/${version}/${file}`
       ),
@@ -147,4 +153,20 @@ test('workflow rechecks CI and merges only the tested SHA, without relying on na
   expect(merge.run).toContain('--match-head-commit "$EXPECTED_HEAD"');
   expect(merge.run).not.toContain('--auto');
   expect(merge.run).not.toContain('--admin');
+});
+
+test('the catalog workflow commits every file a generated catalog PR may hold', () => {
+  const workflow = readFileSync(
+    new URL('../../.github/workflows/collaboration-catalog.yml', import.meta.url),
+    'utf8'
+  );
+  const added =
+    workflow
+      .match(/git add (.+)$/m)?.[1]
+      .trim()
+      .split(/\s+/) ?? [];
+  for (const file of catalogFiles(version))
+    expect(added.some((path) => (path.endsWith('/') ? file.startsWith(path) : file === path))).toBe(
+      true
+    );
 });

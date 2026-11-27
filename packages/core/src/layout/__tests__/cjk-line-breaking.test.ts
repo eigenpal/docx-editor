@@ -138,7 +138,8 @@ describe('kinsoku beside tabs and inside the chop', () => {
     // an overflow at ー took the mid-word carry, re-laid the tab with a stale advance
     // that no longer reached its stop, and closed the first line seven characters early.
     const body = `<w:p>${run('AA BBBB')}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:tab/></w:r>${run('ー天地玄黄宇宙洪')}</w:p>`;
-    // The stop at the edge keeps the tab on the first line.
+    // The stop at the edge leaves no room for the word after the tab on any line, so the tab
+    // moves down with it, ends that line alone, and the word opens the next line.
     const edgeStop = {
       stops: [{ positionPt: 60, alignment: 'left' as const }],
       defaultIntervalPt: 36,
@@ -155,10 +156,11 @@ describe('kinsoku beside tabs and inside the chop', () => {
       edgeStop
     );
     expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
-      'AA BBBB\t',
+      'AA BBBB',
+      '\t',
       'ー天地玄黄宇宙洪',
     ]);
-    const tab = lines[0]!.spans.find((span) => span.text === '\t')!;
+    const tab = lines[1]!.spans.find((span) => span.text === '\t')!;
     expect(tab.box.x + tab.box.width).toBeCloseTo(60, 5);
   });
 

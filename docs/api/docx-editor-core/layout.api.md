@@ -217,6 +217,13 @@ export interface CacheProvenance extends OperationSnapshot {
 }
 
 // @public
+export function canonicalFontFamily(family: string): {
+    readonly bold: boolean;
+    readonly family: string;
+    readonly italic: boolean;
+};
+
+// @public
 export interface CanvasMeasurerOptions {
     readonly context?: CanvasTextContext | null;
     // (undocumented)
@@ -398,6 +405,12 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
 
 // @public
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
+
+// @public
+export const CJK_FALLBACK_FAMILY = "Noto Sans CJK JP";
+
+// @public
+export const CJK_SUBSTITUTED_FAMILIES: readonly string[];
 
 // @public
 export interface CjkTypographySettings {
@@ -914,7 +927,13 @@ export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'gr
 
 // @public
 export interface DrawingGroupPictureLayerRecord {
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
     readonly crop: SourceCrop;
+    readonly effects?: DrawingImageEffects;
+    readonly flipH?: true;
     readonly frameUnit: Readonly<{
         height: number;
         width: number;
@@ -922,11 +941,16 @@ export interface DrawingGroupPictureLayerRecord {
         y: number;
     }>;
     readonly resource: ImageResourceState;
+    readonly rotationDegrees?: number;
 }
 
 // @public
 export interface DrawingGroupPictureRecord {
     readonly alternateContent: boolean;
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
 }
 
 // @public (undocumented)
@@ -1235,6 +1259,32 @@ export function expandLvlText(lvlText: string, counters: readonly number[], form
 export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null;
 
 // @public
+export const FALLBACK_FACE_FAMILIES: readonly string[];
+
+// @public
+export type FallbackFaceReader = (families: ReadonlySet<string>, signal: AbortSignal | undefined,
+faces?: readonly FontRequest[]) => Promise<readonly FontSource[]>;
+
+// @public
+export type FallbackFontResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<FallbackFontsAnswer>>;
+
+// @public
+export interface FallbackFontsAnswer {
+    // (undocumented)
+    readonly sources: FontSource[];
+    // (undocumented)
+    readonly substitutions: FontSourceSubstitution[];
+}
+
+// @public
+export interface FallbackLineBox {
+    // (undocumented)
+    readonly baselineEm: number;
+    // (undocumented)
+    readonly heightEm: number;
+}
+
+// @public
 export interface FieldAtomMarker {
     readonly fixedResult?: true;
     readonly formControl?: {
@@ -1249,9 +1299,12 @@ export interface FieldAtomMarker {
     };
     readonly formField: boolean;
     readonly pageField?: {
+        readonly formula?: PageFieldMarker['formula'];
         readonly kind: AllowlistedPageField;
         readonly numberFormat?: PageFieldNumberFormat;
         readonly picture?: string;
+        readonly savedResult?: string;
+        readonly segments?: PageFieldMarker['segments'];
     };
     readonly pageRef?: PageRefFieldProjection;
     readonly resultEnd?: number;
@@ -1296,6 +1349,46 @@ export type FixedPointRoundingMode = 'halfAwayFromZero' | 'halfToEven' | 'toward
 
 // @public
 export type FontByteValidator = (bytes: Uint8Array, faceIndex: number) => FontValidationResult;
+
+// @public
+export interface FontConfiguration {
+    // (undocumented)
+    readonly defaultFont: {
+        readonly family: string;
+        readonly sizeHalfPoints: number;
+    };
+    // (undocumented)
+    readonly epoch: number;
+    // (undocumented)
+    readonly language?: string;
+    // (undocumented)
+    readonly maxFontBytes: number;
+    // (undocumented)
+    readonly sources: readonly FontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
+}
+
+// @public
+export interface FontConfigurationFragment {
+    readonly deferred?: Promise<FontConfigurationFragment | undefined>;
+    // (undocumented)
+    readonly sources?: readonly FontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
+}
+
+// @public
+export interface FontFaceRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
 
 // @public
 export interface FontFingerprintInputs {
@@ -1361,6 +1454,23 @@ export class FontResolutionError extends Error {
 export type FontResolutionErrorCode = 'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch';
 
 // @public
+export interface FontResolutionRequest {
+    readonly defaultFamily: string;
+    readonly faces?: readonly FontFaceRequest[];
+    readonly families: readonly string[];
+    readonly resolvedFaces?: readonly FontFaceRequest[];
+    readonly signal?: AbortSignal;
+}
+
+// @public
+export type FontResolver = (request: FontResolutionRequest) => FontConfiguration | FontConfigurationFragment | undefined | Promise<FontConfiguration | FontConfigurationFragment | undefined>;
+
+// @public
+export interface FontResolverMark {
+    readonly 'docx-editor.dev/font-resolver': true;
+}
+
+// @public
 export interface FontResourceDefinition {
     // (undocumented)
     readonly availability?: 'available' | 'forbidden';
@@ -1418,6 +1528,34 @@ export interface FontShapingOptions {
 
 // @public
 export type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
+
+// @public
+export interface FontSource {
+    // (undocumented)
+    readonly availability?: 'available' | 'forbidden';
+    // (undocumented)
+    readonly bytes: Uint8Array;
+    // (undocumented)
+    readonly faceIndex: number;
+    // (undocumented)
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly request: FontFaceRequest;
+}
+
+// @public
+export interface FontSourceSubstitution {
+    // (undocumented)
+    readonly from: FontFaceRequest;
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly to: FontFaceRequest;
+}
 
 // @public
 export interface FontSubstitution {
@@ -1494,7 +1632,16 @@ export function fragmentOwnsAtomOffset(fragment: ParagraphFragmentRecord, atomOf
 export function fragmentsOfParagraph(layout: SemanticLayout, paragraphId: string): ParagraphFragmentRecord[];
 
 // @public
+export function genericStandInFamily(family: string): string;
+
+// @public
 export function geometryOfSection(section: SectionProperties): PageGeometry;
+
+// @public
+export const GLYPH_FALLBACK_FACES: readonly FontRequest[];
+
+// @public
+export const GLYPH_FALLBACK_FAMILIES: readonly string[];
 
 // @public
 export interface GlyphOutline {
@@ -1554,7 +1701,13 @@ export interface GraphemeWordSegmentRecord {
 }
 
 // @internal
+export function groupPictureInkReach(drawing: InlineDrawingRecord | AnchoredDrawingRecord, ink: LayoutBox): LayoutBox;
+
+// @internal
 export function groupPictureLayerDrawing<D extends InlineDrawingRecord | AnchoredDrawingRecord>(drawing: D, layer: DrawingGroupPictureLayerRecord): D;
+
+// @internal
+export function groupPicturePaintsPastExtent(drawing: InlineDrawingRecord | AnchoredDrawingRecord): boolean;
 
 // @public
 export interface GroupTextboxStoryRecord {
@@ -1779,6 +1932,7 @@ export interface InlineDrawingRecord {
     readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupMembersNotShown?: number;
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupPictureLayers?: readonly DrawingGroupPictureLayerRecord[];
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
@@ -1822,6 +1976,9 @@ export const intlGraphemeBoundary: GraphemeBoundary;
 export function isCanvasMeasurementAvailable(context?: CanvasTextContext | null | undefined): boolean;
 
 // @public
+export function isCjkRuledFontFamily(canonical: string): boolean;
+
+// @public
 export function isContentControl(node: OoxmlNode): node is ContentControlLike;
 
 // @public
@@ -1832,6 +1989,9 @@ export function isCumulativeGeometryTrustedFromLineOrigin(run: ShapedRun, lineSt
 
 // @public
 export function isFurniturePoint(layout: SemanticLayout, point: HitPoint): boolean;
+
+// @public
+export function isGenericStandIn(family: string, sourceFamily: string): boolean;
 
 // @public
 export function isGeometryTrustedCaretOffset(run: ShapedRun, utf16Offset: number): boolean;
@@ -1847,6 +2007,9 @@ export function isIntlWordSegmenterAvailable(): boolean;
 
 // @public
 export function isMarkerOnlySeparatorNote(note: OoxmlNode, displayMode?: RevisionDisplayMode, revisionAuthorFilter?: RevisionAuthorFilter): boolean;
+
+// @public
+export function isRuledFontFamily(canonical: string): boolean;
 
 // @public (undocumented)
 export function isValidStyleId(raw: string | undefined): raw is string;
@@ -2214,7 +2377,13 @@ export interface ListMarkerRecord {
 export type ListSuffix = 'tab' | 'space' | 'nothing';
 
 // @public
+export const LOCALIZED_FONT_FAMILIES: ReadonlyMap<string, string>;
+
+// @public
 export function mapSymbolPuaText(text: string, fontFamily: string | null | undefined, isFamilyAvailable?: (family: string) => boolean): string;
+
+// @public
+export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
 
 // @public
 export function markRevisionRemovesMark(revision: RevisionAttribution): boolean;
@@ -2322,7 +2491,16 @@ export interface MoveCaretOptions {
 }
 
 // @public
+export function namedFallbackFontResolver(read: FallbackFaceReader): FallbackFontResolver;
+
+// @public
+export function namedSubstituteFamily(family: string): string | undefined;
+
+// @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
+
+// @internal
+export function nearestFaceOrder(weight: number, style: 'normal' | 'italic'): readonly (readonly [number, 'normal' | 'italic'])[];
 
 // @public
 export function nextTabDestination(tabs: ResolvedTabStops, currentX: number, rightEdge: number, forNumbering?: boolean): TabDestination;
@@ -3035,6 +3213,18 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null;
 // @public
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties;
 
+// @internal
+export function pictureCornerFrame(corners: readonly DrawingPoint[]): {
+    readonly box: {
+        height: number;
+        width: number;
+        x: number;
+        y: number;
+    };
+    readonly flipH: boolean;
+    readonly rotationDegrees: number;
+} | null;
+
 // @public
 export interface PictureFrameEffects {
     readonly reflection?: ShapeReflection;
@@ -3152,6 +3342,9 @@ export interface RefNoteParts {
     // (undocumented)
     readonly footnotesPart: OoxmlPart | null;
 }
+
+// @internal
+export function regionCutClipBox(drawing: InlineDrawingRecord | AnchoredDrawingRecord, box: LayoutBox, far: LayoutBox): LayoutBox | null;
 
 // @public
 export interface RegisteredFieldLink {
@@ -3945,6 +4138,7 @@ export interface SemanticLayoutOptions {
     readonly evenAndOddHeaders?: boolean;
     // @internal (undocumented)
     readonly fieldCodeRanges?: FieldCodeRanges;
+    readonly fieldDate?: Date;
     readonly fieldResults?: FieldResultsMode;
     readonly furniture?: PageFurniture;
     // (undocumented)
@@ -4078,6 +4272,7 @@ export interface SemanticSpanVisit {
         x: number;
         y: number;
     }>;
+    readonly storyTurns?: readonly StoryTurn[];
     readonly textboxDepth: number;
     readonly textboxOwner: TextboxOwnerRecord | null;
     readonly textboxPath: readonly TextboxOwnerRecord[];
@@ -4157,6 +4352,7 @@ export interface SemanticTableCell {
     };
     readonly noWrap?: true;
     readonly preferredWidth: PreferredWidth;
+    readonly restartsVerticalMerge?: true;
     // (undocumented)
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
     // (undocumented)
@@ -4557,6 +4753,12 @@ export function spansInSelection(layout: SemanticLayout, selection: SemanticSele
 order: readonly string[]): StyleSpanRecord[];
 
 // @public
+export function standInFontResolver(read: FallbackFaceReader): FallbackFontResolver;
+
+// @public
+export function standInLineBox(canonical: string, target: string): FallbackLineBox | undefined;
+
+// @public
 export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, styles?: StyleCascadeTable, numberingIndex?: NumberingIndex): OoxmlElement[];
 
 // @public
@@ -4577,6 +4779,7 @@ export interface StoryParagraphFragmentContext {
         x: number;
         y: number;
     }>;
+    readonly storyTurns?: readonly StoryTurn[];
     readonly textboxDepth: number;
     readonly textboxOwner: TextboxOwnerRecord | null;
     readonly textboxPath: readonly TextboxOwnerRecord[];
@@ -4589,6 +4792,15 @@ export interface StoryProjectionDependencies {
     // (undocumented)
     readonly tokenForParagraphForPart: (partName: string, paragraph: OoxmlNode) => string;
     readonly tokenForTableForPart: (partName: string, table: OoxmlNode) => string;
+}
+
+// @public
+export interface StoryTurn {
+    readonly degrees: number;
+    readonly pivot: Readonly<{
+        x: number;
+        y: number;
+    }>;
 }
 
 // @public
@@ -4671,6 +4883,8 @@ export function styleForFontSlot(style: ResolvedRunStyle, slot: FontSlot | undef
 // @public
 export interface StyleSpanRecord {
     readonly borderBaselinePt?: number;
+    // @internal
+    readonly borderEndTrimPt?: number;
     // (undocumented)
     readonly box: LayoutBox;
     readonly caretEdges?: readonly number[];
@@ -4704,6 +4918,12 @@ export interface StyleSpanRecord {
     readonly unsupported?: UnsupportedContentRecord;
     readonly wrapAdvanceBefore?: number;
 }
+
+// @public
+export function substitutionsToFallback(family: string, target: string): FontSourceSubstitution[];
+
+// @public
+export const SYMBOL_STAND_IN_FAMILY = "Noto Sans Symbols 2";
 
 // @public
 export const SYNTHETIC_BOLD_ADVANCE_EM: number;
@@ -5097,6 +5317,8 @@ export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     // @internal
     faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
+    // @internal
+    hasMeasurableFont?(style: ResolvedRunStyle): boolean;
     hasResolvedFont?(style: ResolvedRunStyle): boolean;
     inkBounds?(text: string, style: ResolvedRunStyle): {
         left: number;
@@ -5137,6 +5359,18 @@ export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string>
 
 // @public
 export function tryCreateCanvasMeasurer(options?: CanvasMeasurerOptions): TextMeasurer | null;
+
+// @public
+export function turnStoryBox(turns: readonly StoryTurn[] | undefined, box: LayoutBox): LayoutBox;
+
+// @public
+export function turnStoryPoint(turns: readonly StoryTurn[] | undefined, point: Readonly<{
+    x: number;
+    y: number;
+}>): Readonly<{
+    x: number;
+    y: number;
+}>;
 
 // @public
 export function unionLayoutBoxes(boxes: readonly LayoutBox[]): LayoutBox | null;
@@ -5204,6 +5438,9 @@ export interface VectorPattern {
     readonly rows: readonly number[];
 }
 
+// @internal
+export function vectorPictureBand(component: VectorShapeComponent, pictureCount: number): number;
+
 // @public
 export interface VectorShapeComponent {
     readonly arrowheadsEmu?: readonly (readonly Readonly<{
@@ -5222,6 +5459,7 @@ export interface VectorShapeComponent {
     readonly fillHex: string | null;
     readonly fillPattern?: VectorPattern;
     readonly fillRule?: 'nonzero';
+    readonly picturesBelow?: number;
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)

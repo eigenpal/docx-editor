@@ -31,10 +31,26 @@ test('a localized name takes the face of its English name', async () => {
       to: regular('Meiryo'),
     },
     { from: bold('メイリオ'), to: bold('Meiryo') },
+    // The nearest face in the editor's order: no italic, so the bold weight.
     {
       from: { family: 'メイリオ', weight: 700, style: 'italic' },
-      to: regular('Meiryo'),
+      to: bold('Meiryo'),
     },
+  ]);
+});
+
+test('an English name takes the faces of its localized name', async () => {
+  const result = await cjkFonts({
+    families: ['Meiryo'],
+    defaultFamily: 'Arial',
+    resolvedFaces: [regular('メイリオ')],
+  });
+  expect(result.sources).toEqual([]);
+  expect(result.substitutions?.map(({ from, to }) => [from.weight, from.style, to])).toEqual([
+    [400, 'normal', regular('メイリオ')],
+    [400, 'italic', regular('メイリオ')],
+    [700, 'normal', regular('メイリオ')],
+    [700, 'italic', regular('メイリオ')],
   ]);
 });
 

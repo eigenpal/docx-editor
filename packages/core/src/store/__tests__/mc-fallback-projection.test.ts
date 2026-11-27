@@ -1,6 +1,6 @@
 // A run-level `mc:AlternateContent` whose chosen branch cannot paint shows its VML fallback
 // when that paints, with the fallback's own geometry. Without one, the chosen branch keeps
-// its hidden extent.
+// its hidden extent. A chosen group that paints without some members shows the fallback too.
 
 import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
@@ -33,13 +33,21 @@ const TEXTBOX =
   `<a:ext cx="${CX}" cy="${CY}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></wps:spPr>` +
   '<wps:txbx><w:txbxContent><w:p><w:r><w:t>t</w:t></w:r></w:p></w:txbxContent></wps:txbx>' +
   '<wps:bodyPr vert="vert270"/></wps:wsp>';
-/** An inline group whose only member is a nested group of text boxes: outside the subset. */
-const NESTED_GROUP =
+/** A member that paint cannot represent. */
+const GRAPHIC_FRAME =
+  '<wpg:graphicFrame><wpg:cNvPr id="9" name="Frame"/><wpg:cNvFrPr/><wpg:xfrm><a:off x="0" y="0"/>' +
+  '<a:ext cx="100" cy="100"/></wpg:xfrm></wpg:graphicFrame>';
+const group = (members: string) =>
   `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${CX}" cy="${CY}"/>` +
   '<wp:docPr id="1" name="G"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">' +
-  `<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${frame(CX, CY)}</wpg:grpSpPr>` +
-  `<wpg:grpSp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${frame(CX, CY)}</wpg:grpSpPr>${TEXTBOX}</wpg:grpSp>` +
+  `<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${frame(CX, CY)}</wpg:grpSpPr>${members}` +
   '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing>';
+/** An inline group whose only member is a graphic frame: the group paints nothing. */
+const UNPAINTED_GROUP = group(GRAPHIC_FRAME);
+/** An inline group whose only member is a glowing nested group of text boxes. */
+const NESTED_GROUP = group(
+  `<wpg:grpSp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${frame(CX, CY)}<a:effectLst><a:glow rad="12700"/></a:effectLst></wpg:grpSpPr>${TEXTBOX}</wpg:grpSp>`
+);
 const CHART =
   `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${CX}" cy="1270000"/>` +
   '<wp:docPr id="2" name="C"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">' +
@@ -100,7 +108,11 @@ function lineTops(source: OoxmlPart): number[] {
 
 describe('an mc:AlternateContent whose chosen branch cannot paint', () => {
   test('shows a VML fallback that paints, at the fallback geometry', () => {
-    const source = part(alternate(NESTED_GROUP, VML_RECT));
+    // The chosen group alone paints nothing.
+    const [alone] = projectDrawingsInPart(part(UNPAINTED_GROUP));
+    expect(alone).toMatchObject({ vectorShape: null, groupPicture: null, textboxStory: null });
+    expect(alone!.groupTextboxes).toBeUndefined();
+    const source = part(alternate(UNPAINTED_GROUP, VML_RECT));
     const [projection] = [...indexInlineDrawingProjectionsInPart(source).values()];
     expect(projection).toMatchObject({
       kind: 'inline',
@@ -111,6 +123,36 @@ describe('an mc:AlternateContent whose chosen branch cannot paint', () => {
     expect(projectDrawingsInPart(source)).toHaveLength(1);
     // The line holds the fallback, never the chosen branch's extent.
     expect(lineTops(source)).toEqual(lineTops(part(VML_RECT)));
+  });
+
+  test('a chosen group that paints without one member shows a fallback that paints', () => {
+    // The text box paints, and the graphic frame does not.
+    const partial = group(TEXTBOX + GRAPHIC_FRAME);
+    const [alone] = projectDrawingsInPart(part(partial));
+    expect(alone!.groupTextboxes).toHaveLength(1);
+    expect(alone!.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      'group-member-not-shown'
+    );
+    const source = part(alternate(partial, VML_RECT));
+    const [projection] = [...indexInlineDrawingProjectionsInPart(source).values()];
+    expect(projection).toMatchObject({
+      kind: 'inline',
+      extentEmu: { cx: 100 * 12700, cy: 4 * 12700 },
+    });
+    expect(projection!.vectorShape).toBeTruthy();
+    expect(projection!.groupTextboxes).toBeUndefined();
+  });
+
+  test('a chosen group with a nested group effect paints flat, in place of its fallback', () => {
+    const source = part(alternate(NESTED_GROUP, VML_RECT));
+    const [projection] = [...indexInlineDrawingProjectionsInPart(source).values()];
+    expect(projection).toMatchObject({ kind: 'inline', extentEmu: { cx: CX, cy: CY } });
+    // The glow paints nothing. The text of the nested text box lays out.
+    expect(projection!.groupTextboxes).toHaveLength(1);
+    expect(projection!.groupTextboxes![0]!.rotationDegrees).toBe(270);
+    expect(projection!.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
+      'group-member-not-shown'
+    );
   });
 
   test('a chart shows its fallback picture', () => {
@@ -131,7 +173,7 @@ describe('an mc:AlternateContent whose chosen branch cannot paint', () => {
 
   test('without a fallback that paints, keeps one visible placeholder at the chosen extent', () => {
     const unpaintable = '<w:pict><v:group style="width:10pt;height:10pt"/></w:pict>';
-    const source = part(alternate(NESTED_GROUP, unpaintable));
+    const source = part(alternate(UNPAINTED_GROUP, unpaintable));
     const [projection] = [...indexInlineDrawingProjectionsInPart(source).values()];
     expect(projection).toMatchObject({
       hidden: false,

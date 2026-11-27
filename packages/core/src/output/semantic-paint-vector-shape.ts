@@ -46,6 +46,23 @@ export function applyVectorInkReach(
 }
 
 /**
+ * Cut a vector frame at `ink`, where the outer box is wider than the ink of the vector members:
+ * a turned picture of a group widens the outer box for the picture alone.
+ */
+export function clipVectorFrameToInk(
+  frame: HTMLElement,
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  ink: LayoutBox,
+  scale: number
+): void {
+  const box = vectorShapeViewport(drawing.vectorShape!, drawing.geometry.contentBounds).frame;
+  const cut = (value: number) => `${finiteStyle(value * scale)}px`;
+  frame.style.clipPath = `inset(${cut(ink.y - box.y)} ${cut(
+    box.x + box.width - (ink.x + ink.width)
+  )} ${cut(box.y + box.height - (ink.y + ink.height))} ${cut(ink.x - box.x)})`;
+}
+
+/**
  * Whether the drawing is a picture whose `vectorShape` is its own frame (outline, shadow,
  * fill) rather than a shape or a group's other members.
  */

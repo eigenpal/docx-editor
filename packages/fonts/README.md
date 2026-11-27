@@ -24,7 +24,27 @@ Load open-licensed substitutes for common document fonts. The docx-editor engine
 
 Helvetica shares Arial's advance widths, so `packagedFonts()` also serves Helvetica with Liberation Sans. The first five substitutes target matching advance widths for the glyphs they cover. TeX Gyre Adventor is slightly narrower than Century Gothic; the measured difference stays within 1% in `bun run check:font-width-fidelity`. Selawik matches Segoe UI's advance widths and takes Segoe UI's line height. Selawik has no italic faces, so italic Segoe UI text uses the upright faces, slanted. Kerning and glyph differences can still change line breaks. For the original glyphs, supply licensed font bytes through `loadFonts()` from `@docx-editor.dev/core/editor`.
 
-Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor keeps native family fallback available for missing glyphs. Exact metrics still depend on the font available for that script.
+## Fallback faces
+
+A document can name a font that no source supplies, or use a character that its font lacks. `packagedFonts()` then serves a fallback face, and PDF export from `@docx-editor.dev/docx-to-pdf` uses the same face. The editor and the exported PDF therefore break lines at the same places.
+
+| Text | Fallback face |
+| --- | --- |
+| A missing family with a serif, sans-serif, or monospaced name | Liberation Serif, Liberation Sans, or Liberation Mono |
+| Georgia, Verdana | Liberation Serif, Liberation Sans |
+| Cambria Math, mathematical operators and letters | Noto Sans Math |
+| Symbols, a missing symbol family | Noto Sans Symbols 2 |
+| Arabic | Noto Sans Arabic |
+| Emoji | Twemoji Mozilla, then Noto Emoji |
+
+- A fallback face loads when the document's text needs it. A document whose fonts cover its text loads none.
+- A family that the browser has installed keeps its own face.
+- The font notice lists a family that renders in a fallback face with different widths.
+- To turn off the symbol, mathematics, Arabic, and emoji faces, pass `packagedFonts({ fallbackFaces: false })`. The `allow` option does not limit them. Such a character then draws in a font that the browser picks, and its line can differ from PDF export.
+- For Chinese, Japanese, and Korean text, add `cjkFonts()` from `@docx-editor.dev/fonts-cjk`.
+- `GLYPH_FALLBACK_FACE_FAMILIES` lists the symbol, mathematics, Arabic, and emoji families.
+
+`defaultFonts()` and `loadDefaultFonts()` load no fallback face. A custom resolver gets the same behavior when it serves these families under their own names.
 
 `loadDefaultFonts()` and `defaultFonts()` load five package defaults: Calibri, Cambria, Times New Roman, Arial, and Courier New. To include Century Gothic and Segoe UI, pass `families: ALL_DEFAULT_FONT_FAMILIES`. Their substitutes add about 709 KB and 88 KB. Alternatively, `packagedFonts()` and `googleFonts()` load them from packaged assets when the document requests them.
 
@@ -215,6 +235,8 @@ From the repository root, run `bun run check:google-catalog` to check the commit
 
 ## Licenses
 
-The packaged fonts include license texts in `licenses/`. Carlito, Caladea, Liberation, and Selawik use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License. The package code uses Apache-2.0.
+The packaged fonts include license texts in `licenses/`. Carlito, Caladea, Liberation, Selawik, and the Noto fonts use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License. Twemoji Mozilla uses the Apache License 2.0 for code and CC BY 4.0 for emoji artwork. The package code uses Apache-2.0.
+
+Noto Emoji and Noto Sans Arabic are static instances generated with FontTools `instantiateVariableFont` at weight 400. The Arabic instance also uses width 100. The other fallback faces are unchanged upstream binaries. `assets/sources.json` records source URLs and SHA-256 hashes.
 
 The GUST Font License incorporates the LaTeX Project Public License 1.3c or any later version. It also requests that you rename modified fonts. Both texts ship in `licenses/`. The package identifies this license as `LicenseRef-GUST-Font-License` because GUST has no SPDX identifier.

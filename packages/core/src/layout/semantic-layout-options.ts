@@ -163,6 +163,13 @@ export interface SemanticLayoutOptions {
    * mode is folded into every cache key.
    */
   readonly fieldResults?: FieldResultsMode;
+  /**
+   * The moment DATE and TIME fields with a `\@` date-time picture show, in its local time.
+   * Absent keeps every saved result, and so does the `editable`
+   * {@link SemanticLayoutOptions.fieldResults} mode. Layout never writes the value to the
+   * document. The moment is folded into every cache key.
+   */
+  readonly fieldDate?: Date;
   /** @internal */
   readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
   /** @internal Word TOC character-style suppression. */

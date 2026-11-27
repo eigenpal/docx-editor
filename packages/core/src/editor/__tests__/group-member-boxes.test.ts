@@ -23,7 +23,7 @@ function member(x: number, rot: number): string {
 }
 
 /** A 144 x 72pt group in 144 x 144pt child units: an upright member and a turned one. */
-function boxes(rot: number) {
+function boxes(rot: number, members = `${member(0, 0)}${member(72, rot)}`) {
   const xml =
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
     `xmlns:wps="${WPS}" xmlns:wpg="${WPG}"><w:body><w:p><w:r><w:drawing>` +
@@ -36,7 +36,7 @@ function boxes(rot: number) {
     `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm>` +
     `<a:off x="0" y="0"/><a:ext cx="${144 * EMU}" cy="${72 * EMU}"/><a:chOff x="0" y="0"/>` +
     `<a:chExt cx="${144 * EMU}" cy="${144 * EMU}"/></a:xfrm></wpg:grpSpPr>` +
-    `${member(0, 0)}${member(72, rot)}</wpg:wgp></a:graphicData></a:graphic></wp:anchor>` +
+    `${members}</wpg:wgp></a:graphicData></a:graphic></wp:anchor>` +
     '</w:drawing></w:r></w:p></w:body></w:document>';
   const parsed = readOoxmlPart(xml, {
     name: '/word/document.xml',
@@ -44,12 +44,8 @@ function boxes(rot: number) {
   });
   if (!parsed.ok) throw new Error(parsed.reason);
   const [projection] = projectDrawingsInPart(parsed.part);
-  return groupMemberBoxes(parsed.part, projection!.drawingNodeId)!.map((box) => [
-    box.x,
-    box.y,
-    box.width,
-    box.height,
-  ]);
+  const found = groupMemberBoxes(parsed.part, projection!.drawingNodeId);
+  return found ? found.map((box) => [box.x, box.y, box.width, box.height]) : null;
 }
 
 test('a member box follows the member placement in an unevenly scaled group', () => {
@@ -62,4 +58,34 @@ test('a member box follows the member placement in an unevenly scaled group', ()
   expect(boxes(90)[1]).toEqual([0.625, -0.5, 0.25, 2]);
   // Turned 30 degrees: each axis keeps its own scale, so the box is the child box.
   expect(boxes(30)[1]).toEqual([0.5, 0, 0.5, 1]);
+});
+
+test('a shape inside a nested group gets its box through the nested child space', () => {
+  // The nested group fills the right half and authors its member in half-size child units.
+  const nested =
+    '<wpg:grpSp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm>' +
+    `<a:off x="${72 * EMU}" y="0"/><a:ext cx="${72 * EMU}" cy="${144 * EMU}"/>` +
+    `<a:chOff x="0" y="0"/><a:chExt cx="${36 * EMU}" cy="${72 * EMU}"/></a:xfrm></wpg:grpSpPr>` +
+    `${member(0, 0).replace(`cx="${72 * EMU}" cy="${144 * EMU}"`, `cx="${36 * EMU}" cy="${72 * EMU}"`)}` +
+    '</wpg:grpSp>';
+  expect(boxes(0, member(0, 0) + nested)).toEqual([
+    [0, 0, 0.5, 1],
+    [0.5, 0, 0.5, 1],
+  ]);
+  // A shape inside a turned nested group has no upright box, so only the direct shape selects.
+  const turned = nested.replace('<wpg:grpSpPr><a:xfrm>', '<wpg:grpSpPr><a:xfrm rot="60000">');
+  expect(boxes(0, member(0, 0) + turned)).toEqual([[0, 0, 0.5, 1]]);
+  // A nested group with an effect paints its members flat, so both shapes select.
+  const glowing = nested.replace(
+    '</a:xfrm></wpg:grpSpPr>',
+    '</a:xfrm><a:effectLst><a:glow rad="1"/></a:effectLst></wpg:grpSpPr>'
+  );
+  expect(boxes(0, member(0, 0) + glowing)).toEqual([
+    [0, 0, 0.5, 1],
+    [0.5, 0, 0.5, 1],
+  ]);
+  // A nested group without a child extent paints nothing, so only the direct shape selects.
+  const childExtent = `<a:chExt cx="${36 * EMU}" cy="${72 * EMU}"/>`;
+  expect(nested).toContain(childExtent);
+  expect(boxes(0, member(0, 0) + nested.replace(childExtent, ''))).toEqual([[0, 0, 0.5, 1]]);
 });

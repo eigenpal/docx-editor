@@ -3,9 +3,9 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import {
   clipboardCommandRefusal,
+  hasEditorClipboardCopy,
+  readClipboardForPaste,
   tableChromeIconPaths,
-  hostWindowOf,
-  type HostWindow,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor, useEditorContentElement } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
@@ -141,25 +141,24 @@ export const ContextMenuPaste = defineComponent({
     const cmd = useEditorCommand({ type: 'paste', text: ' ' });
     return () => {
       if (props.hidden) return null;
-      const blocked = clipboardRefusal !== null;
+      // A refused read leaves the row live while the editor's own copy can still paste.
+      const blocked =
+        clipboardRefusal !== null && !hasEditorClipboardCopy(contentElement.value ?? null);
+      const title = (blocked ? clipboardRefusal : null) ?? cmd.disabledReason.value;
       return (
         <MenuRow
           {...menuRowSlot('edit.paste')}
           icon={props.icon ?? chromeIcon(PASTE_PATHS) ?? undefined}
           shortcut={label(props.shortcutKey ?? 'contextMenu.pasteShortcut')}
           disabled={!cmd.isEnabled.value || blocked}
-          {...((clipboardRefusal ?? cmd.disabledReason.value)
-            ? { title: clipboardRefusal ?? cmd.disabledReason.value ?? '' }
-            : {})}
+          {...(title ? { title } : {})}
           onSelect={() => {
             // Close first: the read can wait on a browser permission prompt, and a menu
             // left open over it looks stuck. The read still starts inside this click.
             close(true);
             void (async () => {
               try {
-                const { text, html } = await readClipboardPayload(
-                  hostWindowOf(contentElement.value)
-                );
+                const { text, html } = await readClipboardForPaste(contentElement.value);
                 if (text || html) {
                   exec({ type: 'paste', text, ...(html ? { html } : {}) });
                 }
@@ -180,38 +179,6 @@ export const ContextMenuPaste = defineComponent({
 });
 
 ContextMenuPaste.docxRow = 'edit.paste' as const;
-
-/**
- * Both clipboard flavours where the async read allows it, plain text where it does not.
- * Some engines strip attributes from async-read HTML — the engine's paste router degrades
- * to the surviving flavours, so the read never has to guess what made it through.
- */
-async function readClipboardPayload(
-  win: HostWindow
-): Promise<{ text: string; html: string | null }> {
-  // The editor's own window: a pop-out window has focus there, and the opener's clipboard
-  // refuses a read from a window that does not.
-  const clipboard = win.navigator.clipboard;
-  if (typeof clipboard.read === 'function' && typeof win.ClipboardItem !== 'undefined') {
-    try {
-      const items = await clipboard.read();
-      let text = '';
-      let html: string | null = null;
-      for (const item of items) {
-        if (item.types.includes('text/plain')) {
-          text = await (await item.getType('text/plain')).text();
-        }
-        if (item.types.includes('text/html')) {
-          html = await (await item.getType('text/html')).text();
-        }
-      }
-      if (text || html) return { text, html };
-    } catch {
-      // Fall through to the plain read; a refusal there is the one reported.
-    }
-  }
-  return { text: await clipboard.readText(), html: null };
-}
 
 /**
  * Paste the clipboard's plain text as if typed, whatever richer flavours it holds — the
@@ -236,25 +203,27 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
     const cmd = useEditorCommand({ type: 'pasteWithoutFormatting', text: ' ' });
     return () => {
       if (props.hidden) return null;
-      const blocked = clipboardRefusal !== null;
+      // A refused read leaves the row live while the editor's own copy can still paste.
+      const blocked =
+        clipboardRefusal !== null &&
+        !hasEditorClipboardCopy(contentElement.value ?? null, { plainText: true });
+      const title = (blocked ? clipboardRefusal : null) ?? cmd.disabledReason.value;
       return (
         <MenuRow
           {...menuRowSlot('edit.pasteWithoutFormatting')}
           icon={props.icon ?? chromeIcon(PASTE_PATHS) ?? undefined}
           shortcut={label(props.shortcutKey ?? 'contextMenu.pasteWithoutFormattingShortcut')}
           disabled={!cmd.isEnabled.value || blocked}
-          {...((clipboardRefusal ?? cmd.disabledReason.value)
-            ? { title: clipboardRefusal ?? cmd.disabledReason.value ?? '' }
-            : {})}
+          {...(title ? { title } : {})}
           onSelect={() => {
             // Close first: the read can wait on a browser permission prompt, and a menu
             // left open over it looks stuck. The read still starts inside this click.
             close(true);
             void (async () => {
               try {
-                const text = await hostWindowOf(
-                  contentElement.value
-                ).navigator.clipboard.readText();
+                const { text } = await readClipboardForPaste(contentElement.value, {
+                  plainText: true,
+                });
                 if (text) exec({ type: 'pasteWithoutFormatting', text });
               } catch (error) {
                 reportClipboardRefusal(

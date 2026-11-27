@@ -53,6 +53,7 @@ import {
 } from './layout-run-shape.ts';
 import {
   preservesShapingFace,
+  substitutesOnlyMissingGlyphs,
   type FixedPointRoundingMode,
   type NormalizationPolicy,
   type TextShaper,
@@ -216,6 +217,7 @@ export function createShapedMeasurer(
   const entriesByStyle = new WeakMap<ResolvedRunStyle, StyleEntry>();
   // Sampled once: a shaper's runs keep their environment's face for its whole life.
   const facePreserving = preservesShapingFace(shaper);
+  const missingGlyphFallback = substitutesOnlyMissingGlyphs(shaper);
   const faceLineMetrics = createShapedLineMetrics(
     shaper,
     baseEnvironment,
@@ -364,9 +366,30 @@ export function createShapedMeasurer(
   const strikeoutByFont = new WeakMap<ResolvedFont, StrikeoutStrokeEm | null>();
   // Coverage answers per face and text; the callers ask about single hinted characters.
   const coverageByFont = new WeakMap<ResolvedFont, Map<string, boolean>>();
+  // The cmap answer for each UTF-16 code unit of a face: 0 unknown, 1 mapped, 2 not mapped.
+  const mappedUnitsByFont = new WeakMap<ResolvedFont, Uint8Array>();
+  /** Whether the face's own cmap maps every character of `text`. False past the BMP. */
+  const mapsEveryCharacter = (font: ResolvedFont, text: string): boolean => {
+    let units = mappedUnitsByFont.get(font);
+    if (!units) mappedUnitsByFont.set(font, (units = new Uint8Array(0x10000)));
+    for (let index = 0; index < text.length; index += 1) {
+      const unit = text.charCodeAt(index);
+      // A surrogate is half of a character: the shaper answers for the pair.
+      if (unit >= 0xd800 && unit <= 0xdfff) return false;
+      let known = units[unit]!;
+      if (known === 0) units[unit] = known = fontMapsCodePoint(font, unit) === true ? 1 : 2;
+      if (known === 2) return false;
+    }
+    return true;
+  };
 
   const measurer: TextMeasurer = {
     hasResolvedFont(style) {
+      return resolveFontCached(style) !== null;
+    },
+    // The same answer: a host that tells installed faces from stand-ins narrows only
+    // `hasResolvedFont` (`resolved-font-measurement.ts`).
+    hasMeasurableFont(style) {
       return resolveFontCached(style) !== null;
     },
     syntheticBold(style) {
@@ -558,7 +581,13 @@ export function createShapedMeasurer(
       // A shaper that never substitutes a face shapes this text in `font` alone, so its band
       // is the answer; shaping each word again only to read the face back was a third of
       // line breaking. Composed as the span loop below composes one span, to the same bits.
-      if (facePreserving) {
+      // A shaper with glyph fallback faces substitutes a face only for a glyph that `font`
+      // lacks. The face's own cmap maps every character here, so no face is substituted.
+      // Synthesized small capitals shape other characters than the text holds, so they shape.
+      if (
+        facePreserving ||
+        (missingGlyphFallback && !style.smallCaps && mapsEveryCharacter(font, text))
+      ) {
         const metrics = faceLineMetrics(font, style, entry);
         const baseline = Math.max(0, metrics.baseline);
         const descent = Math.max(0, metrics.height - metrics.baseline);

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Text of a shape in a canvas or a group lays out in the whole member box, a turned inline shape takes its unturned room, and a run border takes no room on the line.",
+  "after": "Member text lays out in the text rectangle of the shape less half of the outline, a turned inline shape takes its turned room, and a run border, an effect extent, and the outline of an inline VML text box take their room on each line.",
+  "reason": "Only drawing projection, layout, and paint change. Shared nodes, text offsets, operations, and package serialization remain unchanged, and each participant derives the same geometry from the same source XML.",
+  "tests": [
+    "packages/core/src/layout/__tests__/member-text-rectangle.test.ts",
+    "packages/core/src/layout/__tests__/run-border-advance.test.ts",
+    "packages/pro/src/collaboration/__tests__/canvas-member-text-peers.test.ts"
+  ],
+  "changeset": "canvas-member-text-rectangle",
+  "migration": null
+}

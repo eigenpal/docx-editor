@@ -17,7 +17,7 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 
 | Field | Behavior |
 | --- | --- |
-| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers and footers. Body fields with an empty saved result also update. |
+| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers, footers, and the body. A hidden saved result stays hidden. An `=` formula over these fields, such as `{ = { PAGE } }` or `{ = { NUMPAGES } - { PAGE } }`, updates the same way. See [Page number formulas](#page-number-formulas). These fields and formulas also update inside another field's result, such as `{ QUOTE "x" { PAGE } }`. In the body, that result keeps its saved text when it holds a space or more than 32 characters. A `PAGE` field that is a tracked deletion shows the live value. A page field whose instruction alone is a tracked deletion shows nothing. In the original view, such a field shows its value when it has no live instruction element. Otherwise it keeps its saved result. |
 | `STYLEREF` | Updates supported character-style and paragraph-style references in headers. A paragraph without a paragraph style matches the default paragraph style. A paragraph style outranks a character style with the same name. Supports `\l` and `\* MERGEFORMAT`. With `\n` or `\w`, shows the list number of a paragraph-style match: `\n` shows only the number text of the paragraph's own level, and `\w` adds the higher levels. A match without a number shows `0`. |
 | `REF` | Resolves bookmark text or numbering in the body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |
@@ -25,9 +25,50 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 | `LISTNUM` | Numbers from the document's list definitions in the body. Without a name, uses the list of its paragraph or of the last numbered paragraph before it, else the built-in list. Without `\l`, a field in a numbered paragraph uses the next level down. In the built-in list, the level is the paragraph's outline level, else the level below the last heading. |
 | `SYMBOL` | Renders the requested character, font, and size. |
 | Selected metadata fields | Render sanitized values from document properties. |
-| `DATE`, `TIME`, `FILENAME`, `SEQ`, `EQ`, `CITATION`, `BIBLIOGRAPHY` | Show the saved result. No new value is calculated. |
+| `DATE`, `TIME` | Show the saved result. With [`fieldDate`](#show-the-current-date), fields with a `\@` picture show that date. |
+| `FILENAME`, `SEQ`, `EQ`, `CITATION`, `BIBLIOGRAPHY` | Show the saved result. No new value is calculated. |
 
 Other fields show their saved result. `REF`, `PAGEREF`, and `NOTEREF` with `\h` link to their bookmark. For switch support, wrapping, and header pagination, see [DOCX fidelity](/docs/2.x/docx-fidelity#fields-links-and-table-of-contents).
+
+## Page number formulas
+
+An `=` formula updates on each page when its operands are `PAGE`, `NUMPAGES`, or `SECTIONPAGES` fields and numbers, such as `{ = { PAGE } + 1 }`.
+
+- The operators are unary minus, `^`, `*`, `/`, `+`, `-`, and the comparisons `=`, `<>`, `<`, `<=`, `>`, and `>=`. Parentheses group terms. A comparison shows `1` or `0`.
+- The result shows as many decimal places as its most precise number, and at least two after a division. Trailing zeros are removed: `{ = { PAGE } / 3 }` shows `0.33` on page 1 and `1` on page 3.
+- A `\#` picture without a decimal point rounds the result to a whole number. A negative result shows only through a picture of `0` digits, such as `00`.
+- A `\*` number format, such as `\* roman`, shows only whole results of zero or more.
+- An operand can have the `\* Arabic` switch. Any other operand switch keeps the saved result.
+- A formula keeps its saved result on a page where it has no value, such as after a division by zero, or a result its switches cannot show.
+- A formula keeps its saved result when it uses functions, bookmarks, table cells, `%`, a repeated `^`, a negative exponent, a formula as an operand, or a picture with a decimal point.
+- A formula over a bare `PAGE` keeps its saved result in a section whose page numbers are not digits, such as roman numerals. Use `{ PAGE \* Arabic }` as the operand there.
+- A formula without a page field, and a formula that is a tracked deletion, keep their saved results. A formula whose `=` alone is a tracked deletion shows nothing.
+
+## Show the current date
+
+The value of a `DATE` or `TIME` field is the current date and time, so its saved result shows the date of the last update. By default, the editor shows saved results. Set `fieldDate` when you create the editor to show a date instead:
+
+```ts
+import { createDocxEditor } from '@docx-editor.dev/core';
+
+const editor = createDocxEditor({
+  container,
+  document: bytes,
+  fieldDate: new Date(),
+});
+```
+
+- Only fields with a `\@` date-time picture show the date. A field without a picture, or with `\l`, `\h`, `\s`, or a casing switch, shows its saved result.
+- Pictures support `d`, `dd`, `ddd`, `dddd`, `M`, `MM`, `MMM`, `MMMM`, `y`, `yy`, `yyyy`, `Y`, `YY`, `YYYY`, `h`, `hh`, `H`, `HH`, `m`, `mm`, `ss`, `AM/PM`, `am/pm`, and quoted text. Both `AM/PM` and `am/pm` show `AM` or `PM`. A code repeated beyond these lengths, such as `yyy` or `ddddd`, another letter, a Thai picture item, or a backquoted SEQ name keeps the saved result. Inside quotes, `\\` is a backslash and `\"` is a double quote.
+- Month and day names are English. A picture with a name keeps its saved result when the language of the field instruction is not English.
+- A complex field takes the language of the run that holds its instruction. A simple field (`w:fldSimple`) takes the language set by the document defaults, table style, or paragraph style. The result run's language applies only when none of them sets one.
+- The date shows in the local time zone.
+- The date is display-only. Saved files and collaboration sessions keep the saved results.
+- `CREATEDATE`, `SAVEDATE`, and `PRINTDATE` always show their saved results.
+- **File > Print** and **File > Export > PDF** pass the date to your PDF handler as `ChromeExportView.fieldDate`. Forward it to `exportPdf` as `fieldDate`, and the PDF shows the same dates. Fields show the date in the local time of the converter, so send the browser's wall-clock time to a server. See [Convert PDF on the server](/docs/2.x/guides/export#convert-pdf-on-the-server).
+- `exportPdf` and `exportMarkdown` take a `fieldDate` option for conversions outside the editor. Without it, they show saved results. **File > Export > Markdown** does not pass the date. In your Markdown handler, pass the same `Date` that you gave the editor to `exportMarkdown`.
+- An invalid `Date`, or `fieldDate` with `fieldResults: 'editable'`, throws a `TypeError`. The option applies only at creation.
+- The React and Vue components take the same `fieldDate` prop. They read it once, when they create the editor. To show another date, remount the component.
 
 ## Edit saved field results
 
@@ -177,7 +218,15 @@ Generated TOC rows are read-only. Delete and Backspace do not remove them. Conte
 - The editor refuses to insert an empty content control at a field edge inside a tracked change, link, or smart tag.
 - An inline content control that holds a field character never divides at the field edge.
 - Field instructions stay inert. Macros, DDE, OLE, and external include instructions never execute.
-- Saved results inside another field's instruction do not display.
+- Saved results inside another field's instruction do not display, also when the instruction holds paragraph marks.
+- A paragraph inside a field instruction that holds plain text outside a nested field still displays. The text before the field and the text after its instruction then keep their own lines.
+- Paragraphs inside a field instruction do not display and do not advance list numbers. This also applies in table cells and content controls. Showing field instructions changes only table of contents fields, so these paragraphs stay hidden and other fields keep their saved results.
+- The text before a field and the text after its instruction share one line when the instruction holds paragraph marks. The line uses the first paragraph's formatting and the last paragraph's space after. The paragraphs stay separate in the document.
+- On that shared line, text, paragraph breaks, line breaks, and section breaks inserted at the start of the result go before the field instead. This includes composed text, tracked insertions, and formatting armed there. A table goes before the whole line. Text typed there takes the formatting of the text before the field, unless you arm a format.
+- The caret has one stop where the two sides meet. When the result starts a new line, or runs in the other direction, each side keeps its own stop. The editor state can report a caret at that stop as the start of the result paragraph.
+- Backspace, Delete, and the `mergeParagraphs` command do not join across a paragraph mark inside a field instruction. `mergeParagraphs` refuses with the `unsupported` code.
+- Enter, the `splitParagraph` command, and section breaks refuse to add a paragraph mark inside a field instruction. This includes the start of the field result when the two sides do not share one line, for example when the first paragraph ends a section. A table or a table of contents inserted in the field result goes before the paragraph that holds the start of the field. A rich paste there falls back to plain text, and the editor state reports a `field-code-mark` rejection.
+- Automation writes refuse to add or remove a paragraph mark inside a field instruction. An untracked range delete that covers the whole field, from its start through the end of its result, removes the field instead.
 - `LISTNUM` and `REF` in headers, footers, and text boxes keep their saved result.
 - `NOTEREF` with `\p` or `\f` keeps its saved result.
 - `STYLEREF` results longer than 4,096 characters keep their saved result.

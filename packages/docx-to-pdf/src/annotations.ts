@@ -15,7 +15,7 @@ import {
   type PDFRef,
 } from 'pdf-lib';
 import type { ExportSemanticLayout } from '@docx-editor.dev/core/export';
-import type { SemanticSpanVisit } from '@docx-editor.dev/core/layout';
+import { turnStoryBox, type SemanticSpanVisit } from '@docx-editor.dev/core/layout';
 import { pageHeight, pdfLiteralUri, Work } from './context.ts';
 
 type Literal =
@@ -37,7 +37,8 @@ export function linkAnnotation(
 ): void {
   const link = visit.span.link;
   if (!link || !link.href) return;
-  const b = visit.absoluteBox;
+  // The click area is where the text paints: turned text-box text turns its span box.
+  const b = turnStoryBox(visit.storyTurns, visit.absoluteBox);
   const x = b.x - visit.page.box.x,
     y = pageHeight(page) - (b.y - visit.page.box.y) - b.height;
   const base = {
