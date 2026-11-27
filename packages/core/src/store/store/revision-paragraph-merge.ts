@@ -11,6 +11,9 @@ import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { contentWithText, editedProperties } from './tree-op-content-controls.ts';
 import { cloneWithNewIds } from './tree-op-nodes.ts';
 
+/** The empty `keepsFirst` default. Declared above the functions whose parameters name it. */
+const NO_PARAGRAPHS: ReadonlyMap<string, boolean> = new Map();
+
 const properties = (n: OoxmlNode) =>
   n.kind !== 'textValue' && n.namespaceUri === WML_NAMESPACE_URI && n.localName === 'pPr';
 
@@ -402,8 +405,6 @@ function lastTwoBlocks(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
   }
   return tail;
 }
-
-const NO_PARAGRAPHS: ReadonlyMap<string, boolean> = new Map();
 
 /** Containers whose emptied last paragraph goes with its content. */
 const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'customXml']);

@@ -1121,8 +1121,15 @@ function* layoutBlocksPass(
       overrun: cursorY + extent - contentHeight(),
     });
   /** Records that `anchorId` reached `anchorY` on the page being filled. */
-  const noteAnchor = (anchorId: string, anchorY = cursorY): void =>
-    positionedFlow.note(floatSignals, anchorId, flowColumnIndex, pageFragments.length, anchorY);
+  // `cursorY` is declared below, so it is read in the body and not in a parameter default.
+  const noteAnchor = (anchorId: string, anchorY?: number): void =>
+    positionedFlow.note(
+      floatSignals,
+      anchorId,
+      flowColumnIndex,
+      pageFragments.length,
+      anchorY ?? cursorY
+    );
   // Pass-local: the shared flow token prevents checkpoint resume inside this group.
   const terminalTextTableIds = new Set<string>();
   // A continuous section resumes the previous section's column rather than opening a
