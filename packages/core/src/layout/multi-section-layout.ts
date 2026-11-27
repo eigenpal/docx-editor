@@ -24,6 +24,7 @@ import { currentFinal } from './published-story-projections.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import type { ContinuedPageHost } from './continued-page-zones.ts';
+import { withContinuedSectionContent } from './continued-section-origin.ts';
 import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   createLayoutSession,
@@ -300,8 +301,9 @@ export function emptySectionNeedsBlankPage(
  *
  * A sheet has ONE size. Word honours `continuous` by continuing the column on the current
  * page; a continuous break that also changes paper size or orientation starts a new page.
- * Mid-page margin / header-distance changes stay on the sheet — Word applies the new
- * content column below the resumed cursor, and the host sheet keeps its furniture.
+ * Mid-page margin / header-distance changes stay on the sheet: the continued section takes
+ * its own side margins below the resumed cursor (`continued-section-origin.ts`), and the host
+ * sheet keeps its furniture.
  */
 function samePageSize(a: PageGeometry, b: PageGeometry): boolean {
   return a.width === b.width && a.height === b.height;
@@ -310,42 +312,13 @@ function samePageSize(a: PageGeometry, b: PageGeometry): boolean {
 /** One sheet's content box, as the insets a section pass flows against. */
 function contentInsetsOf(page: PageRecord): PageContentInsets {
   const top = page.contentBox.y - page.box.y;
+  const left = page.contentBox.x - page.box.x;
   return {
     top,
     bottom: page.box.height - top - page.contentBox.height,
     height: page.contentBox.height,
-  };
-}
-
-/**
- * Append a continued section's first-page fragments to the sheet it continues.
- *
- * The fragments already carry content-relative offsets past the host page's used height
- * (the section was laid out with `flowStartY` and, since per-page insets, the host's own
- * content box through {@link contentInsetsOf}), so this is a concatenation, not a shift.
- * The host page keeps its own furniture: the header/footer belong to the sheet, and the
- * continued section contributes content to it, not chrome.
- */
-function withAppendedFragments(page: PageRecord, continued: PageRecord): PageRecord {
-  if (
-    continued.fragments.length === 0 &&
-    !continued.columnSeparators?.length &&
-    !continued.anchoredDrawings?.length
-  ) {
-    return page;
-  }
-  const anchoredDrawings =
-    page.anchoredDrawings || continued.anchoredDrawings
-      ? Object.freeze([...(page.anchoredDrawings ?? []), ...(continued.anchoredDrawings ?? [])])
-      : undefined;
-  return {
-    ...page,
-    fragments:
-      continued.fragments.length > 0 ? [...page.fragments, ...continued.fragments] : page.fragments,
-    ...((page.columnSeparators?.length || continued.columnSeparators?.length) && {
-      columnSeparators: [...(page.columnSeparators ?? []), ...(continued.columnSeparators ?? [])],
-    }),
-    ...(anchoredDrawings ? { anchoredDrawings } : {}),
+    left,
+    right: page.box.width - left - page.contentBox.width,
   };
 }
 
@@ -777,7 +750,7 @@ export function* layoutMultiSectionDocumentSteps(
       // sheet is rebuilt this pass, so no prior page record describes it.
       const hostIndex = pages.length - 1;
       const host = pages[hostIndex]!;
-      const merged = withAppendedFragments(host, laid.pages[0]!);
+      const merged = withContinuedSectionContent(host, laid.pages[0]!);
       if (merged !== host) {
         pages[hostIndex] = merged;
         const remappedIndex = remappedAll.lastIndexOf(host);

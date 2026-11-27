@@ -450,6 +450,12 @@ export interface DrawingAnchorFrameContext {
   readonly contentInsetBottom: number;
   readonly contentWidth: number;
   readonly verticalMarginFrame?: { readonly top: number; readonly height: number };
+  /**
+   * The sheet's margin box on the inline axis, where it is not the content box: a section that
+   * starts with `w:type="continuous"` (17.6.22) has its own `w:pgMar` (17.6.11) side margins,
+   * and the `margin` frame (ST_RelFromH, 20.4.3.4) stays on the margins of the shared sheet.
+   */
+  readonly horizontalMarginFrame?: { readonly left: number; readonly width: number };
   /** Sheet top in header story coordinates. Body stories use their content inset. */
   readonly topMarginFrameOrigin?: number;
   /**
@@ -612,8 +618,8 @@ function horizontalEdges(
 
   const pageLeft = -ctx.marginLeft;
   const pageRight = ctx.contentWidth + ctx.marginRight;
-  const contentLeft = 0;
-  const contentRight = ctx.contentWidth;
+  const contentLeft = ctx.horizontalMarginFrame?.left ?? 0;
+  const contentRight = contentLeft + (ctx.horizontalMarginFrame?.width ?? ctx.contentWidth);
   const columnLeft = ctx.columnBox.x;
   const columnRight = ctx.columnBox.x + ctx.columnBox.width;
 
@@ -621,7 +627,7 @@ function horizontalEdges(
     case 'page':
       return { left: pageLeft, right: pageRight, center: (pageLeft + pageRight) / 2 };
     case 'margin':
-      return { left: contentLeft, right: contentRight, center: contentLeft + ctx.contentWidth / 2 };
+      return { left: contentLeft, right: contentRight, center: (contentLeft + contentRight) / 2 };
     case 'column':
       return { left: columnLeft, right: columnRight, center: columnLeft + ctx.columnBox.width / 2 };
     case 'character':

@@ -54,7 +54,7 @@ export function layoutPassContextKey(
   // so it is length-framed: a printable separator would be a forgeable boundary.
   const zones = inputs.continuedZones ?? '';
   const continuedContext = continuedInsets
-    ? `|cont:${continuedInsets.top},${continuedInsets.height};z${zones.length}:${zones}`
+    ? `|cont:${continuedInsets.top},${continuedInsets.height},${continuedInsets.left ?? ''},${continuedInsets.right ?? ''};z${zones.length}:${zones}`
     : '';
   // A `w:pgBorders` edit moves NO paragraph key: the frame is drawn beside the text and never
   // through it, so every per-block key and every checkpoint still matches and each reuse path
