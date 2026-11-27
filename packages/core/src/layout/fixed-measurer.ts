@@ -35,7 +35,8 @@ export function createFixedMeasurer(
       return scaled + text.length * style.characterSpacingPt;
     },
     lineMetrics: (style) => {
-      // Super/subscript draw smaller, so they need less line height than their nominal size.
+      // Super/subscript draw smaller, so their glyph band is shorter than their nominal size.
+      // The line box still takes the full size: layout asks for it with a baseline style.
       const shrink = glyphSizeFactorOf(style);
       const height = lineHeight * scale(style) * shrink;
       return { height, baseline: height * 0.8 };

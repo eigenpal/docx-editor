@@ -274,17 +274,23 @@ describe('resolved style reaches measurement and the spans (task 7.2)', () => {
     expect(line!.spans[0]!.text).toBe('abc');
   });
 
-  test('superscript occupies less line height than baseline text', () => {
-    // The paragraph MARK is measured with the line, and it carries its own `w:rPr`. So a
-    // paragraph whose run is superscript but whose mark is not stays full height — Word does
-    // the same. Raising the run alone therefore proves nothing; the mark has to be raised too
-    // for the line itself to shrink.
+  test('superscript keeps the line height of baseline text', () => {
+    // `w:vertAlign` repositions the text "without altering the font size of the run
+    // properties" (ECMA-376 17.3.2.42). The glyphs draw smaller, but the line box is the one
+    // of the full font size, whether or not the paragraph mark is superscript too.
     const superscriptRun = '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>';
     const baseline = lay(load('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    const superscript = lay(
+    const runOnly = lay(load(`<w:p><w:r>${superscriptRun}<w:t>x</w:t></w:r></w:p>`));
+    const runAndMark = lay(
       load(`<w:p><w:pPr>${superscriptRun}</w:pPr><w:r>${superscriptRun}<w:t>x</w:t></w:r></w:p>`)
     );
-    expect(linesOf(superscript)[0]!.box.height).toBeLessThan(linesOf(baseline)[0]!.box.height);
+    const height = linesOf(baseline)[0]!.box.height;
+    expect(linesOf(runOnly)[0]!.box.height).toBe(height);
+    expect(linesOf(runAndMark)[0]!.box.height).toBe(height);
+    // The glyphs themselves measure smaller than baseline text.
+    expect(linesOf(runAndMark)[0]!.spans[0]!.box.width).toBeLessThan(
+      linesOf(baseline)[0]!.spans[0]!.box.width
+    );
   });
 });
 

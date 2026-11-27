@@ -229,14 +229,15 @@ describe('a line with other content under a direct mark', () => {
     expect(heights(layout)).toEqual([line(8), line(8)]);
   });
 
-  test('a superscript mark keeps the floor at the smaller glyph size', () => {
+  test('a superscript mark leaves a superscript line at the full size of its run', () => {
+    // `w:vertAlign` does not alter the font size of the run properties (ECMA-376 17.3.2.42).
     const raised = (size: string) => `<w:rPr>${size}<w:vertAlign w:val="superscript"/></w:rPr>`;
     const layout = lay(
       paragraph(script('superscript'), raised('<w:sz w:val="48"/>')) +
         paragraph(script('superscript'), raised(''))
     );
-    expect(heights(layout)[0]).toBeCloseTo(line(12) * 0.65, 5);
-    expect(heights(layout)[1]).toBeCloseTo(line(12) * 0.65, 5);
+    expect(heights(layout)[0]).toBeCloseTo(line(12), 5);
+    expect(heights(layout)[1]).toBeCloseTo(line(12), 5);
   });
 
   test('superscript toggled on the last line and wrapped away keeps the line height', () => {
