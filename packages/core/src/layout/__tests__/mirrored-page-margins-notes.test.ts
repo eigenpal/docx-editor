@@ -264,6 +264,41 @@ describe('mirrored side margins after the notes pass', () => {
     expect(pictureOnSheet(overflowLayout(1, true, false, PAGE_EDGE_PICTURE))).toEqual(unmoved);
   });
 
+  test('every part of a page-edge table that continues over pages keeps its place', () => {
+    const row =
+      '<w:tr><w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/></w:tcPr>' +
+      '<w:p><w:r><w:t>T</w:t></w:r></w:p></w:tc></w:tr>';
+    const tall = PAGE_EDGE_TABLE.replace(/<w:tr>.*<\/w:tr>/, row.repeat(26));
+    const partsOnSheet = (layout: SemanticLayout) =>
+      layout.pages.flatMap((page) =>
+        page.fragments
+          .filter((fragment) => fragment.kind === 'table')
+          .map((table) => Number((page.contentBox.x - page.box.x + table.box.x).toFixed(2)))
+      );
+    const unmoved = partsOnSheet(overflowLayout(0, true, false, tall));
+    expect(unmoved.length).toBeGreaterThan(1);
+    expect(new Set(unmoved).size).toBe(1);
+    expect(partsOnSheet(overflowLayout(1, true, false, tall))).toEqual(unmoved);
+  });
+
+  test('a picture laid out in a cell of a table in the text flow stays in its cell', () => {
+    const lead =
+      '<w:tbl><w:tblPr><w:tblW w:w="3000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr>${PAGE_EDGE_PICTURE}</w:tc></w:tr></w:tbl>`;
+    // The distance from the cell's left edge to the picture.
+    const inCell = (layout: SemanticLayout) => {
+      for (const page of layout.pages) {
+        const picture = page.anchoredDrawings?.[0];
+        const table = page.fragments.find((fragment) => fragment.kind === 'table');
+        if (picture && table) return Number((picture.x - table.box.x).toFixed(2));
+      }
+      throw new Error('no picture');
+    };
+    expect(inCell(overflowLayout(1, true, false, lead))).toBe(
+      inCell(overflowLayout(0, true, false, lead))
+    );
+  });
+
   test('without the setting no page moves', () => {
     const layout = overflowLayout(1, false);
     for (const page of layout.pages) expect(page.contentBox.x - page.box.x).toBe(108);

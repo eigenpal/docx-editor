@@ -28,6 +28,7 @@ import type {
 
 /** Points; well under any visible step, well over float error from offset sums. */
 const SIDE_TOLERANCE = 0.001;
+const NO_TABLES: ReadonlySet<string> = new Set();
 
 function moveNoteArea(area: NoteAreaRecord, dx: number): NoteAreaRecord {
   const move = (box: LayoutBox): LayoutBox => ({ ...box, x: box.x + dx });
@@ -74,25 +75,57 @@ function blockMovedSideways(
 }
 
 /**
+ * The ids of the body tables positioned from the page edge. Only one fragment of a table
+ * that continues over pages carries its position, so the answer is for all `pages` together.
+ */
+export function pageEdgeTableIds(pages: readonly PageRecord[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const page of pages)
+    for (const fragment of page.fragments)
+      if (fragment.kind === 'table' && fragment.floatingWrap?.float.horzAnchor === 'page')
+        ids.add(fragment.tableId);
+  return ids;
+}
+
+/** Adds the id of every paragraph in the cells of `block` to `ids`. */
+function collectCellParagraphs(block: BlockFragmentRecord, ids: Set<string>): void {
+  if (block.kind === 'paragraph') return void ids.add(block.paragraphId);
+  for (const row of block.rows)
+    for (const cell of row.cells)
+      for (const inner of cell.blocks) collectCellParagraphs(inner, ids);
+}
+
+/**
  * The body records of `page` that are positioned from the page edge, moved `dx` points so
  * that they stay where they are on the sheet while the content box moves the other way.
  * Returns nothing when the page holds no such record.
  */
 function pageEdgeRecordsHeld(
   page: PageRecord,
-  dx: number
+  dx: number,
+  pageEdgeTables: ReadonlySet<string>
 ): Pick<PageRecord, 'fragments' | 'anchoredDrawings'> | undefined {
   const held = new Set<string>();
+  // Paragraphs in the cells of the tables that travel with the text.
+  const inCell = new Set<string>();
   let changed = false;
   const fragments = page.fragments.map((fragment) => {
-    if (fragment.kind !== 'table' || fragment.floatingWrap?.float.horzAnchor !== 'page')
+    if (fragment.kind !== 'table') return fragment;
+    if (!pageEdgeTables.has(fragment.tableId)) {
+      if (page.anchoredDrawings?.length) collectCellParagraphs(fragment, inCell);
       return fragment;
+    }
     changed = true;
     return blockMovedSideways(fragment, dx, held);
   });
-  // A drawing anchored in a moved table cell goes with its cell.
   const anchoredDrawings = page.anchoredDrawings?.map((drawing) => {
-    if (drawing.horizontalFrame !== 'page' && !held.has(drawing.anchorParagraphId)) return drawing;
+    // A drawing anchored in a moved table cell goes with its cell. A drawing laid out in a
+    // cell that stays with the text is placed from that cell, whatever frame it names.
+    const stays = held.has(drawing.anchorParagraphId)
+      ? false
+      : drawing.horizontalFrame !== 'page' ||
+        (drawing.layoutInCell && inCell.has(drawing.anchorParagraphId));
+    if (stays) return drawing;
     changed = true;
     return shiftAnchoredDrawing(drawing, dx, 0);
   });
@@ -136,9 +169,14 @@ function storyOnSide(
 /**
  * `page` with its content box, header, footer, note areas and page borders on the side
  * `shell` resolves, or `page` itself when it is there already or the shell names no side.
- * Body records positioned from the page edge keep their place on the sheet.
+ * Body records positioned from the page edge keep their place on the sheet; `pageEdgeTables`
+ * names the tables among them ({@link pageEdgeTableIds}).
  */
-export function pageOnShellSide(page: PageRecord, shell: OverflowPageShell): PageRecord {
+export function pageOnShellSide(
+  page: PageRecord,
+  shell: OverflowPageShell,
+  pageEdgeTables: ReadonlySet<string> = NO_TABLES
+): PageRecord {
   if (shell.contentLeft === undefined) return page;
   const dx = page.box.x + shell.contentLeft - page.contentBox.x;
   if (Math.abs(dx) <= SIDE_TOLERANCE) return page;
@@ -147,7 +185,7 @@ export function pageOnShellSide(page: PageRecord, shell: OverflowPageShell): Pag
   const footer = storyOnSide(page.footer, shell.footer, dx);
   return {
     ...rest,
-    ...pageEdgeRecordsHeld(page, -dx),
+    ...pageEdgeRecordsHeld(page, -dx, pageEdgeTables),
     contentBox: { ...page.contentBox, x: page.contentBox.x + dx },
     ...(shell.pageBorders ? { pageBorders: shell.pageBorders } : {}),
     ...(header ? { header } : {}),

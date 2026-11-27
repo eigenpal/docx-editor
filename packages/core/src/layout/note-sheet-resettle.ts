@@ -5,7 +5,7 @@
 
 import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
 import { layoutHasPageSides, layoutUsesEvenAndOddHeaders } from './page-parity-sheet.ts';
-import { pageOnShellSide } from './page-side-resettle.ts';
+import { pageEdgeTableIds, pageOnShellSide } from './page-side-resettle.ts';
 import type { LayoutBox, NoteAreaRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 
 /**
@@ -187,6 +187,7 @@ export function resettleBodyFurniture(
   const sides = layoutHasPageSides(layout);
   if (!layoutUsesEvenAndOddHeaders(layout) && !sides) return [...pages];
   let changed = false;
+  let pageEdgeTables: ReadonlySet<string> | undefined;
   const next = pages.map((numbered) => {
     if (numbered.noteStream !== undefined || numbered.parityBlank) return numbered;
     const before = numbersBefore.get(numbered.index);
@@ -202,7 +203,7 @@ export function resettleBodyFurniture(
     const shell = overflowPageShellAt(layout, numbered.index, numbered.index, numbered.box, shift);
     if (!shell) return numbered;
     // The side moves the whole page sideways, so it holds whatever the furniture does.
-    const page = pageOnShellSide(numbered, shell);
+    const page = pageOnShellSide(numbered, shell, (pageEdgeTables ??= pageEdgeTableIds(pages)));
     if (page !== numbered) changed = true;
     if (anchored) return page;
     if (
