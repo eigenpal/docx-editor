@@ -1,5 +1,12 @@
 # @docx-editor.dev/core
 
+## 2.41.1
+
+### Patch Changes
+
+- 2d00144: Fix document layout when an app rebuilds the engine with a minifying bundler such as Vite 8. Documents with tables beside floating objects no longer fail to render or convert.
+- Updated dependencies: @docx-editor.dev/i18n@2.41.1
+
 ## 2.41.0
 
 ### Minor Changes

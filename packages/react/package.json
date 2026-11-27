@@ -3,7 +3,7 @@
   "sideEffects": [
     "**/*.css"
   ],
-  "version": "2.41.0",
+  "version": "2.41.1",
   "description": "React DOCX editor adapter for the @docx-editor.dev editor contract.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -71,7 +71,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@docx-editor.dev/i18n": "^2.41.0",
+    "@docx-editor.dev/i18n": "^2.41.1",
     "@radix-ui/react-select": "^2.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1"
