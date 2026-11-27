@@ -439,16 +439,6 @@ export class TextWriter {
           }
           continue;
         }
-        // A monochrome glyph, of a text face or of a color face, is written as text in the
-        // run's font (`w:rFonts`, CT_Fonts, ECMA-376 §17.3.2.26) and color (`w:color`,
-        // CT_Color, §17.3.2.6). A color face is selected here, so a run that paints only color
-        // glyphs never names it.
-        if (selected?.face !== activeFace || selected.size !== activeSize) {
-          batch.flush();
-          this.registerFont(page, activeFace);
-          out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
-          selected = { face: activeFace, size: activeSize };
-        }
         // Synthetic bold and italic, per FACE: a fallback face in the same run can be real
         // bold while the primary is not. A text outline already strokes, so it takes no bold.
         const synthesizeBold = style.bold && !style.textOutline && !activeFace.bold;
@@ -476,6 +466,16 @@ export class TextWriter {
           // A kana and sound mark drawn as one glyph read as the precomposed character.
           const glyphText =
             cluster.glyphEnd - cluster.glyphStart === 1 ? composedPairOr(text) : text;
+          // A monochrome glyph, of a text face or of a color face, is written as text in the
+          // run's font (`w:rFonts`, CT_Fonts, ECMA-376 §17.3.2.26) and color (`w:color`,
+          // CT_Color, §17.3.2.6). A color face is selected only here, where a glyph is
+          // encoded, so a page never names a color face that the PDF does not embed.
+          if (selected?.face !== activeFace || selected.size !== activeSize) {
+            batch.flush();
+            this.registerFont(page, activeFace);
+            out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
+            selected = { face: activeFace, size: activeSize };
+          }
           batch.add(activeFace, activeSize, gx, gy, activeFace.encode(glyph.id, glyphText));
           continue;
         }

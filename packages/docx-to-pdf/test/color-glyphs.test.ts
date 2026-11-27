@@ -43,7 +43,12 @@ function font(
         paletteIndex: layer.color === 'foreground' ? 0xffff : next++,
       })),
     },
-    CPAL: { numColorRecords: colors.length, colorRecordIndices: [0], colorRecords: colors },
+    CPAL: {
+      numPaletteEntries: colors.length,
+      numColorRecords: colors.length,
+      colorRecordIndices: [0],
+      colorRecords: colors,
+    },
     getGlyph: (id: number) =>
       glyphs[id] ?? layers[id - 10]?.glyph ?? { advanceWidth: 512, path: { commands: [] } },
   } as unknown as FontkitFont;
@@ -97,6 +102,14 @@ test('a glyph without a base glyph record is monochrome, and bounds are refusals
   };
   pastPalette.CPAL.colorRecordIndices[0] = 1;
   expect(colorGlyph(pastPalette as unknown as FontkitFont, 1, work).kind).toBe('refused');
+  // An index past the palette's own entries is refused, not read from the next palette.
+  const pastEntries = font([{ glyph: square, color: black }]) as unknown as {
+    CPAL: { numPaletteEntries: number; numColorRecords: number; colorRecords: Color[] };
+  };
+  pastEntries.CPAL.numPaletteEntries = 0;
+  pastEntries.CPAL.numColorRecords = 2;
+  pastEntries.CPAL.colorRecords.push(black);
+  expect(colorGlyph(pastEntries as unknown as FontkitFont, 1, work).kind).toBe('refused');
   // A face without color tables has no color glyphs at all.
   expect(colorGlyph({ getGlyph: () => square } as unknown as FontkitFont, 5, work)).toEqual({
     kind: 'none',

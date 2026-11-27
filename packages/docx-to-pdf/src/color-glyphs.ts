@@ -166,6 +166,7 @@ interface ColorTables {
     readonly layerRecords?: ArrayLike<{ readonly gid: number; readonly paletteIndex: number }>;
   };
   readonly CPAL?: {
+    readonly numPaletteEntries?: number;
     readonly numColorRecords?: number;
     readonly colorRecordIndices?: readonly number[];
     readonly colorRecords?: ArrayLike<{
@@ -249,6 +250,7 @@ function readColorGlyph(font: FontkitFont, glyphId: number, work: Work): ColorGl
     return { kind: 'refused', reason: 'the layer records are out of range' };
   const palette = tables.CPAL!;
   const paletteStart = palette.colorRecordIndices?.[0] ?? 0;
+  const paletteSize = palette.numPaletteEntries ?? 0;
   const colorCount = Math.min(palette.numColorRecords ?? 0, palette.colorRecords?.length ?? 0);
   const out: ColorGlyphLayer[] = [];
   for (let index = firstLayerIndex; index < firstLayerIndex + numLayers; index++) {
@@ -264,7 +266,7 @@ function readColorGlyph(font: FontkitFont, glyphId: number, work: Work): ColorGl
     }
     // Palette 0 is the default palette; its entries start at its first color record index.
     const colorIndex = paletteStart + layer.paletteIndex;
-    if (colorIndex >= colorCount)
+    if (layer.paletteIndex >= paletteSize || colorIndex >= colorCount)
       return { kind: 'refused', reason: 'a layer names a palette entry that does not exist' };
     const { red, green, blue, alpha } = palette.colorRecords![colorIndex]!;
     out.push({

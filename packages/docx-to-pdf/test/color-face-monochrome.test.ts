@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import * as fontkit from 'fontkit';
-import { PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, decodePDFRawStream } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { colorGlyph, glyphOutline } from '../src/color-glyphs.ts';
@@ -55,12 +55,13 @@ function withTables(source: Uint8Array, added: Record<string, Uint8Array>): Uint
   return out;
 }
 
-function hybridFace(): Uint8Array {
+function hybridFace(damaged = false): Uint8Array {
   const face = fontkit.create(Buffer.from(textFace)) as fontkit.FontkitFont;
   const gid = (char: string) => face.glyphForCodePoint(char.codePointAt(0)!).id;
   const colr = new DataView(new ArrayBuffer(14 + 6 + 8));
   colr.setUint16(2, 1); // one base glyph record
-  colr.setUint32(4, 14);
+  // A damaged table points its base glyph records past the end of the file.
+  colr.setUint32(4, damaged ? 0x7fffff00 : 14);
   colr.setUint32(8, 20);
   colr.setUint16(12, 2); // two layer records
   colr.setUint16(14, gid('X'));
@@ -81,6 +82,7 @@ function hybridFace(): Uint8Array {
 }
 
 const hybrid = hybridFace();
+const damaged = hybridFace(true);
 const ARIAL = 'Arial';
 
 interface Exported {
@@ -88,21 +90,33 @@ interface Exported {
   readonly content: string;
   /** The outline commands of every glyph in each embedded TrueType subset. */
   readonly embedded: readonly (readonly number[])[];
+  /** Font resources that a page names and that the file does not hold. */
+  readonly dangling: readonly string[];
 }
 
-async function exported(runs: string): Promise<Exported> {
+async function exported(
+  runs: string,
+  paragraphProperties = '',
+  colorFace = hybrid
+): Promise<Exported> {
   const sources = [
-    createFontSource(hybrid, { family: FAMILY, weight: 400, style: 'normal' }),
+    createFontSource(colorFace, { family: FAMILY, weight: 400, style: 'normal' }),
     createFontSource(textFace, { family: ARIAL, weight: 400, style: 'normal' }),
   ].map((source) => {
     if ('failure' in source) throw new Error(JSON.stringify(source.failure));
     return source.source;
   });
-  const result = await exportPdf(docx(`<w:p>${runs}</w:p>`), {
+  const result = await exportPdf(docx(`<w:p>${paragraphProperties}${runs}</w:p>`), {
     useSystemFonts: false,
     fonts: { sources },
   });
   const parsed = await PDFDocument.load(result.bytes);
+  const dangling: string[] = [];
+  for (const page of parsed.getPages()) {
+    const fonts = page.node.Resources()?.lookupMaybe(PDFName.of('Font'), PDFDict);
+    for (const [name, ref] of fonts?.entries() ?? [])
+      if (ref instanceof PDFRef && !parsed.context.lookup(ref)) dangling.push(name.asString());
+  }
   const streams: string[] = [];
   const embedded: number[][] = [];
   for (const [, object] of parsed.context.enumerateIndirectObjects()) {
@@ -120,7 +134,12 @@ async function exported(runs: string): Promise<Exported> {
       streams.push(new TextDecoder().decode(bytes));
     }
   }
-  return { result, content: streams.filter((s) => s.includes('BT')).join('\n'), embedded };
+  return {
+    result,
+    dangling,
+    content: streams.filter((s) => s.includes('BT')).join('\n'),
+    embedded,
+  };
 }
 
 function run(text: string, family = FAMILY, properties = ''): string {
@@ -179,6 +198,23 @@ test('a run that paints only color glyphs embeds no outline of the color face', 
   const subsets = pdf.embedded.map((glyphs) => glyphs.slice(1).filter((c) => c > 0).length);
   expect(subsets.sort()).toEqual([0, 4]);
   expect(await extractedText(pdf.result.bytes)).toContain('Done X');
+});
+
+test('a page never names a color face that writes no glyph', async () => {
+  // A space on a right-to-left line is not written, so the color face encodes nothing.
+  const hebrew = (text: string) =>
+    `<w:r><w:rPr><w:rFonts w:ascii="${ARIAL}" w:hAnsi="${ARIAL}" w:cs="${ARIAL}"/><w:rtl/></w:rPr><w:t>${text}</w:t></w:r>`;
+  const space = `<w:r><w:rPr><w:rFonts w:ascii="${FAMILY}" w:hAnsi="${FAMILY}" w:cs="${FAMILY}"/><w:rtl/></w:rPr><w:t xml:space="preserve"> </w:t></w:r>`;
+  const pdf = await exported(hebrew('שלום') + space + hebrew('עולם'), '<w:pPr><w:bidi/></w:pPr>');
+  expect(pdf.dangling).toEqual([]);
+  for (const color of [run('aXa'), run('Done ', ARIAL) + run('X')])
+    expect((await exported(color)).dangling).toEqual([]);
+});
+
+test('a face whose color table is damaged still exports its text', async () => {
+  const pdf = await exported(run('Puntuación 64'), '', damaged);
+  expect(pdf.dangling).toEqual([]);
+  expect(await extractedText(pdf.result.bytes)).toContain('Puntuación 64');
 });
 
 test('synthetic bold strokes a monochrome glyph of a color face', async () => {

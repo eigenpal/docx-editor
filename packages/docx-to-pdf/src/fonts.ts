@@ -116,9 +116,11 @@ export class EmbeddedFace {
       (Number.isFinite(font.italicAngle) && font.italicAngle !== 0);
     this.family = admitted.request.family;
     this.strike = strikeMetrics(admitted);
-    // fontkit's subsetter reads each glyph through `getGlyph`, which wraps a glyph of a
-    // color face so that it has no outline; the outline view returns the outline glyph.
-    this.subset = (this.colorLayers ? outlineFace(font) : font).createSubset();
+    // fontkit's subsetter reads each glyph through `getGlyph`, which wraps a glyph of a face
+    // with COLR and CPAL in its table directory so that it has no outline. That holds even
+    // when a damaged table fails to decode and `colorLayers` is false. The outline view
+    // returns the outline glyph, and is the face itself when there are no color tables.
+    this.subset = outlineFace(font).createSubset();
     const space = font.glyphForCodePoint(0x20)?.id;
     this.hasSpace = typeof space === 'number' && Number.isInteger(space) && space > 0;
     this.trueType = Boolean(
