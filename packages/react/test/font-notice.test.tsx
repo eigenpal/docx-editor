@@ -125,7 +125,82 @@ describe('<DocxEditor fontNotice>', () => {
   });
 });
 
+describe('renderFontNotice warnings', () => {
+  test('warns once for each case where it cannot render', async () => {
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (message: string) => void warnings.push(message);
+    try {
+      const mine = () => <i data-testid="mine" />;
+      const cases = [
+        <DocxEditor key="a" document={MISSING} chrome={false} renderFontNotice={mine} />,
+        <DocxEditor key="b" document={MISSING} fontNotice={false} renderFontNotice={mine} />,
+        <DocxEditor
+          key="c"
+          document={MISSING}
+          fontNotice={{ children: mine }}
+          renderFontNotice={mine}
+        />,
+      ];
+      for (const element of [...cases, ...cases]) {
+        const { container, unmount } = render(element);
+        await settle();
+        // Only the third case has a notice to draw, and it draws the render prop once.
+        expect(container.querySelectorAll('[data-testid="mine"]').length).toBe(
+          element.key === 'c' ? 1 : 0
+        );
+        unmount();
+      }
+    } finally {
+      console.warn = original;
+    }
+    const ours = warnings.filter((message) => message.includes('renderFontNotice'));
+    expect(ours.length).toBe(3);
+    expect(ours[0]).toContain('chrome={false}');
+    expect(ours[1]).toContain('fontNotice={false}');
+    expect(ours[2]).toContain('fontNotice.children');
+  });
+});
+
 describe('DocxEditor.FontNotice', () => {
+  test('fills the families into a message from a translator that does not interpolate', async () => {
+    const { container } = render(
+      <DocxEditorRoot document={MISSING}>
+        <DocxEditor.FontNotice t={((key: string) => `${key}: {fonts}`) as never}>
+          {({ message }) => <p data-testid="mine">{message}</p>}
+        </DocxEditor.FontNotice>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await settle();
+    expect(container.querySelector('[data-testid="mine"]')?.textContent).toBe(
+      `editor.fontSubstitutionNotice: ${FAMILY}`
+    );
+  });
+
+  test('does not call the translator while there is nothing to show', async () => {
+    const keys: string[] = [];
+    render(
+      <DocxEditorRoot document="blank">
+        <DocxEditor.FontNotice
+          t={
+            ((key: string) => {
+              keys.push(key);
+              return key;
+            }) as never
+          }
+        />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await settle();
+    expect(keys).toEqual([]);
+  });
+
   test('takes a function as children in a composed editor', async () => {
     const { container } = render(
       <DocxEditorRoot document={MISSING}>

@@ -471,7 +471,7 @@ const DocxEditorFrame = defineComponent({
     return () => {
       if (!chrome.value && slots.loadingIndicator) warnLoadingIndicatorWithoutChrome();
       warnOpenFailureActions(openFailure.value, slots.openFailureActions !== undefined);
-      warnFontNoticeSlot(fontNotice.value, slots.fontNotice !== undefined);
+      warnFontNoticeSlot(fontNotice.value, slots.fontNotice !== undefined, chrome.value);
       const t = translate.value;
       const viewportClass =
         chrome.value && isDark.value ? 'dark' : chrome.value ? undefined : props.class;

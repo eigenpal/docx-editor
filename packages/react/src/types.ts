@@ -109,8 +109,9 @@ export interface DocxEditorProps {
   /**
    * Your own font notice, in place of the packaged bar. It renders in the same row, only
    * while the document has substituted families that the reader has not dismissed. It is
-   * the same as `fontNotice.children`; pass only one. With `fontNotice={false}` there is
-   * no notice, so it renders nothing.
+   * the same as `fontNotice.children`; pass only one. It renders nothing with
+   * `fontNotice={false}`, and nothing with `chrome={false}`: compose `DocxEditor.FontNotice`
+   * yourself there.
    *
    * ```tsx
    * <DocxEditor
@@ -262,7 +263,8 @@ export interface DocxEditorProps {
   openFailure?: boolean | DocxEditorOpenFailureProps;
   /**
    * The bar that names the font families the document renders in substitute faces, on by
-   * default with the packaged chrome. It shows only when there are such families.
+   * default with the packaged chrome. It shows only when there are such families. Requires
+   * `chrome`; without it, compose `DocxEditor.FontNotice` yourself.
    *
    * `false` removes it, for a host that does not want it or reports the families itself
    * from `useEditorState((snapshot) => snapshot.fontSubstitutions)`. An object is

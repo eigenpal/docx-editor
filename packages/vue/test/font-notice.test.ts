@@ -117,7 +117,56 @@ describe('<DocxEditor fontNotice>', () => {
   });
 });
 
+describe('fontNotice slot warnings', () => {
+  test('warns once for each case where it cannot render', async () => {
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (message: string) => void warnings.push(message);
+    try {
+      const mine = () => h('i', { 'data-testid': 'mine' });
+      const cases: [Record<string, unknown>, number][] = [
+        [{ document: MISSING, chrome: false }, 0],
+        [{ document: MISSING, fontNotice: false }, 0],
+        // Only this case has a notice to draw, and it draws the slot once.
+        [{ document: MISSING, fontNotice: { children: mine } }, 1],
+      ];
+      for (const [props, drawn] of [...cases, ...cases]) {
+        const view = await mountSugarAsync(props, { fontNotice: mine });
+        await settle();
+        expect(view.container.querySelectorAll(MINE).length).toBe(drawn);
+        view.unmount();
+      }
+    } finally {
+      console.warn = original;
+    }
+    const ours = warnings.filter((message) => message.includes('#fontNotice'));
+    expect(ours.length).toBe(3);
+    expect(ours[0]).toContain(':chrome="false"');
+    expect(ours[1]).toContain(':font-notice="false"');
+    expect(ours[2]).toContain('fontNotice.children');
+  });
+});
+
 describe('DocxEditorFontNotice', () => {
+  test('fills the families into a message from a translator that does not interpolate', async () => {
+    const view = mountEditorTree(
+      () =>
+        h(
+          DocxEditorFontNotice,
+          { t: ((key: string) => `${key}: {fonts}`) as never },
+          {
+            default: ({ message }: DocxEditorFontNoticeContext) =>
+              h('p', { 'data-testid': 'mine' }, message),
+          }
+        ),
+      MISSING
+    );
+    await settle();
+    expect(view.container.querySelector(MINE)?.textContent).toBe(
+      `editor.fontSubstitutionNotice: ${FAMILY}`
+    );
+  });
+
   test('takes a default slot in a composed editor', async () => {
     const view = mountEditorTree(
       () =>

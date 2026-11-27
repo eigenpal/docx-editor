@@ -41,36 +41,45 @@ export interface DocxEditorFontNoticeProps {
   children?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
 }
 
-const warnedSlot = new Set<'both' | 'disabled'>();
+const SLOT_WARNINGS = {
+  both: '[docx-editor] The #fontNotice slot replaces fontNotice.children. Pass only one.',
+  disabled:
+    '[docx-editor] The #fontNotice slot is ignored with :font-notice="false", which renders ' +
+    'no font notice.',
+  noChrome:
+    '[docx-editor] The #fontNotice slot is ignored with :chrome="false", which renders no ' +
+    'font notice. Compose <DocxEditorFontNotice> yourself instead.',
+} as const;
+
+const warnedSlot = new Set<keyof typeof SLOT_WARNINGS>();
 
 /**
  * Warn once, in development, when the `fontNotice` slot cannot do what it says: it
- * replaces `fontNotice.children`, and `:font-notice="false"` renders no notice for it.
+ * replaces `fontNotice.children`, and neither `:font-notice="false"` nor `:chrome="false"`
+ * renders a notice for it.
  */
 export function warnFontNoticeSlot(
   fontNotice: boolean | DocxEditorFontNoticeProps,
-  hasSlot: boolean
+  hasSlot: boolean,
+  chrome: boolean
 ): void {
   if (!hasSlot || !isDevelopment()) return;
-  const kind =
-    fontNotice === false
+  const kind = !chrome
+    ? 'noChrome'
+    : fontNotice === false
       ? 'disabled'
       : typeof fontNotice === 'object' && fontNotice.children
         ? 'both'
         : null;
   if (kind === null || warnedSlot.has(kind)) return;
   warnedSlot.add(kind);
-  console.warn(
-    kind === 'both'
-      ? '[docx-editor] The #fontNotice slot replaces fontNotice.children. Pass only one.'
-      : '[docx-editor] The #fontNotice slot is ignored with :font-notice="false", which ' +
-          'renders no font notice.'
-  );
+  console.warn(SLOT_WARNINGS[kind]);
 }
 
 /**
- * Word-style font compatibility notice. Fill the default slot to render your own notice
- * from the same state.
+ * The bar that names the font families the document renders in substitute faces. The
+ * reader can dismiss it; a different set of families shows it again. Fill the default slot
+ * to render your own notice from the same state.
  *
  * @public
  */
@@ -102,8 +111,9 @@ export const DocxEditorFontNotice = defineComponent({
       const t = props.t ?? ambient;
       const fonts = subs.join(', ');
       // Interpolated locally as well: hosts commonly bridge a bare `(key) => string` into
-      // `t`, and the notice must not surface a literal placeholder then.
-      const message = t('editor.fontSubstitutionNotice', { fonts }).replace('{fonts}', fonts);
+      // `t`, and the notice must not surface a literal placeholder then. A function, so a
+      // `$` in a family name is not read as a replacement pattern.
+      const message = t('editor.fontSubstitutionNotice', { fonts }).replace('{fonts}', () => fonts);
       const dismiss = () => {
         dismissedKey.value = key;
       };

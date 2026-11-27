@@ -298,7 +298,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     } = props;
     if (!chrome && loadingIndicator !== undefined) warnLoadingIndicatorWithoutChrome();
     warnOpenFailureActions(openFailure, renderOpenFailureActions !== undefined);
-    warnFontNoticeRender(fontNotice, renderFontNotice !== undefined);
+    warnFontNoticeRender(fontNotice, renderFontNotice !== undefined, chrome);
 
     // Chrome colour mode: 'system' subscribes to the OS setting. The same rule `Root`
     // applies, which this also hands the mode to for the parts that scope themselves.

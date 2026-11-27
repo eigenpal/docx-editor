@@ -79,7 +79,7 @@ export interface DocxEditorProps {
    * The bar that names the font families the document renders in substitute faces, on by
    * default with the packaged chrome. `false` removes it. An object is
    * `DocxEditorFontNoticeProps`, passed straight through. For your own notice, use the
-   * `fontNotice` slot.
+   * `fontNotice` slot. Requires `chrome`; without it, compose `DocxEditorFontNotice` yourself.
    */
   fontNotice?: boolean | DocxEditorFontNoticeProps;
   rulers?: boolean;

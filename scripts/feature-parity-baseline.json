@@ -230,8 +230,10 @@
     "editor/DocxEditorFontNotice": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
+        "both",
         "children",
         "children",
+        "chrome",
         "default",
         "default",
         "fontNotice",

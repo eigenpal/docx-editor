@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import type { TFunction } from '@docx-editor.dev/i18n';
@@ -43,31 +43,39 @@ export interface DocxEditorFontNoticeProps {
   children?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
 }
 
-const warnedRender = new Set<'both' | 'disabled'>();
+const RENDER_WARNINGS = {
+  both: '[docx-editor] renderFontNotice replaces fontNotice.children. Pass only one.',
+  disabled:
+    '[docx-editor] renderFontNotice is ignored with fontNotice={false}, which renders no ' +
+    'font notice.',
+  noChrome:
+    '[docx-editor] renderFontNotice is ignored with chrome={false}, which renders no font ' +
+    'notice. Compose <DocxEditor.FontNotice> yourself instead.',
+} as const;
+
+const warnedRender = new Set<keyof typeof RENDER_WARNINGS>();
 
 /**
  * Warn once, in development, when `renderFontNotice` cannot do what it says: it replaces
- * `fontNotice.children`, and `fontNotice={false}` renders no notice for it.
+ * `fontNotice.children`, and neither `fontNotice={false}` nor `chrome={false}` renders a
+ * notice for it.
  */
 export function warnFontNoticeRender(
   fontNotice: boolean | DocxEditorFontNoticeProps,
-  hasRenderProp: boolean
+  hasRenderProp: boolean,
+  chrome: boolean
 ): void {
   if (!hasRenderProp || !isDevelopment()) return;
-  const kind =
-    fontNotice === false
+  const kind = !chrome
+    ? 'noChrome'
+    : fontNotice === false
       ? 'disabled'
       : typeof fontNotice === 'object' && fontNotice.children
         ? 'both'
         : null;
   if (kind === null || warnedRender.has(kind)) return;
   warnedRender.add(kind);
-  console.warn(
-    kind === 'both'
-      ? '[docx-editor] renderFontNotice replaces fontNotice.children. Pass only one.'
-      : '[docx-editor] renderFontNotice is ignored with fontNotice={false}, which renders ' +
-          'no font notice.'
-  );
+  console.warn(RENDER_WARNINGS[kind]);
 }
 
 /**
@@ -96,18 +104,16 @@ export function DocxEditorFontNotice({
 
   const key = substitutions.join('\0');
   const dismiss = useCallback(() => setDismissedKey(key), [key]);
-  const fonts = substitutions.join(', ');
-  // Interpolated locally as well: hosts commonly bridge a bare `(key) => string` into
-  // `t`, and the notice must not surface a literal placeholder then.
-  const message = t('editor.fontSubstitutionNotice', { fonts }).replace('{fonts}', fonts);
-  const context = useMemo<DocxEditorFontNoticeContext>(
-    () => ({ fonts: substitutions, message, dismiss }),
-    [substitutions, message, dismiss]
-  );
 
   if (substitutions.length === 0) return null;
   if (dismissedKey === key) return null;
-  if (children) return <>{children(context)}</>;
+
+  const fonts = substitutions.join(', ');
+  // Interpolated locally as well: hosts commonly bridge a bare `(key) => string` into
+  // `t`, and the notice must not surface a literal placeholder then. A function, so a
+  // `$` in a family name is not read as a replacement pattern.
+  const message = t('editor.fontSubstitutionNotice', { fonts }).replace('{fonts}', () => fonts);
+  if (children) return <>{children({ fonts: substitutions, message, dismiss })}</>;
 
   return (
     <div

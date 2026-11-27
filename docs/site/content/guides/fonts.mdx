@@ -329,7 +329,7 @@ Read `editor.fontMeasurement()` to inspect measurement.
 
 If a document renders families in substitute faces, the packaged editor shows a bar that names them. The reader can dismiss the bar. It shows again when the set of families changes.
 
-Set `fontNotice` to `false` to remove the bar. Pass an object to restyle it with `className` and `style`.
+Set `fontNotice` to `false` to remove the bar. Pass an object to restyle it with `className` and `style`. The bar is part of the packaged frame, so `chrome={false}` renders no bar.
 
 To show your own component in the same row, pass `renderFontNotice` in React, or fill the `#fontNotice` slot in Vue. The component renders only while there are substituted families that the reader has not dismissed.
 
