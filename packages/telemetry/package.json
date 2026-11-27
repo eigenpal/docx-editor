@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/telemetry",
-  "version": "2.41.0",
+  "version": "2.41.1",
   "description": "Anonymous diagnostics, metrics, and error reporting for @docx-editor.dev editors and collaboration servers, with OpenTelemetry, Prometheus, and Sentry exporters.",
   "sideEffects": false,
   "type": "module",

@@ -1,5 +1,12 @@
 # @eigenpal/docx-js-editor
 
+## 2.41.1
+
+### Patch Changes
+
+- b0dac16: `<DocxEditor>` takes a `fontNotice` prop in React and Vue: `false` removes the font substitution bar, and an object restyles it. To show your own component in its place, pass `renderFontNotice` in React or fill the `#fontNotice` slot in Vue.
+- Updated dependencies: @docx-editor.dev/i18n@2.41.1
+
 ## 2.41.0
 
 ### Patch Changes
