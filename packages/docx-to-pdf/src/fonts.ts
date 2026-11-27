@@ -10,6 +10,7 @@ import type { ExportAdmittedFontFace } from '@docx-editor.dev/core/export';
 import { mapSymbolPuaText } from '@docx-editor.dev/core/layout';
 import { fontEmbeddingDecision } from './pdf-font-embedding.ts';
 import { strikeMetrics } from './font-metrics.ts';
+import { outlineFace } from './color-glyphs.ts';
 import { flateStream, hex, unicodeHex, Work } from './context.ts';
 
 /**
@@ -56,11 +57,15 @@ export class EmbeddedFace {
   readonly font: FontkitFont;
   readonly strike: ReturnType<typeof strikeMetrics>;
   /**
-   * A COLR/CPAL face. Its glyphs are painted as filled palette layers by the text writer and
-   * never written as text, so the face is not embedded: the subsetter cannot encode a color
-   * glyph, and the page carries the text in its line's `ActualText` instead.
+   * A COLR/CPAL face. Its color glyphs are painted as filled palette layers by the text
+   * writer and never written as text; the page carries their characters in the line's
+   * `ActualText` and on an invisible space. Its monochrome glyphs, such as letters and
+   * digits, are written as text. The subset reads the face through its outline view (see
+   * {@link outlineFace}), and the face is embedded only when the page writes a glyph of it.
    */
   readonly colorLayers: boolean;
+  /** Whether the face has a space glyph to carry characters painted some other way. */
+  readonly hasSpace: boolean;
   /**
    * Whether the face's own outlines are bold or slanted. A bold or italic run drawn in a
    * face that is not (a single-weight face, or a substituted regular) gets Word's synthetic
@@ -111,7 +116,11 @@ export class EmbeddedFace {
       (Number.isFinite(font.italicAngle) && font.italicAngle !== 0);
     this.family = admitted.request.family;
     this.strike = strikeMetrics(admitted);
-    this.subset = font.createSubset();
+    // fontkit's subsetter reads each glyph through `getGlyph`, which wraps a glyph of a
+    // color face so that it has no outline; the outline view returns the outline glyph.
+    this.subset = (this.colorLayers ? outlineFace(font) : font).createSubset();
+    const space = font.glyphForCodePoint(0x20)?.id;
+    this.hasSpace = typeof space === 'number' && Number.isInteger(space) && space > 0;
     this.trueType = Boolean(
       (font as unknown as { directory?: { tables?: Record<string, unknown> } }).directory?.tables
         ?.glyf
@@ -209,9 +218,8 @@ export class EmbeddedFace {
    * has no space glyph to lend.
    */
   carrier(text: string): string | null {
-    const space = this.font.glyphForCodePoint(0x20)?.id;
-    if (!Number.isInteger(space) || space <= 0) return null;
-    return this.encode(space, text);
+    if (!this.hasSpace) return null;
+    return this.encode(this.font.glyphForCodePoint(0x20).id, text);
   }
   /**
    * The advance this PDF declares for a character code, in 1/1000 em.
@@ -230,7 +238,8 @@ export class EmbeddedFace {
   }
   /** `subsetTags` holds the subset tags already used in this PDF; see {@link subsetTag}. */
   async finish(work: Work, subsetTags: Set<string> = new Set()): Promise<void> {
-    if (this.colorLayers) return;
+    // A color face that wrote no glyph is named by no page.
+    if (this.colorLayers && this.rows.length === 0) return;
     await work.yield();
     const bytes = this.encodeSubset();
     work.check();
