@@ -112,7 +112,7 @@ import {
 import { keptFloatAnchor } from './balanced-float-anchors.ts';
 import { createEarlierLinePush, ownTableStaysForAnchor } from './earlier-line-push.ts';
 import { createStackPlacement } from './table-float-stack.ts';
-import { isBareSectionMark } from './section-mark-break.ts';
+import { isBareSectionMark, markCarriedAfter, markStaysAfterTable } from './section-mark-break.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -1834,6 +1834,10 @@ function* layoutBlocksPass(
   };
   /** The mark a trailing page break kept on its own sheet (`markJoinsBreakSheet`). */
   let markOnBreakSheet = -1;
+  /** `markStaysAfterTable` for the paragraph at `at`, before a continuous section. */
+  const staysAfterTable = (at: number, entry: PreparedParagraph): boolean =>
+    options.sectionMarkCollapses === true &&
+    markStaysAfterTable(entry.paragraph, prepared[at - 1], options.compatibilityMode);
   // Before a continuous section, the empty closing mark is out of flow; its fragment stays.
   const collapsesSectionMark = (at: number, lines?: readonly PendingLine[]): boolean => {
     if (at === markOnBreakSheet) return true;
@@ -1841,7 +1845,7 @@ function* layoutBlocksPass(
     if (options.sectionMarkCollapses !== true || at === 0 || anchorsFrames(prepared[at - 1]))
       return false;
     const mark = emptySectionMarkAt(at, lines);
-    return mark !== undefined && !breaksBeforeAt(at, mark);
+    return mark !== undefined && !breaksBeforeAt(at, mark) && !staysAfterTable(at, mark);
   };
   // `w:keepNext` chains. Members measure at THIS column's width (a memo hit when equal).
   const keepChains = keepNextChains(
@@ -2066,7 +2070,10 @@ function* layoutBlocksPass(
     const preparedEntry = prepared[index]!;
     const preparedSpacing =
       preparedEntry.kind === 'paragraph' ? preparedEntry.spacing : entry.spacing;
-    const startBefore = spaceBeforeAt(index, entry, preparedSpacing.before);
+    const startBefore =
+      staysAfterTable(index, entry) && emptySectionMarkAt(index) !== undefined
+        ? 0
+        : spaceBeforeAt(index, entry, preparedSpacing.before);
     const authoredSpacing =
       startBefore === preparedSpacing.before
         ? preparedSpacing
@@ -2771,7 +2778,10 @@ function* layoutBlocksPass(
     previousSpaceAfter = collapsingSpaceAfter(endedWithPageBreak ? 0 : spacing.after, styleCascade);
     if (savedFrameFlow) {
       cursorY = savedFrameFlow.cursorY;
-      previousSpaceAfter = savedFrameFlow.previousSpaceAfter;
+      // The next paragraph's space before collapses against a collapsed mark's space after.
+      const own = collapsingSpaceAfter(authoredSpacing.after, styleCascade);
+      const carried = savedFrameFlow.previousSpaceAfter;
+      previousSpaceAfter = collapsedMark ? markCarriedAfter(paragraph, own, carried) : carried;
       firstParagraphOfSection = savedFrameFlow.firstParagraphOfSection;
     }
   }
