@@ -1,6 +1,8 @@
 // Where an empty section mark stays when a page break precedes it or it carries its own.
 
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { paragraphMarkHidden } from './hidden-paragraph-mark.ts';
 import { paragraphSectionNode, type DocumentSection } from './section-properties.ts';
 
 /** Paragraph properties, a bookmark, or a run that holds only its properties. */
@@ -132,4 +134,45 @@ export function sectionMarksJoiningBreakSheet(
  */
 export function isBareSectionMark(paragraph: OoxmlElement): boolean {
   return paragraphSectionNode(paragraph) !== undefined && holdsOnlyInertContent(paragraph);
+}
+
+/**
+ * Whether an empty section mark before a continuous section stays in the flow because a table
+ * is directly before it (`w:sectPr`, `CT_SectPr`, ECMA-376 Part 1 §17.6.18; `w:type`,
+ * `CT_SectType`, §17.6.22). The mark is then the paragraph that closes the table: it keeps its
+ * line and its space after, and its space before is not applied. Compatibility mode 15 and
+ * later only; in legacy modes the mark takes no room after a table either.
+ *
+ * `previous` is the block before the mark in document order. A positioned table (`w:tblpPr`,
+ * `CT_TblPPr`, §17.4.57) counts wherever it stands on the page. A hidden mark
+ * (`paragraphMarkHidden`) joins the next paragraph and keeps no line. The line still cannot
+ * open a page: at the bottom of a page the mark stays there and the next section starts on the
+ * next page.
+ */
+export function markStaysAfterTable(
+  mark: OoxmlElement,
+  previous: { readonly kind: string } | undefined,
+  compatibilityMode: number | undefined
+): boolean {
+  return (
+    previous?.kind === 'table' &&
+    hasCompatibilityRule(compatibilityMode, 'sectionMarkAfterTableKeepsLine') &&
+    !paragraphMarkHidden(mark)
+  );
+}
+
+/**
+ * The space after that the flow carries past an empty section mark that takes no room, for
+ * the space before of the next section's first paragraph to collapse against (`w:spacing`,
+ * `CT_Spacing`, ECMA-376 Part 1 §17.3.1.33).
+ *
+ * The mark is the paragraph directly before that paragraph, so its own space after is the one
+ * that collapses: the next paragraph adds only the part of its space before that exceeds it.
+ * The mark's space after itself takes no room, and the space after of the paragraph before
+ * the mark stays in full. `own` and `previous` are the collapsing parts of the mark's space
+ * after and of the space after before the mark. A hidden mark joins the next paragraph and
+ * has no spacing of its own, so the earlier space after still collapses.
+ */
+export function markCarriedAfter(mark: OoxmlElement, own: number, previous: number): number {
+  return paragraphMarkHidden(mark) ? previous : own;
 }

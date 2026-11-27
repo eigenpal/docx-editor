@@ -81,6 +81,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `wrappedAnchorsEndOnSheet` | `legacy` | A wrapping object positioned from its paragraph or line moves up to end at the bottom page edge, never above the top page edge. Its line never moves. A row whose cell object would cross the bottom margin moves to the next page |
 | `wrappedAnchorsStayBelowTopMargin` | `modern` | A wrapping object positioned from its paragraph never starts above the top margin |
 | `lineAnchorsBeforeBandPush` | `legacy` | An object positioned from the first line of a paragraph measures from where that line was before a wrapping band above pushed it down |
+| `sectionMarkAfterTableKeepsLine` | `modern` | An empty paragraph that only carries the mark of a section before a continuous section keeps its line and its space after when a table is directly before it. Its space before is not applied. In legacy modes it takes no room there either |
 | `ownTableKeepsPageTopSpaceBefore` | `legacy` | A paragraph at the top of a page keeps its space before when a floating table it anchors covers the top of the text area |
 | `columnAlignmentFollowsIndents` | `legacy` | An object aligned left or right in its column aligns with the left or right indent of its anchor paragraph |
 | `adjustLineHeightInTable` | `w:adjustLineHeightInTable` | Cell paragraphs snap to the line grid |

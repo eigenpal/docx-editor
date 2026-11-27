@@ -263,6 +263,10 @@ export const MODE_RULES = {
     'A wrapping object positioned from its paragraph never starts above the top margin',
     'ECMA-376 Part 1 §20.4.2.11 positionV'
   ),
+  sectionMarkAfterTableKeepsLine: modern(
+    'An empty paragraph that only carries the mark of a section before a continuous section keeps its line and its space after when a table is directly before it. Its space before is not applied. In legacy modes it takes no room there either',
+    'ECMA-376 Part 1 §17.6.18 sectPr'
+  ),
   ownTableKeepsPageTopSpaceBefore: legacy(
     'A paragraph at the top of a page keeps its space before when a floating table it anchors covers the top of the text area',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
