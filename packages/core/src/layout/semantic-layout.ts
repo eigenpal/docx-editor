@@ -532,11 +532,8 @@ function* layoutBlocksPass(
       : '');
   // The side follows the displayed number (`PageGeometry.evenPageMargin`). Local page 0 of a
   // continued section is the host sheet, which keeps the side of its own number.
-  const geometryAt = (index: number) =>
-    geometryOnPage(
-      geometry,
-      (index === 0 ? hostNumber : undefined) ?? furniturePageNumberStart + index
-    );
+  const geometryAt = (i: number) =>
+    geometryOnPage(geometry, (i ? undefined : hostNumber) ?? furniturePageNumberStart + i);
   const flowStartY = options.flowStartY ?? 0;
   const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
   // Physical sheet position remains separate from displayed header/footer numbering.
