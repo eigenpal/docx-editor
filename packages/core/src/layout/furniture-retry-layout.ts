@@ -10,7 +10,7 @@ import { framedTokenJoin } from './framed-token.ts';
 import { refusalYieldsHiddenFurniture } from './furniture-drawing-exclusion.ts';
 import { createLayoutSession, replaceLayoutSession } from './layout-session.ts';
 import type { LayoutSteps } from './layout-steps.ts';
-import type { BlockLayoutOptions } from './semantic-layout.ts';
+import type { BlockLayoutOptions } from './semantic-layout-options.ts';
 
 /** `pass` over `bodies`, balanced, retried once cold when unsupported furniture blocks the body. */
 export function* layoutWithFurnitureRetry(

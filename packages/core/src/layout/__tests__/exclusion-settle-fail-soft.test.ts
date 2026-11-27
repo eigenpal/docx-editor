@@ -14,7 +14,7 @@ import { limitExclusionPassesForTest } from '../exclusion-layout-steps.ts';
 import { disableFollowingZoneMovesForTest } from '../following-anchor-tops.ts';
 import { refusalRetriesWithoutHiddenFurniture } from '../furniture-drawing-exclusion.ts';
 import { layoutBlocksWithColumnBalance, type BlockLayoutResult } from '../column-balance-layout.ts';
-import type { BlockLayoutOptions } from '../semantic-layout.ts';
+import type { BlockLayoutOptions } from '../semantic-layout-options.ts';
 import type { PageRecord } from '../semantic-records.ts';
 import { markResultUnsettled } from '../unsettled-exclusion-layout.ts';
 import { createLayoutSession } from '../layout-session.ts';

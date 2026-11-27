@@ -1,3 +1,4 @@
+import type { BlockLayoutOptions as ColumnBalanceBlockLayoutOptions } from './column-balance-layout.ts';
 import type { DocumentProperties, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
@@ -264,3 +265,11 @@ export interface SemanticLayoutOptions {
    */
   readonly bodyBlockLimit?: number;
 }
+
+/** Options of one block layout pass of the story loop in `semantic-layout.ts`. */
+export type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
+  readonly disabledParagraphFrameIds?: ReadonlySet<string>;
+  readonly paragraphFrameFallbackRound?: number;
+  /** Set by the one retry of `layoutBlocksWithGeometry`: blocking unsupported furniture zones yield. */
+  readonly yieldHiddenFurnitureZones?: boolean;
+};

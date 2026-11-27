@@ -235,20 +235,10 @@ import {
 import { preparedBlocks } from './prepared-block-memo.ts';
 import { tableTopLeads } from './cell-edge-neighbours.ts';
 import { tableOpening } from './table-opening.ts';
-import {
-  type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
-  type BlockLayoutResult,
-} from './column-balance-layout.ts';
-import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
+import type { BlockLayoutResult } from './column-balance-layout.ts';
+import type { BlockLayoutOptions, SemanticLayoutOptions } from './semantic-layout-options.ts';
 import type { PreparedBlock, SectionPrepass } from './section-prepass-types.ts';
 import { sectionFlowKeys } from './section-flow-keys.ts';
-
-export type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
-  readonly disabledParagraphFrameIds?: ReadonlySet<string>;
-  readonly paragraphFrameFallbackRound?: number;
-  /** Set by the one retry of `layoutBlocksWithGeometry`: blocking unsupported furniture zones yield. */
-  readonly yieldHiddenFurnitureZones?: boolean;
-};
 
 /**
  * Lay one story part out into pages.
@@ -530,8 +520,7 @@ function* layoutBlocksPass(
     (furniture?.evenAndOddHeaders || geometry.evenPageMargin
       ? `|fp:${furniturePageNumberStart & 1}${hostNumber === undefined ? '' : hostNumber & 1}`
       : '');
-  // The side follows the displayed number (`PageGeometry.evenPageMargin`). Local page 0 of a
-  // continued section is the host sheet, which keeps the side of its own number.
+  // The side follows the displayed number; page 0 of a continued section is the host sheet.
   const geometryAt = (i: number) =>
     geometryOnPage(geometry, (i ? undefined : hostNumber) ?? furniturePageNumberStart + i);
   const flowStartY = options.flowStartY ?? 0;
