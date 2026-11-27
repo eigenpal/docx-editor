@@ -109,6 +109,21 @@ describe('a justified line with a tab', () => {
     });
   }
 
+  test('right-to-left text that a decimal stop places does not stretch', () => {
+    const rtl = (jc: string) =>
+      paragraph('אב גד\tהו 1.5 זח\nסוף', `<w:bidi/>${stop('decimal', 200)}`, jc, '<w:rtl/>');
+    const widths = (line: LineRecord) => line.spans.map((span) => span.box.width);
+    expect(widths(firstLine(rtl('both')))).toEqual(widths(firstLine(rtl('left'))));
+  });
+
+  test('text on a wrapped line stretches after a center stop that keeps some width', () => {
+    const line = firstLine(paragraph(`ab\t${TAIL}`, stop('center', 200)));
+    expect(line.spans.find((span) => span.text === '\t')!.box.width).toBeGreaterThan(0);
+    expect(x(line, 'ab')).toBe(0);
+    const last = words(line).at(-1)!;
+    expect(last[1] + 10 * last[0].length).toBeCloseTo(MEASURE, 4);
+  });
+
   for (const alignment of ['center', 'right']) {
     test(`text too long for a ${alignment} stop stretches after the tab`, () => {
       const line = firstLine(paragraph(`ab cd\t${TAIL}`, stop(alignment, 60)));
@@ -202,6 +217,20 @@ describe('a justified line that starts with spaces', () => {
     expect(first.box.x + first.box.width).toBeCloseTo(natural.box.x + natural.box.width, 4);
     expect(first.box.width).toBeGreaterThan(natural.box.width);
     expect(Math.min(...words(line).map(([, start]) => start))).toBeCloseTo(0, 4);
+  });
+
+  test('with a first-line indent, a hanging indent, or a list number', () => {
+    const numbering = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>';
+    for (const properties of [
+      '<w:ind w:firstLine="400"/>',
+      '<w:ind w:left="720" w:hanging="360"/>',
+      numbering,
+    ]) {
+      const body = (jc: string) => paragraph(`   ab ${TAIL}`, properties, jc);
+      const line = firstLine(body('both'));
+      expect(x(line, 'ab')).toBe(x(firstLine(body('left')), 'ab'));
+      expect(x(line, 'ef') - x(line, 'ab')).toBeGreaterThan(30);
+    }
   });
 
   test('leading spaces keep their advance before a manual line break', () => {
