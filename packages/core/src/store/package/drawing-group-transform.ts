@@ -16,20 +16,12 @@ export function transformComponent(
 ): VectorShapeComponent {
   // A group that collapses an axis flattens an inset outline's shape onto a line; with no
   // inside left, the outline stays centred.
+  // A shadow keeps its distance and blur: they are absolute lengths, as a line width is, so
+  // the group's child-to-extent scale does not change them.
   const { strokeInset: inset, ...rest } = component;
   return {
     ...rest,
     ...(inset && scaleX !== 0 && scaleY !== 0 ? { strokeInset: true } : {}),
-    ...(component.shadow
-      ? {
-          shadow: {
-            ...component.shadow,
-            dxEmu: component.shadow.dxEmu * scaleX,
-            dyEmu: component.shadow.dyEmu * scaleY,
-            blurEmu: component.shadow.blurEmu * ((Math.abs(scaleX) + Math.abs(scaleY)) / 2),
-          },
-        }
-      : {}),
     ...(component.fillGradient
       ? {
           fillGradient: {
@@ -121,13 +113,23 @@ function groupArrowhead(
 }
 
 /**
+ * Whether a clockwise turn lies nearer a quarter turn than upright or upside down: in
+ * [45, 135) or [225, 315) degrees. The shape's box then lies across its axes.
+ */
+export function quarterTurned(degrees: number): boolean {
+  const turn = ((degrees % 360) + 360) % 360;
+  return (turn >= 45 && turn < 135) || (turn >= 225 && turn < 315);
+}
+
+/**
  * Where a member lands in its group, as the extent to project it at, and the offset and
- * scale that map that projection into the group extent. An upright member projects at its
- * own extent and scales with the group. A turned member's box maps into the group extent
- * first, and the member turns about the centre of that box, so a group that scales its axes
- * unevenly never skews it. A member turned nearer a quarter turn ([45, 135) or [225, 315)
- * degrees) takes the scale of the other axis on each side, as its turned box lies across
- * them.
+ * scale that map that projection into the group extent. A member's box maps into the group
+ * extent first, and its geometry is evaluated at that size (`a:prstGeom`, ECMA-376 Part 1,
+ * 20.1.9.18): a preset whose guides follow the shorter side, such as a round rectangle,
+ * keeps round corners in a group that scales its axes unevenly, and its text rectangle
+ * follows. A turned member turns about the centre of that box, so the group never skews it.
+ * A member turned nearer a quarter turn takes the scale of the other axis on each side, as
+ * its turned box lies across them.
  */
 export function groupMemberPlacement(
   child: Readonly<{
@@ -148,12 +150,13 @@ export function groupMemberPlacement(
     x: (child.offset.x - childOffset.x) * scaleX,
     y: (child.offset.y - childOffset.y) * scaleY,
   };
-  if (rotationDegrees === 0 || !(scaleX > 0) || !(scaleY > 0)) {
-    return { extent: child.extent, offset, scaleX, scaleY };
+  // A group that collapses or mirrors an axis keeps the member's own geometry and scales it.
+  if (!(scaleX > 0) || !(scaleY > 0)) return { extent: child.extent, offset, scaleX, scaleY };
+  if (rotationDegrees === 0) {
+    const extent = { cx: child.extent.cx * scaleX, cy: child.extent.cy * scaleY };
+    return { extent, offset, scaleX: 1, scaleY: 1 };
   }
-  const across =
-    (rotationDegrees >= 45 && rotationDegrees < 135) ||
-    (rotationDegrees >= 225 && rotationDegrees < 315);
+  const across = quarterTurned(rotationDegrees);
   const cx = child.extent.cx * (across ? scaleY : scaleX);
   const cy = child.extent.cy * (across ? scaleX : scaleY);
   const centreX = offset.x + (child.extent.cx * scaleX) / 2;
@@ -168,15 +171,21 @@ export function groupMemberPlacement(
 
 /**
  * A group's members under its own turn: flipped, then turned clockwise, about the centre of
- * the group extent. Null when a member's paint does not follow the turn here yet: a shadow or
- * a pattern fill. The group then keeps its placeholder.
+ * the group extent. A shadow and a pattern fill do not follow the turn here: the member paints
+ * without its shadow, and with the mean colour of its pattern.
  */
 export function turnGroupComponents(
-  components: readonly VectorShapeComponent[],
+  source: readonly VectorShapeComponent[],
   extent: Readonly<{ cx: number; cy: number }>,
   turn: GroupTurn
-): VectorShapeComponent[] | null {
-  if (components.some((c) => c.shadow || c.shadowOnly || c.fillPattern)) return null;
+): VectorShapeComponent[] {
+  const components: VectorShapeComponent[] = [];
+  for (const component of source) {
+    // A shadow silhouette paints only its shadow.
+    if (component.shadowOnly) continue;
+    const { shadow: _shadow, fillPattern: _fillPattern, ...flat } = component;
+    components.push(flat);
+  }
   const place = shapePointTransform(extent, turn.flipH, turn.flipV, turn.rotationDegrees);
   const map = (paths: readonly (readonly Readonly<{ x: number; y: number }>[])[]) =>
     paths.map((path) => path.map(place));
@@ -198,6 +207,27 @@ export function turnGroupComponents(
         }
       : {}),
   }));
+}
+
+/**
+ * Members of turned or flipped nested groups under those turns, innermost first: each flips
+ * and turns about the centre of its box, which sits anywhere in the drawing extent.
+ */
+export function turnComponentsInBoxes(
+  components: readonly VectorShapeComponent[],
+  turns: readonly Readonly<{
+    box: Readonly<{ x: number; y: number; cx: number; cy: number }>;
+    turn: GroupTurn;
+  }>[]
+): VectorShapeComponent[] {
+  let current: VectorShapeComponent[] = [...components];
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const { box, turn } = turns[index]!;
+    const local = current.map((c) => transformComponent(c, { x: -box.x, y: -box.y }, 1, 1));
+    const turned = turnGroupComponents(local, { cx: box.cx, cy: box.cy }, turn);
+    current = turned.map((c) => transformComponent(c, { x: box.x, y: box.y }, 1, 1));
+  }
+  return current;
 }
 
 /**

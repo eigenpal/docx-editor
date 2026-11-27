@@ -1,5 +1,17 @@
 # @docx-editor.dev/fonts-cjk
 
+## 2.41.1
+
+No changes in this release.
+
+## 2.41.0
+
+No changes in this release.
+
+## 2.40.0
+
+No changes in this release.
+
 ## 2.39.0
 
 No changes in this release.

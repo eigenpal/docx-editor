@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A shorter vertical merge from the same row as a longer merge sized its own first row. Over rows that can grow, its text was clipped at that row or its rows were too tall.",
+  "after": "Every merge from one row is sized together. Each merge grows its own last row, unless that row has an exact height. A head row that moves to the next page sizes its merges again there.",
+  "reason": "The change is in table row layout only. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-same-head-row-growable.test.ts",
+    "packages/core/src/layout/__tests__/table-vmerge-same-head-row-incremental.test.ts",
+    "packages/core/src/layout/__tests__/table-vmerge-reoffer.test.ts"
+  ],
+  "changeset": "shorter-merge-growable-rows",
+  "migration": null
+}

@@ -5,6 +5,7 @@ export {
   tableCellRead,
   planTableMutation,
   planInsertTable,
+  nextParagraphSibling,
   type AutomationTableMutation,
   type AutomationTableRead,
   type AutomationTableCellRead,

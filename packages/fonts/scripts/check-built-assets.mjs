@@ -45,13 +45,25 @@ const fragment = await cjs.loadDefaultFonts({
     return new Response(readFileSync(url));
   },
 });
+// The glyph fallback faces substitute for no family, so the eager loader skips them. The
+// on-demand resolver serves them under their own names.
+const fallbackFaces = await cjs.packagedFonts({
+  install: false,
+  fetcher: async (input) => {
+    const url = new URL(String(input));
+    requestedUrls.push(url.href);
+    return new Response(readFileSync(url));
+  },
+})({ families: [...cjs.GLYPH_FALLBACK_FACE_FAMILIES], defaultFamily: 'No Such Family', faces: [] });
+assert.equal(fallbackFaces.failures.length, 0, 'CJS build must load every fallback face in Node');
+assert.equal(fallbackFaces.sources.length, cjs.GLYPH_FALLBACK_FACE_FAMILIES.length);
 const requestedFiles = requestedUrls
   .map((url) => fileURLToPath(url))
   .map((file) => file.slice(assetsDir.length + 1))
   .sort();
 
 assert.equal(fragment.failures.length, 0, 'CJS build must load every packaged face in Node');
-assert.equal(fragment.sources.length, assetFiles.length);
+assert.equal(fragment.sources.length + fallbackFaces.sources.length, assetFiles.length);
 assert.deepEqual(requestedFiles, assetFiles);
 const expectedRoot = new URL('./', pathToFileURL(join(assetsDir, assetFiles[0])).href);
 assert.equal(new URL('./', cjs.FONT_ASSET_ROOT).href, expectedRoot.href);

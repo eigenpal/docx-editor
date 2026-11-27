@@ -22,7 +22,11 @@ const EMU_PER_POINT = 12_700;
 export interface GroupTextboxStoryRecord {
   /** Canonical node id of the member `wps:wsp`. */
   readonly memberNodeId: string;
-  /** The member box in points, relative to the drawing extent's top-left corner. */
+  /**
+   * The box the member story lays out in, in points, relative to the drawing extent's top-left
+   * corner: the member box, or for vertical text the member box with its sides swapped about
+   * the same centre.
+   */
   readonly box: LayoutBox;
   /** The member's story, in content-box coordinates inside {@link box}. */
   readonly story: TextboxStoryLayout;
@@ -34,7 +38,8 @@ export interface GroupTextboxStoryRecord {
 }
 
 /**
- * The projection a member story lays out from: the member's box as the extent, its story as
+ * The projection a member story lays out from: the box its story lays out in as the extent
+ * (see {@link GroupTextboxProjection.frameEmu}), its story as
  * the drawing's story, and its node id so line ids and cache producers stay per member. The
  * group's frame is fixed, so the member is never placed or resized from its story.
  */

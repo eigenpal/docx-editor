@@ -26,7 +26,7 @@ function furnitureTextboxFragments(page: PageRecord): ParagraphFragmentRecord[] 
       (fragment, context) => {
         if (context.textboxDepth === 0 || context.textboxOwner?.accessibility.hidden) return;
         // Overlay boxes stay upright, so a turned story has none rather than misplaced ones.
-        if (context.textboxOwner?.textboxStory?.contentRotation) return;
+        if (context.storyTurns) return;
         fragments.push(
           translateParagraphFragment(
             fragment,

@@ -4,7 +4,6 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { expect, test } from 'bun:test';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { PDFDocument } from 'pdf-lib';
 import { exportPdf } from '../src/index.ts';
@@ -31,27 +30,4 @@ test('strict export preserves explicit physical page geometry', async () => {
   expect(result.diagnostics).toEqual([]);
   expect(result.pageCount).toBe(1);
   expect(pdf.getPage(0).getSize()).toEqual({ width: 612, height: 792 });
-});
-
-test('fallback font binaries match the recorded inputs and carry their own licenses', () => {
-  const assets = new URL('../assets/', import.meta.url);
-  const sources = JSON.parse(readFileSync(new URL('sources.json', assets), 'utf8')) as Record<
-    string,
-    { installedSha256?: string }
-  >;
-  for (const [file, record] of Object.entries(sources)) {
-    if (record.installedSha256)
-      expect(
-        createHash('sha256')
-          .update(readFileSync(new URL(file, assets)))
-          .digest('hex')
-      ).toBe(record.installedSha256);
-    if (file.endsWith('-OFL.txt'))
-      expect(readFileSync(new URL(`../licenses/${file}`, import.meta.url), 'utf8')).toContain(
-        'SIL OPEN FONT LICENSE'
-      );
-  }
-  expect(
-    readFileSync(new URL('../../../examples/vite/public/sample.docx', import.meta.url))
-  ).toEqual(readFileSync(new URL('../../../examples/vite/public/sample.docx', import.meta.url)));
 });

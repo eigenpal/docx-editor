@@ -160,9 +160,16 @@ export interface OwnAnchorPageFit {
    * Placement already moved up every object that can end at the margin
    * (`wrappedParagraphAnchorBottomTop`), so a crossing object cannot end there without rising
    * above its line: the line moves to the next page, and an object that still crosses the
-   * margin there ends the page.
+   * margin there ends the page. `opening` is the space and top border between `lineY` and
+   * the line's text, which a first line's frame starts above: the line still ends below them.
    */
-  crosses(line: AnchorLine, lastLine: boolean, paragraphY: () => number, lineY: number): boolean;
+  crosses(
+    line: AnchorLine,
+    lastLine: boolean,
+    paragraphY: () => number,
+    lineY: number,
+    opening?: number
+  ): boolean;
 }
 
 /** The page-fit test for one body paragraph, in modern modes only. */
@@ -176,7 +183,7 @@ export function createOwnAnchorPageFit(
   const anchors = ownPageFitAnchors(paragraph, scope);
   if (anchors.length === 0) return { crosses: () => false };
   return {
-    crosses(line, lastLine, paragraphY, lineY) {
+    crosses(line, lastLine, paragraphY, lineY, opening = 0) {
       if (!anchors.some((anchor) => onLine(anchor.start, line, lastLine))) return false;
       const frameBase = scope.frameBase();
       if (frameBase.wrappedParagraphAnchorBottom !== 'margin') return false;
@@ -188,7 +195,7 @@ export function createOwnAnchorPageFit(
         const resolved = resolveAnchoredDrawingPosition(anchor.projection, {
           ...frameBase,
           paragraphBox: box(top),
-          anchorLineBox: box(lineY),
+          anchorLineBox: { ...box(lineY), height: line.height + opening },
           anchorCharacterX: x,
           columnBox: box(top),
           cellBox: null,
@@ -206,9 +213,10 @@ export function createOwnAnchorPageFit(
 /**
  * The paragraph's lines with each line's height raised to the room its own objects need below
  * its top, for `w:keepNext` pricing. A line fits with an object of height `h` when the object
- * ends above the margin where it is, or when `h` fits below the line top (the object then moves
- * up). `opening` gives the space and top border above the first line, which a paragraph-relative
- * offset counts from. Modern modes only (`modern`); other modes return the lines unchanged.
+ * ends above the margin where it is, or when `h` fits below the line's bottom (the object then
+ * moves up, and starts at or below that bottom). `opening` gives the space and top border above
+ * the first line, which a paragraph-relative offset counts from. Modern modes only (`modern`);
+ * other modes return the lines unchanged.
  */
 export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
   paragraph: OoxmlNode,
@@ -229,7 +237,7 @@ export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
       // A first-line frame starts at the paragraph top, above the opening space and border.
       const belowLine = anchor.frame === 'line' && index > 0 ? offset : offset - lineTop;
       const height = measureInlineDrawing(anchor.projection).height;
-      need = Math.max(need, Math.min(height, belowLine + height));
+      need = Math.max(need, Math.min(line.height + height, belowLine + height));
     }
     return need === line.height ? line : { ...line, height: need };
   });

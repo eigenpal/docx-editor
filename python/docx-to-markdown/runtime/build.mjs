@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, rmSync, readdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeNotices } from './notices.mjs';
 
@@ -68,11 +68,17 @@ const meta = spawnSync(
 );
 if (meta.status !== 0) process.exit(meta.status ?? 1);
 
+// The converter serves no glyph fallback face (symbols, mathematics, Arabic, emoji), so the
+// wheel carries neither those faces nor their licenses.
+const GLYPH_FALLBACK_FILE = /^(?:Noto|Twemoji)/;
 for (const file of readdirSync(join(fontsRoot, 'assets'))) {
-  if (/\.(?:ttf|otf)$/.test(file))
+  if (/\.(?:ttf|otf)$/.test(file) && !GLYPH_FALLBACK_FILE.test(file))
     cpSync(join(fontsRoot, 'assets', file), join(vendor, 'fonts', file));
 }
-cpSync(join(fontsRoot, 'licenses'), join(vendor, 'licenses'), { recursive: true });
+cpSync(join(fontsRoot, 'licenses'), join(vendor, 'licenses'), {
+  recursive: true,
+  filter: (source) => !GLYPH_FALLBACK_FILE.test(basename(source)),
+});
 // Snapshot the pinned Google Fonts catalog so Python can say up front whether
 // `google_fonts=True` can serve a family, without starting the runtime.
 const catalog = spawnSync(

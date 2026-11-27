@@ -46,28 +46,42 @@ const SOURCE = documentBytes(
 const t = (key: string): string => key;
 
 let clipboard: { text: string; html: string | null } = { text: '', html: null };
+/** Whether the browser lets the page read the clipboard. */
+let readAllowed = true;
+const refused = () => Promise.reject(new Error('Read permission denied.'));
 const hadClipboardItem = 'ClipboardItem' in globalThis;
 
 beforeEach(() => {
   clipboard = { text: '', html: null };
+  readAllowed = true;
+  // A new window focus period: an earlier test's copy is not the clipboard content.
+  window.dispatchEvent(new Event('blur'));
   if (!hadClipboardItem) (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {};
   Object.defineProperty(globalThis.navigator, 'clipboard', {
     value: {
       writeText: async () => {},
-      readText: async () => clipboard.text,
-      read: async () => [
-        {
-          types: clipboard.html ? ['text/plain', 'text/html'] : ['text/plain'],
-          getType: async (type: string) =>
-            new Blob([type === 'text/html' ? (clipboard.html ?? '') : clipboard.text]),
-        },
-      ],
+      write: async () => {},
+      readText: async () => (readAllowed ? clipboard.text : refused()),
+      read: async () =>
+        readAllowed ? clipboardItems() : refused(),
     },
     configurable: true,
   });
 });
 
+function clipboardItems() {
+  return [
+    {
+      types: clipboard.html ? ['text/plain', 'text/html'] : ['text/plain'],
+      getType: async (type: string) =>
+        new Blob([type === 'text/html' ? (clipboard.html ?? '') : clipboard.text]),
+    },
+  ];
+}
+
 afterEach(() => {
+  // Leave no copy behind for the next test file in a serial run.
+  window.dispatchEvent(new Event('blur'));
   cleanup();
   if (!hadClipboardItem) delete (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
 });
@@ -178,5 +192,65 @@ describe('Paste in the context menu with a shape that has no text selected', () 
     // A refused payload does not disable Paste: the next clipboard may hold a drawing.
     selectDrawing(editor, 0);
     expect(pasteRow(view).getAttribute('aria-disabled')).toBeNull();
+  });
+});
+
+describe('Copy and Paste in the context menu when the clipboard read is refused', () => {
+  function row(view: ReturnType<typeof render>, slot: string): HTMLElement {
+    act(() => {
+      fireEvent.contextMenu(view.container.querySelector('.docx-paginated-surface')!, {
+        clientX: 120,
+        clientY: 140,
+        button: 2,
+      });
+    });
+    const found = view.container.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
+    if (!found) throw new Error(`no ${slot} row`);
+    return found;
+  }
+
+  test('a line copied from the menu pastes from the menu, and Paste stays live', async () => {
+    const { view, editor } = await mount();
+    readAllowed = false;
+    selectDrawing(editor, 1);
+    const copy = row(view, 'edit.copy');
+    act(() => {
+      fireEvent.click(copy);
+    });
+    // The editor remembers the copy once the clipboard write lands.
+    await settle();
+    // Paste into the first paragraph's text, at its start.
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    act(() => {
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 0 },
+      });
+    });
+    const paste = row(view, 'edit.paste');
+    await act(async () => {
+      fireEvent.click(paste);
+    });
+    for (let attempt = 0; attempt < 20; attempt++) await settle();
+    const first = await firstParagraphXml(editor);
+    expect(first.match(/name="Rule"/g)).toHaveLength(1);
+    expect(document.querySelector('[data-docx-dialog="imageInsertError"]')).toBeNull();
+    // The refused read does not disable Paste while the editor copy can still paste.
+    const again = row(view, 'edit.paste');
+    expect(again.getAttribute('aria-disabled')).toBeNull();
+    expect(again.getAttribute('title')).toBeNull();
+  });
+
+  test('without an editor copy, the refused read disables Paste with the reason', async () => {
+    const { view } = await mount();
+    readAllowed = false;
+    const paste = row(view, 'edit.paste');
+    await act(async () => {
+      fireEvent.click(paste);
+    });
+    for (let attempt = 0; attempt < 5; attempt++) await settle();
+    const again = row(view, 'edit.paste');
+    expect(again.getAttribute('aria-disabled')).toBe('true');
+    expect(again.getAttribute('title')).toBe('Read permission denied.');
   });
 });

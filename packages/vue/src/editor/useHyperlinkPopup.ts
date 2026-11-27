@@ -9,7 +9,7 @@ import {
   type ComputedRef,
   type InjectionKey,
 } from 'vue';
-import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, writeTextToClipboard } from '@docx-editor.dev/core/editor';
 import { scopeDispose } from './scope-dispose';
 import type { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
 import type { Editor, EditorSnapshot, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
@@ -296,7 +296,7 @@ function hyperlinkPopupInstance(active: () => boolean): UseHyperlinkPopupResult 
     const href = state.value.link?.href;
     if (!href) return false;
     try {
-      await hostWindowOf(contentElement.value).navigator.clipboard.writeText(href);
+      await writeTextToClipboard(contentElement.value, href);
     } catch {
       return false;
     }

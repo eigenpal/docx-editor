@@ -5261,6 +5261,9 @@ export interface TextArtOutline {
 export type TextBodyLowering = LoweredDrawingText | 'no-text' | 'unsupported';
 
 // @public
+export function textboxReadStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[];
+
+// @public
 export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[];
 
 // @internal
@@ -5280,6 +5283,7 @@ export interface TextboxStoryProjection {
         top: number;
     }>;
     readonly legacyFrame?: TextboxLegacyFrame;
+    readonly linesFromBottom?: true;
     readonly noWrap?: true;
     readonly shadow?: LegacyTextboxShadow;
     readonly strokeCap?: 'round' | 'square';
@@ -5296,6 +5300,7 @@ export interface TextboxStoryRoot {
     readonly drawingNodeId: string;
     readonly hostParagraphId: string;
     readonly root: OoxmlElement;
+    readonly unplaced?: true;
 }
 
 // @public
@@ -6440,6 +6445,7 @@ export interface VectorShapeComponent {
     readonly fillHex: string | null;
     readonly fillPattern?: VectorPattern;
     readonly fillRule?: 'nonzero';
+    readonly picturesBelow?: number;
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)

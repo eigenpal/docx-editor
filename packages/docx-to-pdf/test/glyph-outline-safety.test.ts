@@ -13,7 +13,7 @@ import { Work } from '../src/context.ts';
 // depth limit or cache, so a composite that names itself, or a chain whose components each
 // name the next glyph twice, must be refused before fontkit builds the path.
 const source = new Uint8Array(
-  readFileSync(new URL('../assets/NotoSansArabic-Regular.ttf', import.meta.url))
+  readFileSync(new URL('../../fonts/assets/NotoSansArabic-Regular.ttf', import.meta.url))
 );
 
 /** Composite glyphs with at least two components, and the byte offset of each component id. */

@@ -50,6 +50,7 @@ For generated signatures, see the [React API reference](/docs/2.x/api/react).
 | `zoom` | `number` | Fixed display scale. Updates without a remount. |
 | `zoomMode` | `ZoomMode \| 'auto'` | Scale source. The default `'auto'` fits the page width. |
 | `fieldResults` | `'atomic' \| 'editable'` | `'editable'` allows editing saved field results. Defaults to `'atomic'`. See [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results). |
+| `fieldDate` | `Date` | DATE and TIME fields with a `\@` picture show this date instead of their saved results. The saved document keeps saved results. Print and PDF export pass the date to the PDF handler. Create the date once, for example with `useState(() => new Date())`. An inline `new Date()` makes a new value on each render, and a changed time warns in development. See [Show the current date](/docs/2.x/guides/fields#show-the-current-date). |
 | `contentLockPolicy` | `ContentLockPolicy` | `{ allowFormattingInLockedContent: true }` allows formatting in content-locked controls. See [Formatting content-locked controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls). |
 | `lockedControlNavigation` | `'characters' \| 'atomic'` | Caret movement through a locked inline control: per character (default) or as one unit. See [Caret movement](/docs/2.x/guides/content-controls#caret-movement-in-content-locked-controls). |
 | `modules` | `readonly EditorModule[]` | Capability modules from [`@docx-editor.dev/pro`](/docs/2.x/pro), such as `reviewModule()`. |
@@ -87,6 +88,8 @@ Wrap resolvers such as `packagedFonts()` in `useFonts` to keep one identity. For
 | `loadingIndicator` | `ReactNode` | Replaces the loading spinner. See [loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator). |
 | `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Configures the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
 | `renderOpenFailureActions` | `(context) => ReactNode` | Adds buttons to that dialog, built from `DocxEditor.OpenFailure.Action`. |
+| `fontNotice` | `boolean \| DocxEditorFontNoticeProps` | Toggles or configures the bar that lists substituted font families. See [the font notice](/docs/2.x/guides/fonts#customize-the-font-notice). |
+| `renderFontNotice` | `(context) => ReactNode` | Replaces that bar with your own component. |
 | `children` | `DocxEditorChildren` | Extra chrome inside the viewport after the pages, such as `DocxEditor.UnsupportedElement` components. |
 | `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
 | `i18n` | `Translations` | Live chrome and drawing labels for this editor. See [i18n](/docs/2.x/i18n). |
@@ -125,8 +128,9 @@ editorRef.current?.focus();
 
 ## Limits
 
-- `fieldResults`, `contentLockPolicy`, `lockedControlNavigation`, and `modules` apply at creation. To change them, remount with a different React `key`.
+- `fieldResults`, `fieldDate`, `contentLockPolicy`, `lockedControlNavigation`, and `modules` apply at creation. To change them, remount with a different React `key`. A new `fieldDate` object with the same time does not warn.
 - Collaboration refuses `fieldResults="editable"` with a `TypeError`.
+- `fieldDate` with `fieldResults="editable"` throws a `TypeError`.
 - The drawing renderers from `drawingModule()` and `reviewModule()` serve every editor in the page. A remount does not remove them. See [Advanced drawing rendering](/docs/2.x/pro/drawing).
 - Without the review module, the editor preserves revisions and comments on save but renders only the final state.
 - If you hide `hyperlinkPopup`, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls stay disabled.

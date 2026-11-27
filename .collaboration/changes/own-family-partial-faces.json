@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A face that a family with its own font bytes lacked measured in the class fallback, and the PDF converter drew a bold-only family's other faces in a generic stand-in.",
+  "after": "Such a face measures, paints, and exports as a synthesized style of the family's nearest own face.",
+  "reason": "The change is in local font resolution only. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/own-family-faces.test.ts",
+    "packages/core/src/editor/__tests__/host-family-paint.test.ts",
+    "packages/core/src/export/__tests__/partial-family-export.test.ts",
+    "packages/docx-to-pdf/test/partial-family-nearest-face.test.ts"
+  ],
+  "changeset": "own-family-partial-faces",
+  "migration": null
+}

@@ -30,15 +30,16 @@ describe('character border groups', () => {
       )
     ).toBe(true);
   });
-  test('adjacent formatting changes share one border without changing advances', () => {
+  test('adjacent formatting changes share one border, which takes room on the line', () => {
     const [line] = lines(run('box') + run(' bold', border + '<w:b/>') + run(' plain', ''));
     const strokes = runBorderStrokesForLine(line!);
     expect(strokes).toHaveLength(4);
     const top = strokes.find((s) => s.side === 'top')!;
-    expect(top.box.x).toBe(-0.5);
+    // The border opens at the line start and closes before the plain text: 0.5pt each.
+    expect(top.box.x).toBe(0);
     expect(top.box.width).toBe(49);
     expect(top.box.height).toBe(0.5);
-    expect(line!.spans.find((span) => !span.style.border)!.box.x).toBe(48);
+    expect(line!.spans.find((span) => !span.style.border)!.box.x).toBe(49);
     expect(top.edge.color).toBe('00AA00');
   });
   test('unbordered text, changed edges and manual line breaks separate groups', () => {
@@ -50,7 +51,7 @@ describe('character border groups', () => {
     expect(broken).toHaveLength(2);
     expect(broken.map((line) => runBorderStrokesForLine(line).length)).toEqual([4, 4]);
   });
-  test('published wrap gaps remain open and nonzero border spacing expands outward', () => {
+  test('published wrap gaps remain open and nonzero border spacing takes room', () => {
     const [line] = lines(run('one') + run('two', border + '<w:b/>'));
     const spans = line!.spans.map((span, i) => ({
       ...span,
@@ -60,7 +61,7 @@ describe('character border groups', () => {
     expect(runBorderStrokesForLine({ ...line!, spans })).toHaveLength(8);
     const [spaced] = lines(run('box', border.replace('space="0"', 'space="2"')));
     const top = runBorderStrokesForLine(spaced!).find((s) => s.side === 'top')!;
-    expect(top.box.x).toBe(-2.5);
+    expect(top.box.x).toBe(0);
     expect(top.box.width).toBe(23);
   });
   test('justification gaps between adjacent model ranges remain inside one border', () => {
@@ -71,6 +72,7 @@ describe('character border groups', () => {
     }));
     const strokes = runBorderStrokesForLine({ ...line!, spans });
     expect(strokes).toHaveLength(4);
-    expect(strokes[0]!.box.width).toBe(spans.at(-1)!.box.x + spans.at(-1)!.box.width + 1);
+    // The outline starts at the line start and ends half a point past the last span.
+    expect(strokes[0]!.box.width).toBe(spans.at(-1)!.box.x + spans.at(-1)!.box.width + 0.5);
   });
 });

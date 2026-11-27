@@ -53,7 +53,11 @@ import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
 import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
 import { DocxEditorSplitCellDialog } from '../editor/DocxEditorSplitCell';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
-import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
+import { DocxEditorFontNotice, warnFontNoticeSlot } from '../editor/DocxEditorFontNotice';
+import type {
+  DocxEditorFontNoticeContext,
+  DocxEditorFontNoticeProps,
+} from '../editor/DocxEditorFontNotice';
 import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
 import type {
   DocxEditorOpenFailureContext,
@@ -82,6 +86,7 @@ import type { DocxEditorMenuProps } from '../editor/menu';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 import { createDocxEditorRefApi } from './DocxEditor/useDocxEditorRefApi';
 import type { TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor';
+import { isDateValue } from '../editor/field-date-warning';
 
 const CONTAINER_STYLE: CSSProperties = {
   display: 'flex',
@@ -187,6 +192,7 @@ export interface DocxEditorNamespace {
   /**
    * The packaged editor. The second parameter types its slots for templates:
    * `#openFailureActions` receives the refused open, the packaged message, and `dismiss`.
+   * `#fontNotice` receives the substituted families, the packaged message, and `dismiss`.
    */
   (
     props: DocxEditorProps,
@@ -197,6 +203,7 @@ export interface DocxEditorNamespace {
         titleBarRight?: () => VNode[];
         loadingIndicator?: () => VNode[];
         openFailureActions?: (context: DocxEditorOpenFailureContext) => VNode[];
+        fontNotice?: (context: DocxEditorFontNoticeContext) => VNode[];
       };
     }
   ): VNode;
@@ -334,12 +341,22 @@ const docxEditorFrameProps = {
     type: [Boolean, Object] as PropType<boolean | DocxEditorOpenFailureProps>,
     default: undefined,
   },
+  fontNotice: {
+    type: [Boolean, Object] as PropType<boolean | DocxEditorFontNoticeProps>,
+    default: undefined,
+  },
   rulers: { type: Boolean, default: undefined },
   mode: { type: String as PropType<DocxEditorProps['mode']>, default: undefined },
   zoom: { type: Number, default: undefined },
   revisionMarkup: Object as PropType<RevisionMarkupOptions>,
   reviewDisplayMode: String as PropType<ReviewDisplayMode>,
   fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
+  fieldDate: {
+    // Not `type: Date`: a `Date` from another window or frame fails that check.
+    type: null as unknown as PropType<Date>,
+    default: undefined,
+    validator: (value: unknown) => value === undefined || isDateValue(value),
+  },
   contentLockPolicy: { type: Object as PropType<ContentLockPolicy>, default: undefined },
   lockedControlNavigation: {
     type: String as PropType<LockedControlNavigation>,
@@ -403,6 +420,7 @@ const DocxEditorFrame = defineComponent({
     const menu = computed(() => props.menu ?? true);
     const navigation = computed(() => props.navigation ?? true);
     const openFailure = computed(() => props.openFailure ?? true);
+    const fontNotice = computed(() => props.fontNotice ?? true);
     const rulers = computed(() => props.rulers ?? true);
     const contextMenu = computed(() => props.contextMenu ?? true);
     const hyperlinkPopup = computed(() => props.hyperlinkPopup ?? true);
@@ -453,6 +471,7 @@ const DocxEditorFrame = defineComponent({
     return () => {
       if (!chrome.value && slots.loadingIndicator) warnLoadingIndicatorWithoutChrome();
       warnOpenFailureActions(openFailure.value, slots.openFailureActions !== undefined);
+      warnFontNoticeSlot(fontNotice.value, slots.fontNotice !== undefined, chrome.value);
       const t = translate.value;
       const viewportClass =
         chrome.value && isDark.value ? 'dark' : chrome.value ? undefined : props.class;
@@ -536,7 +555,13 @@ const DocxEditorFrame = defineComponent({
                     h(DocxEditorHorizontalRuler),
                   ])
                 : null,
-              h(DocxEditorFontNotice, { t }),
+              fontNotice.value === false
+                ? null
+                : h(
+                    DocxEditorFontNotice,
+                    { t, ...(typeof fontNotice.value === 'object' ? fontNotice.value : {}) },
+                    slots.fontNotice ? { default: slots.fontNotice } : undefined
+                  ),
               h('div', { style: WORKSPACE_STYLE }, [
                 navigation.value === false
                   ? null
@@ -576,6 +601,7 @@ const DocxEditorFrame = defineComponent({
           revisionMarkup: props.revisionMarkup,
           reviewDisplayMode: props.reviewDisplayMode,
           ...(props.fieldResults !== undefined ? { fieldResults: props.fieldResults } : {}),
+          ...(props.fieldDate !== undefined ? { fieldDate: props.fieldDate } : {}),
           ...(props.contentLockPolicy !== undefined
             ? { contentLockPolicy: props.contentLockPolicy }
             : {}),
@@ -712,6 +738,7 @@ const DocxEditorImpl = defineComponent({
               titleBarRight: slots.titleBarRight,
               loadingIndicator: slots.loadingIndicator,
               openFailureActions: slots.openFailureActions,
+              fontNotice: slots.fontNotice,
             }
           ),
       });

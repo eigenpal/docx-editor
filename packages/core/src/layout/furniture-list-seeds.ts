@@ -18,7 +18,7 @@ import type {
   HeaderFooterVariant,
   OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
+import { listCountingBlocks } from './hidden-paragraph-mark.ts';
 import {
   createListCounterState,
   saveListCounters,
@@ -119,7 +119,7 @@ function computeSeeds(
   };
   const countStory = (part: OoxmlPart): void => {
     // The same paragraphs the story's own list walk reads (`withResolvedListItems`).
-    const blocks = numberingFlowBlocks(
+    const blocks = listCountingBlocks(
       storyBlocks(part, inputs.displayMode, inputs.revisionAuthorFilter)
     );
     for (const paragraph of walkStoryParagraphs(blocks, 8, true)) {

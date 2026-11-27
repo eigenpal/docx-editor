@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "After a late font answer, the class fallback face of a family that the host serves could become the paint face for all of its text.",
+  "after": "A family that the host serves for any face gets no class fallback; its missing faces stand in through the family that serves it, and its regular face decides the face that paints it.",
+  "reason": "The change is in font resolution and font registration for paint. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/host-family-paint.test.ts",
+    "packages/core/src/editor/__tests__/embedded-font-faces.test.ts",
+    "packages/core/src/layout/__tests__/class-font-fallback.test.ts",
+    "packages/core/src/export/__tests__/partial-family-export.test.ts"
+  ],
+  "changeset": "host-family-font-paint",
+  "migration": null
+}

@@ -75,6 +75,9 @@ import type { DefaultFontFamily, FamilyPlan } from './family-plans.ts';
 import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
 import { canIdle, fetchFontFile, idle } from './byte-cache.ts';
+import { OWN_NAME_FAMILIES, ownNameFacesFor } from './own-name-faces.ts';
+
+export { GLYPH_FALLBACK_FACE_FAMILIES } from './own-name-faces.ts';
 
 export type { DefaultFontFamily } from './family-plans.ts';
 
@@ -549,6 +552,14 @@ export interface PackagedFontsOptions {
    * a family's bytes ({@link PACKAGED_FAMILY_ALIASES}, such as Helvetica) follows that family.
    */
   readonly allow?: readonly DefaultFontFamily[];
+  /**
+   * Whether to serve the glyph fallback faces ({@link GLYPH_FALLBACK_FACE_FAMILIES}): symbols,
+   * mathematics, Arabic, and emoji. The editor asks for one by name when the text holds a
+   * character that its own font lacks, and each loads only then. Defaults to `true`. With
+   * `false`, such a character draws in whatever font the browser picks, and its line can differ
+   * from PDF export.
+   */
+  readonly fallbackFaces?: boolean;
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
   /**
@@ -690,7 +701,93 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       .map(([alias]) => alias),
   ]);
 
+  /**
+   * The faces a request names under their own family names (`own-name-faces.ts`): a packaged
+   * substitute such as Liberation Serif, or a glyph fallback face. A substitute follows
+   * `allow` through the family it substitutes for; a fallback face follows `fallbackFaces`.
+   */
+  async function loadOwnNameFaces(
+    request: FontOriginRequest
+  ): Promise<Pick<DefaultFontsFragment, 'sources' | 'failures'>> {
+    const already = new Set(
+      (request.resolvedFaces ?? []).map((face) => faceKey(face.family, face.weight, face.style))
+    );
+    const eager = options.loading === 'eager' || !request.faces;
+    const files = new Map<string, DefaultFontSource['request']>();
+    for (const declared of new Set(request.families)) {
+      const entry = OWN_NAME_FAMILIES.get(declared.trim().toLowerCase());
+      if (!entry) continue;
+      if (entry.substituteFor) {
+        if (allowed && !allowed.has(entry.substituteFor.toLowerCase())) continue;
+      } else if (options.fallbackFaces === false) continue;
+      const named = (request.faces ?? []).filter(
+        (face) => face.family.trim().toLowerCase() === entry.family.toLowerCase()
+      );
+      // A fallback face has one file, and the request that names its family needs it.
+      const faces = eager || !entry.substituteFor ? entry.faces : ownNameFacesFor(entry, named);
+      for (const face of faces) {
+        if (already.has(faceKey(entry.family, face.weight, face.style))) continue;
+        files.set(face.file, { family: entry.family, weight: face.weight, style: face.style });
+      }
+    }
+    const sources: DefaultFontSource[] = [];
+    const failures: DefaultFontLoadFailure[] = [];
+    await Promise.all(
+      [...files].map(async ([file, face]) => {
+        const manifest = manifestByFile.get(file);
+        if (!manifest) {
+          failures.push({
+            family: face.family,
+            file,
+            diagnostic: 'face missing from packaged manifest',
+          });
+          return;
+        }
+        try {
+          const bytes = await fetchFontFile(
+            { url: assetUrl(file), byteLength: manifest.byteLength, source: 'packaged' },
+            options.fetcher ?? fetch,
+            request.signal
+          );
+          sources.push({
+            request: face,
+            id: sourceIdForFile(file),
+            bytes,
+            hash: manifest.hash,
+            faceIndex: 0,
+          });
+        } catch (error) {
+          if (request.signal?.aborted) throw request.signal.reason ?? error;
+          failures.push({
+            family: face.family,
+            file,
+            diagnostic: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })
+    );
+    return { sources, failures };
+  }
+
   async function resolvePackagedFonts(request: FontOriginRequest): Promise<PackagedFontsFragment> {
+    const [word, own] = await Promise.all([
+      resolveWordFamilies(request),
+      loadOwnNameFaces(request),
+    ]);
+    if (own.sources.length === 0 && own.failures.length === 0) return word;
+    report(own.failures);
+    const sources = new Map(
+      [...word.sources, ...own.sources].map((source) => [source.id, source] as const)
+    );
+    return {
+      ...word,
+      // One order whatever fetch finished first, so the configuration fingerprints stably.
+      sources: [...sources.values()].sort((a, b) => a.id.localeCompare(b.id)),
+      failures: [...word.failures, ...own.failures],
+    };
+  }
+
+  async function resolveWordFamilies(request: FontOriginRequest): Promise<PackagedFontsFragment> {
     // Faces an earlier origin in the composition can already PAINT. Loading them again
     // would spend the bytes on a fragment first-wins composition is bound to drop.
     const already = new Set(

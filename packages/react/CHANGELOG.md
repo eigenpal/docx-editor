@@ -1,5 +1,29 @@
 # @eigenpal/docx-js-editor
 
+## 2.41.1
+
+### Patch Changes
+
+- b0dac16: `<DocxEditor>` takes a `fontNotice` prop in React and Vue: `false` removes the font substitution bar, and an object restyles it. To show your own component in its place, pass `renderFontNotice` in React or fill the `#fontNotice` slot in Vue.
+- Updated dependencies: @docx-editor.dev/i18n@2.41.1
+
+## 2.41.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.41.0, @docx-editor.dev/i18n@2.41.0
+
+## 2.40.0
+
+### Minor Changes
+
+- f5cc27d: The React and Vue editors show the translated reason when they refuse to copy, cut, or paste on a selected drawing, in the same dialog as a refused picture insert. The `imageInsertError` dialog takes an optional `title` that names the refused action. Fixes #2087
+
+### Patch Changes
+
+- 42a0d83: Pasting an image file while a drawing is selected inserts it as an inline picture before the selected drawing's anchor. In suggesting mode, the editor refuses that paste and shows the reason, and the stale insert-target reasons no longer mention a drop. Fixes #2074
+- Updated dependencies: @docx-editor.dev/core@2.40.0, @docx-editor.dev/i18n@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

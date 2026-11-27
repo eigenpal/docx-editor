@@ -8184,8 +8184,8 @@ p.docx-review__refused {
   box-shadow: 0 4px 16px var(--doc-shadow);
 }
 
-/* Font compatibility notice (DocxEditor.FontNotice): Word's "substituted fonts" bar,
-   shown between the toolbar and the workspace when declared faces render in fallbacks. */
+/* Font compatibility notice (DocxEditor.FontNotice): the bar shown between the toolbar
+   and the workspace when declared faces render in fallbacks. */
 .docx-font-notice {
   display: flex;
   align-items: center;

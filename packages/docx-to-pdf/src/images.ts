@@ -7,6 +7,10 @@ import { PDFDocument, PDFName, PDFString, type PDFImage, type PDFPage } from 'pd
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
 import {
   groupPictureLayerDrawing,
+  groupPictureInkReach,
+  groupPicturePaintsPastExtent,
+  regionCutClipBox,
+  vectorPictureBand,
   type LayoutBox,
   type ListMarkerPictureRecord,
   type SemanticDrawingVisit,
@@ -38,6 +42,15 @@ const EMU_PER_POINT = 12_700;
 const EMBEDDABLE_MIMES: ReadonlySet<string> = new Set(['image/png', 'image/jpeg', 'image/gif']);
 
 /** Embed a picture of one of the embeddable formats. */
+/**
+ * The key of one embedded image object: the bytes of the picture, not the part that uses it.
+ * A resource key names the owner part too, so the same picture in six header parts has six
+ * keys. One object for each would repeat the image data for each header.
+ */
+function pdfImageKey(resource: Readonly<{ contentId: string; mime: string }>): string {
+  return `${resource.mime}\0${resource.contentId}`;
+}
+
 async function embedRaster(doc: PDFDocument, mime: string, bytes: Uint8Array): Promise<PDFImage> {
   if (mime === 'image/jpeg') return doc.embedJpg(bytes);
   const png = mime === 'image/gif' ? gifToPng(bytes) : bytes;
@@ -110,10 +123,11 @@ export class ImageWriter {
     const mime = picture.resource.mime;
     const bytes = this.session.validatedImageBytes(picture);
     if (!bytes || (mime === 'image/gif' && !gifToPng(bytes))) return '';
-    let image = this.images.get(picture.resource.resourceKey);
+    const imageKey = pdfImageKey(picture.resource);
+    let image = this.images.get(imageKey);
     if (!image) {
       image = await embedRaster(this.doc, mime, bytes);
-      this.images.set(picture.resource.resourceKey, image);
+      this.images.set(imageKey, image);
     }
     const key = `Im${image.ref.objectNumber}`;
     page.node.setXObject(PDFName.of(key), image.ref);
@@ -311,6 +325,10 @@ export class ImageWriter {
       this.work.report('drawing', message, visit.page.index);
       return '';
     };
+    // A group that paints without some members loses content: strict export refuses it.
+    if (d.groupMembersNotShown && (d.groupPicture || d.vectorShape)) {
+      report(`Shape group paints without ${d.groupMembersNotShown} of its members`);
+    }
     if (d.groupPicture) return this.paintGroupPicture(visit, page, report);
     // A picture's own frame: shadow and fill under the picture, the outline over it.
     if (d.vectorShape && d.placeholderGraphicKind === null) {
@@ -327,15 +345,13 @@ export class ImageWriter {
   }
 
   /**
-   * A shape group with picture members: the members drawn before the picture, the pictures in
-   * document order, then the other vector members over them.
+   * A shape group with picture members: the pictures and the vector members in document
+   * order, the vector members in bands between the pictures.
    *
-   * The group paints whole or not at all, as it does on screen. A group with a failed
-   * picture resource reports unsupported content, including groups in alternative content.
-   * A ready picture in a format this writer cannot embed
-   * gets the same rule here: the MC group is left out and reported at `information`, because
-   * the editor draws it and only this output cannot. A bare group reports every refusal as
-   * `unsupported`, as it reports an unsupported group.
+   * A picture that cannot paint is left out and reported, as it is left out on screen; the
+   * other members still paint. A ready picture in a format this writer cannot embed is left
+   * out too. In a group in alternative content that report is `information`, because the
+   * editor draws the picture and only this output cannot.
    */
   private async paintGroupPicture(
     visit: SemanticDrawingVisit,
@@ -351,8 +367,10 @@ export class ImageWriter {
         drawing: groupPictureLayerDrawing(d, layer),
       })),
     ];
-    for (const { drawing } of pictures) {
-      const { resource } = drawing;
+    // One entry for each picture, empty for a picture that is left out, so bands keep their place.
+    const painted: string[] = [];
+    for (const picture of pictures) {
+      const { resource } = picture.drawing;
       if (
         d.groupPicture?.alternateContent &&
         resource.kind === 'ready' &&
@@ -360,35 +378,36 @@ export class ImageWriter {
       ) {
         this.work.report(
           'drawing',
-          `Shape group left out: picture format not embeddable: ${resource.mime}`,
+          `Group picture left out: picture format not embeddable: ${resource.mime}`,
           visit.page.index,
           'information'
         );
-        return '';
+        painted.push('');
+        continue;
       }
+      painted.push(await this.paintPicture(picture, page, report));
     }
-    const painted: string[] = [];
-    for (const picture of pictures) {
-      let refused = false;
-      const commands = await this.paintPicture(picture, page, (message) => {
-        refused = true;
-        return report(message);
-      });
-      if (refused) return '';
-      painted.push(commands);
+    // Members paint in document order, in bands between the pictures.
+    const out: string[] = [];
+    for (let band = 0; band <= painted.length; band += 1) {
+      if (d.vectorShape) {
+        out.push(
+          paintVectorShape(
+            this.doc,
+            page,
+            visit,
+            this.work,
+            (c) => vectorPictureBand(c, painted.length) === band
+          )
+        );
+      }
+      if (band < painted.length) out.push(painted[band]!);
     }
-    // Members drawn before the picture paint under it; the rest paint over it.
-    const under = d.vectorShape
-      ? paintVectorShape(this.doc, page, visit, this.work, (c) => !!c.belowPicture)
-      : '';
-    const over = d.vectorShape
-      ? paintVectorShape(this.doc, page, visit, this.work, (c) => !c.belowPicture)
-      : '';
-    return [under, ...painted, over].filter((commands) => commands !== '').join('\n');
+    return out.filter((commands) => commands !== '').join('\n');
   }
 
   /**
-   * One image object per resource and brightness/contrast transfer.
+   * One image object per picture content and brightness/contrast transfer.
    *
    * The transfer is linear per channel, so it is the image's `Decode` array: sample 0 maps to
    * the intercept and sample 1 to slope + intercept, and the colour space clamps the result to
@@ -463,7 +482,7 @@ export class ImageWriter {
     if (!EMBEDDABLE_MIMES.has(mime)) return report(`Unsupported PDF image format: ${mime}`);
     if (mime === 'image/gif' && !gifToPng(bytes)) return report('GIF picture could not be decoded');
     const transfer = lumTransfer(d.effects.brightness, d.effects.contrast);
-    const embedded = await this.embedPicture(d.resource.resourceKey, mime, bytes, transfer);
+    const embedded = await this.embedPicture(pdfImageKey(d.resource), mime, bytes, transfer);
     if (d.effects.grayscale || d.effects.bilevel !== undefined || (transfer && !embedded.lum))
       this.work.report(
         'image-effects',
@@ -522,12 +541,28 @@ export class ImageWriter {
       height = 1 - crop.top - crop.bottom;
     if (!(width > 0 && height > 0)) return report('Image crop has no visible area');
     if (d.geometry.clipPolygon && d.geometry.clipPolygon.length === 0) return '';
-    const clip = d.geometry.clipPolygon?.length
+    // A group picture that reaches past the extent paints whole, as a shape member does.
+    const turnedMember = groupPicturePaintsPastExtent(d);
+    // A region that cut the drawing, such as a table cell, still cuts such a picture there.
+    const reach = turnedMember ? groupPictureInkReach(d, d.paintBounds) : null;
+    const regionBox = reach && regionCutClipBox(d, d.paintBounds, reach);
+    const regionClip = regionBox
+      ? `${n(regionBox.x + offsetX)} ${n(pageHeight(page) - regionBox.y - offsetY - regionBox.height)} ${n(regionBox.width)} ${n(regionBox.height)} re W n `
+      : '';
+    // The link of a group covers the drawing, not one picture that paints past it.
+    const linkArea = d.geometry.clipPolygon?.length
       ? d.geometry.clipPolygon.map((v) => ({
           x: v.x + offsetX,
           y: pageHeight(page) - v.y - offsetY,
         }))
-      : p;
+      : null;
+    const clip =
+      d.geometry.clipPolygon?.length && !turnedMember
+        ? d.geometry.clipPolygon.map((v) => ({
+            x: v.x + offsetX,
+            y: pageHeight(page) - v.y - offsetY,
+          }))
+        : p;
     // A byte string, escaped: `PDFString.of` writes its value verbatim, and a `)` in the href
     // would end the string and leave raw PDF inside the action dictionary.
     const uri =
@@ -538,7 +573,7 @@ export class ImageWriter {
       // A loop, not `Math.min(...xs)`: the clip polygon is file-derived, and spreading a long
       // one into a call is the one place a large but otherwise valid shape could blow the stack.
       const bounds = [Infinity, Infinity, -Infinity, -Infinity];
-      for (const point of clip) {
+      for (const point of turnedMember && linkArea ? linkArea : clip) {
         bounds[0] = Math.min(bounds[0]!, point.x);
         bounds[1] = Math.min(bounds[1]!, point.y);
         bounds[2] = Math.max(bounds[2]!, point.x);
@@ -556,6 +591,23 @@ export class ImageWriter {
         )
       );
     }
+    // A group member's geometry clips its picture: a ring in the unit square of the picture.
+    const ring = d.groupPicture?.clipUnit;
+    const shaped =
+      ring && ring.length >= 3
+        ? ring.map((u) => ({
+            x: topLeft.x + ax * u.x - bx * u.y,
+            y: topLeft.y + ay * u.x - by * u.y,
+          }))
+        : null;
+    // A group picture also clips to its own frame, which cuts the cropped part of the image.
+    const ringPath = [shaped, d.groupPicture ? p : null]
+      .filter((ringPoints) => ringPoints !== null)
+      .map(
+        (ringPoints) =>
+          `${ringPoints.map((v, i) => `${n(v.x)} ${n(v.y)} ${i === 0 ? 'm' : 'l'}`).join(' ')} h W n `
+      )
+      .join('');
     const path = clip.map((v, i) => `${n(v.x)} ${n(v.y)} ${i === 0 ? 'm' : 'l'}`).join(' ');
     const matrix = [
       ax / width,
@@ -569,7 +621,7 @@ export class ImageWriter {
     const soft = effects?.softEdgeEmu
       ? softEdgeMask(this.doc, page, clip, effects.softEdgeEmu / EMU_PER_POINT)
       : '';
-    const picture = `q ${opacityCommand}${soft}${path} h W n ${matrix.map(n).join(' ')} cm /${key} Do Q`;
+    const picture = `q ${opacityCommand}${soft}${regionClip}${path} h W n ${ringPath}${matrix.map(n).join(' ')} cm /${key} Do Q`;
     const reflection = effects?.reflection;
     if (!reflection) return picture;
     // The mirror image of an upright picture, below its bottom edge and fading downward.

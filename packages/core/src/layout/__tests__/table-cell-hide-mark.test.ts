@@ -271,14 +271,19 @@ test('vertical cells exclude hidden markers but retain printable content', () =>
   expect(height(table(row(cell(paragraph('', '<w:jc w:val="center"/>'), properties))))).toBe(0);
 });
 
-test('merged empty cells with hidden marks take no height across their rows', () => {
+// A row that only merge heads or only continuations hold takes its first cell's end
+// paragraph (`mergedRowFirstCellHeight`, 17.4.84). A hidden mark there gives one line of the
+// default paragraph style over the document defaults, here the 10pt fallback, not zero:
+// measured with 20pt hidden marks in one and two columns, each row of the merge was one
+// default line tall.
+test('merged empty cells with hidden marks keep one default line per row', () => {
   const result = run(
     table(
       row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
         row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
     )
   );
-  expect(rows(result).map((r) => r.box.height)).toEqual([0, 0]);
+  expect(rows(result).map((r) => r.box.height)).toEqual([10, 10]);
   expect(rows(result)[0]!.cells[0]!.rowSpan).toBe(2);
   const visible = run(
     table(
@@ -286,7 +291,69 @@ test('merged empty cells with hidden marks take no height across their rows', ()
         row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
     )
   );
-  expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(5);
+  // The 5pt text fits the head row's default line, and the continuation row takes another.
+  expect(rows(visible).reduce((sum, row) => sum + row.box.height, 0)).toBe(20);
+});
+
+// With no default paragraph style, the head row's line comes from the document's default run
+// properties: their size, and none when they are hidden text.
+test('a hidden head mark takes the line of the default run properties', () => {
+  const defaults = (rPr: string) =>
+    buildStyleCascadeTable(
+      part(
+        `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>${rPr}</w:rPr></w:rPrDefault>` +
+          '<w:pPrDefault/></w:docDefaults></w:styles>',
+        '/word/styles.xml'
+      ).root
+    );
+  const merged = table(
+    row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
+      row(cell(paragraph(), '<w:vMerge/><w:hideMark/>'))
+  );
+  expect(rows(run(merged, defaults('<w:sz w:val="24"/>')))[0]!.box.height).toBe(12);
+  expect(rows(run(merged, defaults('<w:vanish/><w:sz w:val="24"/>')))[0]!.box.height).toBe(0);
+});
+
+// The default paragraph style counts too, over the document defaults. The paragraph's own
+// style does not: measured with an 8pt default, a 16pt default paragraph style, and a 24pt
+// style on the cell paragraph, heads and continuations each took the 16pt line.
+test('a hidden mark takes the default paragraph style line, not its own style', () => {
+  const cascade = buildStyleCascadeTable(
+    part(
+      `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="16"/></w:rPr>` +
+        '</w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:rPr><w:sz w:val="32"/></w:rPr></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Big"><w:basedOn w:val="Normal"/><w:rPr><w:sz w:val="48"/></w:rPr></w:style>' +
+        '</w:styles>',
+      '/word/styles.xml'
+    ).root
+  );
+  const big = paragraph('', '<w:pStyle w:val="Big"/>');
+  const merged = table(
+    row(cell(big, '<w:vMerge w:val="restart"/><w:hideMark/>')) +
+      row(cell(big, '<w:vMerge/><w:hideMark/>'))
+  );
+  expect(rows(run(merged, cascade)).map((r) => r.box.height)).toEqual([16, 16]);
+});
+
+// The table style's run properties do not count either: measured with an 8pt default and a
+// 16pt table style, the rows of the merge each took the 8pt line.
+test('a hidden mark ignores the table style run properties', () => {
+  const cascade = buildStyleCascadeTable(
+    part(
+      `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="16"/></w:rPr>` +
+        '</w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
+        '<w:style w:type="table" w:styleId="Large"><w:rPr><w:sz w:val="48"/></w:rPr></w:style>' +
+        '</w:styles>',
+      '/word/styles.xml'
+    ).root
+  );
+  const merged = table(
+    row(cell(paragraph(), '<w:vMerge w:val="restart"/><w:hideMark/>')) +
+      row(cell(paragraph(), '<w:vMerge/><w:hideMark/>')),
+    '<w:tblStyle w:val="Large"/>'
+  );
+  expect(rows(run(merged, cascade)).map((r) => r.box.height)).toEqual([8, 8]);
 });
 
 // `w:hideMark` is per cell. A head that hides its own mark says nothing about the cells
@@ -299,7 +366,7 @@ test('a continuation cell keeps its own visible mark under a hidden head', () =>
         row(cell(paragraph(), '<w:vMerge/>'))
     )
   );
-  expect(rows(result).map((r) => r.box.height)).toEqual([0, 20]);
+  expect(rows(result).map((r) => r.box.height)).toEqual([10, 20]);
 });
 
 test('only the markup view keeps the line of a tracked empty paragraph mark', () => {

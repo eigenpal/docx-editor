@@ -38,6 +38,7 @@ import {
 } from './useDocxEditorRoot';
 import { useDocxEditor } from './context';
 import { ChromeDarkContext, useResolvedDark } from './color-mode-context';
+import { isDateValue } from './field-date-warning';
 
 export { docxEditorFacadeListenerCount, type DocxEditorRootProps } from './useDocxEditorRoot';
 
@@ -139,6 +140,12 @@ export const DocxEditorRoot = defineComponent({
     revisionMarkup: Object as PropType<RevisionMarkupOptions>,
     reviewDisplayMode: String as PropType<ReviewDisplayMode>,
     fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
+    fieldDate: {
+      // Not `type: Date`: a `Date` from another window or frame fails that check.
+      type: null as unknown as PropType<Date>,
+      default: undefined,
+      validator: (value: unknown) => value === undefined || isDateValue(value),
+    },
     contentLockPolicy: { type: Object as PropType<ContentLockPolicy>, default: undefined },
     lockedControlNavigation: {
       type: String as PropType<LockedControlNavigation>,

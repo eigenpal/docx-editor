@@ -1,5 +1,28 @@
 # @docx-editor.dev/pro
 
+## 2.41.1
+
+No changes in this release.
+
+## 2.41.0
+
+### Patch Changes
+
+- 4eab3ae: In Safari, a click in a scrolled document after focus left the editor no longer scrolls back to the previous caret position. Fixes #2116
+- Updated dependencies: @docx-editor.dev/core@2.41.0, @docx-editor.dev/react@2.41.0, @docx-editor.dev/vue@2.41.0
+
+## 2.40.0
+
+### Minor Changes
+
+- 3a0b802: Add `collaborationServerExtension`, a Hocuspocus extension that checks client and room formats, prepares and stores rooms with a DOCX export, and upgrades a stored room of an earlier collaboration format when the server loads it. The Hocuspocus provider now sends its collaboration format in the `collaborationFormat` query parameter of the server URL. A server with the extension refuses clients that do not send the parameter, so update clients first.
+
+### Patch Changes
+
+- 9457ed7: Vue review cards show the `Card` children that you pass after the first render, and their labels follow a locale change.
+- 9457ed7: The review rail renders a card only when its own content or position changes, so scrolling and typing beside many comments and tracked changes stay responsive. A card template (a React `List` render prop, or a Vue `#item` or default slot) runs again only when its item, its function, or the reactive state it reads changes.
+- Updated dependencies: @docx-editor.dev/core@2.40.0, @docx-editor.dev/react@2.40.0, @docx-editor.dev/vue@2.40.0
+
 ## 2.39.0
 
 ### Minor Changes

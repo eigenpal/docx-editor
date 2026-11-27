@@ -125,6 +125,7 @@ import {
 } from './paragraph-break-request.ts';
 import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
 import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
+import { mergedRowSizing, unsizedRowFloorPt } from './table-unsized-row-floor.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import { type StyleCascadeTable, type TableCellStyleFormatting } from './style-cascade.ts';
 import { cellBorderContinuation, paragraphBorderGroupKey } from './cell-border-groups.ts';
@@ -1446,6 +1447,10 @@ export function layoutRowFragmentBounded(
   const waits = waitsForRowHeight;
   const markSizedRow =
     row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
+  // Such a row takes its first cell's box (`mergedRowSizing`, 17.4.84).
+  const sizing = mergedRowSizing(row, markSizedRow, atLeastHeightPt);
+  const onlyContinuations = sizing.firstCellBox;
+  let firstCellPt: number | null = null;
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
@@ -1485,8 +1490,13 @@ export function layoutRowFragmentBounded(
       cell,
       flowRight - flowLeft,
       flowDeps,
-      { vertical, markSizedRow }
+      {
+        vertical,
+        markSizedRow: sizing.reservesMarks,
+        ...(onlyContinuations && { onlyContinuations: { firstCellPt } }),
+      }
     );
+    if (onlyContinuations && firstCellPt === null) firstCellPt = continuationPt;
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
     let nextCursor = cursor;
@@ -1593,24 +1603,23 @@ export function layoutRowFragmentBounded(
       rowBottom = needed;
     }
   }
-  // A row whose ONLY cells are detached merge heads has had nothing raise it: the two passes
-  // above skip detached cells on purpose. Keep its paragraph-line floor, but do not
-  // apply that floor to rows consisting entirely of continuation cells: the merged
-  // head and authored row heights already supply their required span geometry.
-  if (
-    rowBottom <= rowTop + 0.001 &&
-    flowed.some(
-      (entry) =>
-        !entry.cell.vMergeContinue && !cellHidesEndMark(entry.cell, deps.documentFirstParagraphId)
-    )
-  ) {
-    let lineBottom = rowTop;
-    for (const entry of flowed) {
-      if (cellHidesEndMark(entry.cell, deps.documentFirstParagraphId)) continue;
-      const line = rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
-      if (line > lineBottom) lineBottom = line;
-    }
-    rowBottom = Math.min(flowMaxBottom, lineBottom);
+  // The passes above skip detached heads, continuations, and waiting `btLr` cells on purpose.
+  // A row that only they hold has had nothing raise it, and a lone restart can floor its row
+  // above its content (`unsizedRowFloorPt`, 17.4.84), but not a remainder fragment.
+  const raised = rowBottom > rowTop + 0.001;
+  if (!raised || (sizing.floorsContent && !isContinuation)) {
+    const floorPt = unsizedRowFloorPt({
+      flowed,
+      raised,
+      detached: (cell) => detachedSpans?.has(cell.id) === true,
+      waits,
+      atLeastHeightPt,
+      rowGapPt,
+      defaultLineHeight,
+      minimumInsets: deps.cellMinimumContentInsets,
+      deps: flowDeps,
+    });
+    if (floorPt > 0) rowBottom = Math.min(flowMaxBottom, Math.max(rowBottom, rowTop + floorPt));
   }
   rowBottom = Math.min(flowMaxBottom, rowBottom);
 

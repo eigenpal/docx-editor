@@ -1,7 +1,7 @@
 import { appendFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
-import { run } from './common.mjs';
+import { CATALOG, GUIDE, RELEASE_DATA, run } from './common.mjs';
 
 // Must match the `collaboration` matrix in ci.yml. catalog-merge.test.ts fails when they
 // drift, and a finished CI run without one of these checks fails here instead of waiting.
@@ -10,6 +10,19 @@ export const REQUIRED = [
   'build',
   ...COLLABORATION_SHARDS.map((shard) => `collaboration (${shard})`),
 ];
+
+// The files a generated catalog PR holds. collaboration-catalog.yml commits these paths;
+// catalog-merge.test.ts fails when the two drift.
+export function catalogFiles(version) {
+  return [
+    CATALOG,
+    GUIDE,
+    RELEASE_DATA,
+    ...['fixture.json', 'package.json', 'package-lock.json'].map(
+      (file) => `.collaboration/releases/${version}/${file}`
+    ),
+  ].sort();
+}
 
 export function catalogMergeState(pr, runs, version, repository) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Expected a stable version');
@@ -26,13 +39,7 @@ export function catalogMergeState(pr, runs, version, repository) {
     throw new Error(
       'Only generated release-pal catalog PRs targeting main can merge automatically'
     );
-  const allowed = [
-    '.collaboration/releases.json',
-    'docs/site/content/pro/collaboration-versions.mdx',
-    ...['fixture.json', 'package.json', 'package-lock.json'].map(
-      (file) => `.collaboration/releases/${version}/${file}`
-    ),
-  ].sort();
+  const allowed = catalogFiles(version);
   if (JSON.stringify(pr.files.map((file) => file.path).sort()) !== JSON.stringify(allowed))
     throw new Error('Catalog PR changes files outside the generated baseline');
   if (pr.mergeable === 'CONFLICTING') throw new Error('Catalog PR has merge conflicts');

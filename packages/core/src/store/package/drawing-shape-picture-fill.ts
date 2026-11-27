@@ -7,7 +7,7 @@ import { identityPictureStretch } from './drawing-group-picture-admission.ts';
 import type { GroupPictureProjection } from './drawing-group-picture.ts';
 import { schemaAngleIsZero } from './drawing-group-frame.ts';
 import { isElement } from './drawing-projection-walk.ts';
-import { readShapeGeometry } from './drawing-shape-geometry.ts';
+import { shapeClipRing } from './drawing-shape-clip-ring.ts';
 import { findDirectChild, parseCropPercent } from './drawing-shape-readers.ts';
 import { findWspInAnchor } from './drawing-shape-projection.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
@@ -20,7 +20,6 @@ import {
 const A = DRAWINGML_MAIN_NAMESPACE_URI;
 const FILLS = new Set(['noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill']);
 /** A clip ring with more points than this keeps the picture's box. */
-const MAX_CLIP_POINTS = 1024;
 
 function relationship(blip: OoxmlElement, localName: 'embed' | 'link'): string | null {
   for (const attribute of blip.attributes) {
@@ -77,7 +76,7 @@ export function readShapePictureFill(
   const srcRect = findDirectChild(fill.children, { namespaceUri: A, localName: 'srcRect' });
   const cropEdge = (name: string): number =>
     srcRect ? parseCropPercent(schemaAttributeValue(srcRect.attributes, name)) : 0;
-  const clipUnit = clipRingOf(spPr, extent);
+  const clipUnit = shapeClipRing(spPr, extent);
   return Object.freeze({
     embeddedRelationshipId,
     linkedRelationshipId,
@@ -92,26 +91,4 @@ export function readShapePictureFill(
     alternateContent: false,
     ...(clipUnit ? { clipUnit } : {}),
   });
-}
-
-/** The shape's one filled outline in the unit square of its extent; null for a rectangle. */
-function clipRingOf(
-  spPr: OoxmlElement,
-  extent: Readonly<{ cx: number; cy: number }>
-): readonly Readonly<{ x: number; y: number }>[] | null {
-  const geometry = readShapeGeometry(spPr, extent);
-  if (!geometry) return null;
-  const outlines = geometry.paths
-    .filter((path) => path.fill !== 'none')
-    .flatMap((path) => path.subpaths);
-  if (outlines.length !== 1) return null;
-  const points = outlines[0]!.points;
-  if (points.length < 3 || points.length > MAX_CLIP_POINTS) return null;
-  const ring = points.map((point) =>
-    Object.freeze({ x: point.x / extent.cx, y: point.y / extent.cy })
-  );
-  const rectangle =
-    ring.length === 4 &&
-    ring.every((point) => (point.x === 0 || point.x === 1) && (point.y === 0 || point.y === 1));
-  return rectangle ? null : Object.freeze(ring);
 }

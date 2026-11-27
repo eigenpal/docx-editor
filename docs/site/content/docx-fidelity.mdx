@@ -59,6 +59,7 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 - Raised and lowered text, including inherited `w:position` with subscript or superscript, adds to automatic and minimum line heights. Exact line spacing keeps its height.
 - An inline picture sits at its run's `w:position` offset from the text baseline.
+- Text with an automatic color paints white on dark run shading, paragraph shading, cell shading, or text box and shape fill, and black on light ones.
 - For equation limits, see [Equations](#equations).
 
 ### Paragraphs and styles
@@ -67,7 +68,11 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 - `w:keepNext` paragraphs form one group, of any length. Explicit page breaks and section boundaries end the group.
 - With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the whole following paragraph with the group when the group fits.
-- In left-to-right text, an opening word wraps within the space after leading left tabs, without a blank line.
+- In left-to-right text, an opening word wraps within the space after one leading left tab, without a blank line. With more leading tabs, the last tab moves to the next line with a word that overflows after it.
+- In left-to-right text, a left tab moves to the next line with a word that overflows after it. The word starts at the stop there and breaks at the right edge. At a center, right, or decimal stop, the tab moves only when the word fits after it.
+- The word cannot break after the stop when the page has a floating object or the paragraph has an anchor. It also cannot break when it holds a field or mark that cannot break. The tab then moves only when the word fits after the stop.
+- A tab to a center, right, or decimal stop after the right indent, up to the margin, stays on its line when the text after it fits before the stop.
+- A custom left stop after the right indent, up to the margin, keeps its tab on the line. In compatibility mode 15, the word after the tab then starts the next line. In [legacy mode](#compatibility-mode-differences), a stop at or past the right indent keeps the tab, and the word can run past the margin.
 - A left tab whose next stop lies past the right edge starts the next line, also in table cells and text frames, even with no text after it.
 - Distributed paragraphs (`w:jc="distribute"`) stretch their last line, also in cells and beside floating objects.
 - For text frames, see [Text frames](#text-frames). For East Asian spacing, see [East Asian text](#east-asian-text).
@@ -79,6 +84,8 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 - Lists that share one `w:abstractNum` count on one number per level.
 - A `w:startOverride` restarts that number once, at the first item of its list, on the overridden level only. Other lists continue from the restarted number. When the same `w:lvlOverride` replaces the level, its `w:start` takes precedence.
 - In a centered or right-aligned paragraph, the marker moves with the first line's text. In a table cell, the marker takes the table style's run formatting.
+- A marker in a face that rises above the text grows the first line by the difference. Automatic line spacing scales only the text, not that difference. In an empty list paragraph, it scales the marker too.
+- In a right-to-left paragraph (`w:bidi`), the marker takes its size, bold, and italic from the complex-script properties (`w:szCs`, `w:bCs`, `w:iCs`) and keeps its Latin face. `w:cs` on the level also selects the complex-script face.
 - Header and footer lists share one count that the body and notes do not join. The count runs over each section's referenced parts, in order. Hidden parts still count, and each explicit reference counts again. An inherited part reuses the earlier section's numbers.
 
 ### Tables
@@ -104,13 +111,16 @@ For image movement, pointer placement, accepted formats, and custom drop handler
 | Feature | Rendering and editing | Round-trip |
 | --- | --- | --- |
 | Anchored text boxes | Insert and edit text boxes in the body, headers, and footers, with collaboration support. Boxes with tables are read-only. Linked boxes, automatic sizing, and rotation can clip content or show a placeholder. | Preserved |
-| Drawing shapes | Supported shapes and groups display with fills, outlines, and outer shadows; empty shape geometry adds no PDF paint. Select, move, and delete shapes, lines, and groups; resizing and shape text stay read-only. Unsupported groups show placeholders; other effects require the [drawing module](/docs/2.x/pro/drawing). | Preserved |
+| Drawing shapes | Supported shapes and groups, nested ones too, display with fills, outlines, and outer shadows; empty shapes add no PDF paint. Select, move, and delete shapes, lines, and groups; resizing and shape text stay read-only. A group leaves out a member that it cannot display; other effects require the [drawing module](/docs/2.x/pro/drawing). | Preserved |
 | WMF and EMF | Editor previews use at most 2,048 pixels per side; the drawing module exports PDF vectors. Failed conversions show placeholders; PDF export omits them and reports an error. These images are read-only. | Full |
 | Charts | Insert [charts](/docs/2.x/guides/charts), resize, move, and wrap them, and edit their type, elements, colors, and data. The [drawing module](/docs/2.x/pro/drawing) paints them in the editor and PDF. Unsupported charts use previews or placeholders; content locks and data bindings prevent chart edits. | Preserved |
 | DrawingML diagrams | Renders the saved diagram drawing. You can resize, move, wrap, and delete a diagram, but not edit its content. A diagram without its drawing needs the drawing module. | Full |
 | VML text paths | Renders with the drawing module. Without it, an inline text path shows a placeholder and a floating text path does not show. | Full |
 
-- Groups with unsupported effects or 3D properties keep their unsupported behavior as a whole. The editor does not render only their supported members.
+- A group displays its shapes, pictures, and text boxes in the saved order. A member that the editor cannot display, such as a chart or a tiled picture, is left out, and the support report and PDF export name it.
+- Pictures in a group keep their rotation, flips, crop, shape clip, and color effects. A shadow on a picture member or on the group itself does not display.
+- A member that reaches past the group frame displays whole, and a table cell still cuts it. A picture fill that does not rotate with its shape stays upright.
+- Text boxes in groups display `vert`, `eaVert`, and `vert270` text, and turn with rotated or flipped groups. Hidden group members do not display.
 - `w14:textOutline` renders when it is an opaque solid RGB outline. PDF export does not paint text outlines.
 - A pie chart draws its first series, and its legend lists that series' categories.
 - Charts take the picture frame commands but refuse crop, replace, and rotate. Deleting a chart removes its fallback too.
@@ -132,6 +142,7 @@ See [Pages and sections](#pages-and-sections) for page break and section rules.
 
 - `LISTNUM` fields count on the counters of their list's numbered paragraphs. The number replaces any saved result.
 - Saved results of fields nested in another field's instruction add no text, breaks, or links.
+- Paragraphs inside a field instruction take no line, show no list marker, and do not advance list numbers. The text before the field and the text after its instruction share one line.
 - `STYLEREF` headers resolve supported display-name references. See [Fields and cross-references](/docs/2.x/guides/fields).
 
 ### Document structure and content controls
@@ -239,8 +250,10 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 | Fixed-height row at a page end | The bottom rule sits outside the authored height. Applies to collapsed, equal single rules up to 12pt. Eighth-point widths, including 0.625pt, keep their size. |
 | Row minimum height | A row starts only where its minimum height and closing rule fit. A split row keeps its minimum on the next page. |
 | Keep-with-next tables | Measure at most 256 kept rows and the next row. |
-| Vertical merges | Shared rows count once. Content that does not fit is clipped at the last row. |
-| Merges clipped at the first row | Nested or overlapping merges, a shorter merge starting in the same row, and a two-row span across a page. |
+| Vertical merges | Shared rows count once. A row of merged cells takes the height of its first cell's end paragraph, or its taller minimum. Content that does not fit is clipped at the last row. |
+| Merges clipped at the first row | Some nested or overlapping merges. |
+| Merges over fixed-height rows at a page break | Merged text continues in the part of the merge on the next page. Its vertical alignment applies on the page where the text starts. Notes, floating objects, and page breaks clip at the first row, as do pictures and tables over growable rows. |
+| Merges from header rows into body rows | The covered body rows join the header rows. They move together and repeat on each continuation page. |
 | Legacy unsplittable row taller than a page, with a nested table | Splits, although it should stay whole. This is a known difference. |
 | Legacy unsplittable row taller than a page, with footnotes | The page keeps the first line of the first footnote. The rest continues on the next page. |
 
@@ -294,6 +307,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 - Supply font bytes for accurate measurement. See [Fonts and measurement](/docs/2.x/guides/fonts).
 - The font resolver also receives faces of SYMBOL fields and numbering markers.
 - Symbol and Wingdings bullets use a Unicode fallback when the font is missing. Layout keeps the symbol font metrics.
+- Symbol bullets and `w:sym` characters map Greek letters, math signs, arrows, and the dash to Unicode. Extension pieces and the euro sign keep their private-use codes. The PDF export leaves Symbol characters in the Latin-1 range, such as `±` and `°`, unpainted when the font is missing.
 - No-break spaces and word joiners keep their break behavior across runs.
 - Paragraph `w:bidi` controls alignment and group order. Run `w:rtl` controls direction within a group.
 - `w:themeFontLang` selects theme fonts for Latin, East Asian, and complex-script tokens.
@@ -384,7 +398,7 @@ Your application controls any data sent to another service or model.
 | Package | License |
 | --- | --- |
 | `@docx-editor.dev/core`, `react`, `vue`, and `i18n` | Apache 2.0 |
-| `@docx-editor.dev/fonts` | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
+| `@docx-editor.dev/fonts` | Apache-2.0 AND OFL-1.1 AND CC-BY-4.0 AND LicenseRef-GUST-Font-License |
 | `@docx-editor.dev/fonts-cjk` | Apache-2.0 AND OFL-1.1 |
 | `@docx-editor.dev/docx-to-pdf`, `editor-api`, and `pro` | EigenPal Pro License |
 

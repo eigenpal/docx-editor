@@ -14,6 +14,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../../editor/paginated-surface.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
+import { forEachSemanticDrawing } from '../../layout/semantic-record-queries.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -260,6 +261,32 @@ describe('change bars in every story share one column', () => {
     expect(top).toBeGreaterThan(
       page.contentBox.y - page.box.y + anchorParagraph.box.y + anchorParagraph.box.height
     );
+  });
+
+  test('a change in vertical text-box text marks the rows the turned line covers', () => {
+    // 216 x 72pt box, `vert`: the line runs down the 72pt height, so its rule spans that height
+    // and not one upright line pitch.
+    const vertical = textBox(run('Down ') + ins('1', run('changed'))).replace(
+      'vert="horz"',
+      'vert="vert"'
+    );
+    const { surface, container } = mount(
+      docx({ body: `<w:p>${run('Anchor.')}${vertical}</w:p>` + `<w:p>${run('Filler.')}</w:p>` })
+    );
+    const rules = bars(container);
+    expect(rules).toHaveLength(1);
+    const page = surface.layout().pages[0]!;
+    let box: { y: number; height: number } | null = null;
+    forEachSemanticDrawing(surface.layout(), (visit) => {
+      if (visit.drawing.kind === 'anchoredDrawing') box = visit.absolutePaintBounds;
+    });
+    expect(box).not.toBeNull();
+    const { y, height } = box as unknown as { y: number; height: number };
+    const top = parseFloat(rules[0]!.style.top);
+    const bottom = top + parseFloat(rules[0]!.style.height);
+    expect(top).toBeGreaterThanOrEqual(y - page.box.y - 0.5);
+    expect(bottom).toBeLessThanOrEqual(y - page.box.y + height + 0.5);
+    expect(bottom - top).toBeGreaterThan(40);
   });
 
   test('a change in a rotated (btLr) cell marks the cell height, not a rotated line box', () => {

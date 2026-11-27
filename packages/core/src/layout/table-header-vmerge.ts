@@ -10,7 +10,10 @@
 // Three rules keep that plan safe inside a group that has no continuation page:
 //
 // - a merge whose chain goes on into the first body row is never planned here. Its head keeps
-//   sizing its own header row, which is the shape the body rows and a repeated copy expect;
+//   sizing its own header row, which is the shape the body rows and a repeated copy expect.
+//   A merge headed in an authored header row never does this: it extends the group through
+//   its last row (`table-header-merged-rows.ts`). Only a merge headed in a covered body row
+//   can still end below the group;
 // - the group is atomic, so a merge is taken whatever the page bottom: the group moves or
 //   degrades as a whole, and the planned height is never taller than the unplanned one;
 // - a detached head that a side-effect-free placement at its real y shows owing a remainder

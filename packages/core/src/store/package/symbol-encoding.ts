@@ -17,21 +17,178 @@ const SYMBOL_PUA_BASE = 0xf000;
 const SYMBOL_PUA_END = 0xf0ff;
 
 /**
- * Adobe Symbol high-range glyphs used as bullets, by byte value.
+ * Symbol glyphs by byte value, from the Adobe Symbol encoding.
  *
- * Only entries whose Unicode equivalent is the SAME glyph are listed; an approximate match
- * would trade a tofu box for a wrong character, which is not an improvement.
+ * Each entry was compared with the glyph name the face itself has for that byte. Bullet
+ * levels (`w:lvlText`, §17.9.11, CT_LevelText) and symbol characters (`w:sym`, §17.3.3.30,
+ * CT_Sym) use the whole range: Greek letters, arithmetic, arrows, and set operators.
+ *
+ * Left out: the space; the bracket, brace, and integral extension pieces and the serif and
+ * sans registered, copyright, and trademark signs (only private-use code points stand for
+ * them); the euro sign (the face has no glyph); and `divide` and `logicalnot`. Their Unicode
+ * twins (U+00F7, U+00AC) are also bare bytes of other glyphs, so {@link symbolFaceByteOf}
+ * could not invert them. `multiply` (U+00D7) has the same clash and keeps its entry: the
+ * inverse prefers the twin.
+ * Where the encoding lists two code points, the Greek letter (Delta, Omega, mu) and the
+ * fraction slash are used.
  */
 const SYMBOL_TO_UNICODE: ReadonlyMap<number, string> = new Map([
-  [0xa7, '♣'], // clubsuit ♣
-  [0xa8, '♦'], // diamondsuit ♦
-  [0xa9, '♥'], // heartsuit ♥
-  [0xaa, '♠'], // spadesuit ♠
-  [0xae, '→'], // arrowright →
-  [0xb0, '°'], // degree °
-  [0xb4, '×'], // multiply ×
-  [0xb7, '•'], // bulletmath • — Word's default level-0 bullet
-  [0xde, '⇒'], // arrowdblright ⇒
+  [0x21, '\u0021'], // exclam !
+  [0x22, '\u2200'], // universal ∀
+  [0x23, '\u0023'], // numbersign #
+  [0x24, '\u2203'], // existential ∃
+  [0x25, '\u0025'], // percent %
+  [0x26, '\u0026'], // ampersand &
+  [0x27, '\u220b'], // suchthat ∋
+  [0x28, '\u0028'], // parenleft (
+  [0x29, '\u0029'], // parenright )
+  [0x2a, '\u2217'], // asteriskmath ∗
+  [0x2b, '\u002b'], // plus +
+  [0x2c, '\u002c'], // comma ,
+  [0x2d, '\u2212'], // minus −
+  [0x2e, '\u002e'], // period .
+  [0x2f, '\u002f'], // slash /
+  [0x30, '\u0030'], // zero 0
+  [0x31, '\u0031'], // one 1
+  [0x32, '\u0032'], // two 2
+  [0x33, '\u0033'], // three 3
+  [0x34, '\u0034'], // four 4
+  [0x35, '\u0035'], // five 5
+  [0x36, '\u0036'], // six 6
+  [0x37, '\u0037'], // seven 7
+  [0x38, '\u0038'], // eight 8
+  [0x39, '\u0039'], // nine 9
+  [0x3a, '\u003a'], // colon :
+  [0x3b, '\u003b'], // semicolon ;
+  [0x3c, '\u003c'], // less <
+  [0x3d, '\u003d'], // equal =
+  [0x3e, '\u003e'], // greater >
+  [0x3f, '\u003f'], // question ?
+  [0x40, '\u2245'], // congruent ≅
+  [0x41, '\u0391'], // Alpha Α
+  [0x42, '\u0392'], // Beta Β
+  [0x43, '\u03a7'], // Chi Χ
+  [0x44, '\u0394'], // Delta Δ
+  [0x45, '\u0395'], // Epsilon Ε
+  [0x46, '\u03a6'], // Phi Φ
+  [0x47, '\u0393'], // Gamma Γ
+  [0x48, '\u0397'], // Eta Η
+  [0x49, '\u0399'], // Iota Ι
+  [0x4a, '\u03d1'], // theta1 ϑ
+  [0x4b, '\u039a'], // Kappa Κ
+  [0x4c, '\u039b'], // Lambda Λ
+  [0x4d, '\u039c'], // Mu Μ
+  [0x4e, '\u039d'], // Nu Ν
+  [0x4f, '\u039f'], // Omicron Ο
+  [0x50, '\u03a0'], // Pi Π
+  [0x51, '\u0398'], // Theta Θ
+  [0x52, '\u03a1'], // Rho Ρ
+  [0x53, '\u03a3'], // Sigma Σ
+  [0x54, '\u03a4'], // Tau Τ
+  [0x55, '\u03a5'], // Upsilon Υ
+  [0x56, '\u03c2'], // sigma1 ς
+  [0x57, '\u03a9'], // Omega Ω
+  [0x58, '\u039e'], // Xi Ξ
+  [0x59, '\u03a8'], // Psi Ψ
+  [0x5a, '\u0396'], // Zeta Ζ
+  [0x5b, '\u005b'], // bracketleft [
+  [0x5c, '\u2234'], // therefore ∴
+  [0x5d, '\u005d'], // bracketright ]
+  [0x5e, '\u22a5'], // perpendicular ⊥
+  [0x5f, '\u005f'], // underscore _
+  [0x61, '\u03b1'], // alpha α
+  [0x62, '\u03b2'], // beta β
+  [0x63, '\u03c7'], // chi χ
+  [0x64, '\u03b4'], // delta δ
+  [0x65, '\u03b5'], // epsilon ε
+  [0x66, '\u03c6'], // phi φ
+  [0x67, '\u03b3'], // gamma γ
+  [0x68, '\u03b7'], // eta η
+  [0x69, '\u03b9'], // iota ι
+  [0x6a, '\u03d5'], // phi1 ϕ
+  [0x6b, '\u03ba'], // kappa κ
+  [0x6c, '\u03bb'], // lambda λ
+  [0x6d, '\u03bc'], // mu μ
+  [0x6e, '\u03bd'], // nu ν
+  [0x6f, '\u03bf'], // omicron ο
+  [0x70, '\u03c0'], // pi π
+  [0x71, '\u03b8'], // theta θ
+  [0x72, '\u03c1'], // rho ρ
+  [0x73, '\u03c3'], // sigma σ
+  [0x74, '\u03c4'], // tau τ
+  [0x75, '\u03c5'], // upsilon υ
+  [0x76, '\u03d6'], // omega1 ϖ
+  [0x77, '\u03c9'], // omega ω
+  [0x78, '\u03be'], // xi ξ
+  [0x79, '\u03c8'], // psi ψ
+  [0x7a, '\u03b6'], // zeta ζ
+  [0x7b, '\u007b'], // braceleft {
+  [0x7c, '\u007c'], // bar |
+  [0x7d, '\u007d'], // braceright }
+  [0x7e, '\u223c'], // similar ∼
+  [0xa1, '\u03d2'], // Upsilon1 ϒ
+  [0xa2, '\u2032'], // minute ′
+  [0xa3, '\u2264'], // lessequal ≤
+  [0xa4, '\u2044'], // fraction ⁄
+  [0xa5, '\u221e'], // infinity ∞
+  [0xa6, '\u0192'], // florin ƒ
+  [0xa7, '\u2663'], // club ♣
+  [0xa8, '\u2666'], // diamond ♦
+  [0xa9, '\u2665'], // heart ♥
+  [0xaa, '\u2660'], // spade ♠
+  [0xab, '\u2194'], // arrowboth ↔
+  [0xac, '\u2190'], // arrowleft ←
+  [0xad, '\u2191'], // arrowup ↑
+  [0xae, '\u2192'], // arrowright →
+  [0xaf, '\u2193'], // arrowdown ↓
+  [0xb0, '\u00b0'], // degree °
+  [0xb1, '\u00b1'], // plusminus ±
+  [0xb2, '\u2033'], // second ″
+  [0xb3, '\u2265'], // greaterequal ≥
+  [0xb4, '\u00d7'], // multiply ×
+  [0xb5, '\u221d'], // proportional ∝
+  [0xb6, '\u2202'], // partialdiff ∂
+  [0xb7, '\u2022'], // bullet •
+  [0xb9, '\u2260'], // notequal ≠
+  [0xba, '\u2261'], // equivalence ≡
+  [0xbb, '\u2248'], // approxequal ≈
+  [0xbc, '\u2026'], // ellipsis …
+  [0xbf, '\u21b5'], // carriagereturn ↵
+  [0xc0, '\u2135'], // aleph ℵ
+  [0xc1, '\u2111'], // Ifraktur ℑ
+  [0xc2, '\u211c'], // Rfraktur ℜ
+  [0xc3, '\u2118'], // weierstrass ℘
+  [0xc4, '\u2297'], // circlemultiply ⊗
+  [0xc5, '\u2295'], // circleplus ⊕
+  [0xc6, '\u2205'], // emptyset ∅
+  [0xc7, '\u2229'], // intersection ∩
+  [0xc8, '\u222a'], // union ∪
+  [0xc9, '\u2283'], // propersuperset ⊃
+  [0xca, '\u2287'], // reflexsuperset ⊇
+  [0xcb, '\u2284'], // notsubset ⊄
+  [0xcc, '\u2282'], // propersubset ⊂
+  [0xcd, '\u2286'], // reflexsubset ⊆
+  [0xce, '\u2208'], // element ∈
+  [0xcf, '\u2209'], // notelement ∉
+  [0xd0, '\u2220'], // angle ∠
+  [0xd1, '\u2207'], // gradient ∇
+  [0xd5, '\u220f'], // product ∏
+  [0xd6, '\u221a'], // radical √
+  [0xd7, '\u22c5'], // dotmath ⋅
+  [0xd9, '\u2227'], // logicaland ∧
+  [0xda, '\u2228'], // logicalor ∨
+  [0xdb, '\u21d4'], // arrowdblboth ⇔
+  [0xdc, '\u21d0'], // arrowdblleft ⇐
+  [0xdd, '\u21d1'], // arrowdblup ⇑
+  [0xde, '\u21d2'], // arrowdblright ⇒
+  [0xdf, '\u21d3'], // arrowdbldown ⇓
+  [0xe0, '\u25ca'], // lozenge ◊
+  [0xe1, '\u2329'], // angleleft 〈
+  [0xe5, '\u2211'], // summation ∑
+  [0xf1, '\u232a'], // angleright 〉
+  [0xf2, '\u222b'], // integral ∫
+  [0xf3, '\u2320'], // integraltp ⌠
+  [0xf5, '\u2321'], // integralbt ⌡
 ]);
 
 /**

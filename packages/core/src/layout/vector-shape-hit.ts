@@ -6,6 +6,7 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
 import type { VectorShapeComponent } from '../store/package/drawing-shape-projection.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import { groupPictureInkReach } from './drawing-group-picture-layers.ts';
 import { vectorShapeInkClip } from './vector-shape-ink.ts';
 
 type Drawing = InlineDrawingRecord | AnchoredDrawingRecord;
@@ -351,11 +352,15 @@ function insideTextArea(
  */
 export function drawingPaintsPastBox(drawing: Drawing): boolean {
   if (textboxPaintsPastFrame(drawing)) return true;
-  if (!drawing.vectorShape?.overflowVisible) return false;
+  if (!drawing.vectorShape?.overflowVisible && !drawing.groupPicture) return false;
   const known = paintsPastBox.get(drawing);
   if (known !== undefined) return known;
   const box = drawing.paintBounds;
-  const ink = vectorShapeInkClip(drawing, box);
+  // A picture of a group that paints past the extent takes a press where it paints.
+  const ink = groupPictureInkReach(
+    drawing,
+    drawing.vectorShape?.overflowVisible ? vectorShapeInkClip(drawing, box) : box
+  );
   const past =
     ink.x < box.x - PATH_HIT_REACH ||
     ink.y < box.y - PATH_HIT_REACH ||

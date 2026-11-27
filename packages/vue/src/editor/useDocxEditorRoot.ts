@@ -10,6 +10,7 @@ import type {
 import { formControlTranslateKey } from './form-control-translate';
 import { warnFieldResultsChanged } from './field-results-warning';
 import { warnContentLockPolicyChanged } from './content-lock-policy-warning';
+import { warnFieldDateChanged } from './field-date-warning';
 import { warnLockedControlNavigationChanged } from './locked-control-navigation-warning';
 import {
   UnsupportedElementRegistryContext,
@@ -109,6 +110,16 @@ export interface DocxEditorRootProps {
    */
   fieldResults?: FieldResultsMode;
   /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
+   * The saved document keeps the saved results. Print and PDF export from the File menu pass the
+   * date to the PDF handler as `ChromeExportView.fieldDate`. Absent (the default), fields show
+   * their saved results. Read once, when the editor is created: a later
+   * change to a different time is ignored, with a development warning. A new `Date` with the same
+   * time does nothing. Refused with a `TypeError` when it is not a valid `Date`, or with
+   * `fieldResults: 'editable'`.
+   */
+  fieldDate?: Date;
+  /**
    * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
    * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
    * protected. Read once, when the editor is created: a later change in value is ignored,
@@ -178,6 +189,8 @@ export function useDocxEditorRootOwner(
   const editorRef = shallowRef<DocxEditorInstance | null>(null);
   /** The `fieldResults` the current instance was created with. */
   let createdFieldResults: DocxEditorRootProps['fieldResults'];
+  /** The `fieldDate` the current instance was created with. */
+  let createdFieldDate: DocxEditorRootProps['fieldDate'];
   /** The `contentLockPolicy` the current instance was created with. */
   let createdContentLockPolicy: DocxEditorRootProps['contentLockPolicy'];
   /** The `lockedControlNavigation` the current instance was created with. */
@@ -305,6 +318,7 @@ export function useDocxEditorRootOwner(
     destroyEditor();
     const p = toValue(props);
     createdFieldResults = p.fieldResults;
+    createdFieldDate = p.fieldDate;
     createdContentLockPolicy = p.contentLockPolicy;
     createdLockedControlNavigation = p.lockedControlNavigation;
     createdFonts = p.fonts;
@@ -319,6 +333,7 @@ export function useDocxEditorRootOwner(
       ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
       ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
       ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
+      ...(p.fieldDate !== undefined ? { fieldDate: p.fieldDate } : {}),
       ...(p.contentLockPolicy !== undefined ? { contentLockPolicy: p.contentLockPolicy } : {}),
       ...(p.lockedControlNavigation !== undefined
         ? { lockedControlNavigation: p.lockedControlNavigation }
@@ -492,6 +507,15 @@ export function useDocxEditorRootOwner(
     () => [editorRef.value, toValue(props).fieldResults] as const,
     ([editor, fieldResults]) => {
       if (editor) warnFieldResultsChanged(createdFieldResults, fieldResults);
+    },
+    { flush: 'post' }
+  );
+
+  // Compared by time, so an inline `new Date(...)` re-created on each render does not warn.
+  watch(
+    () => [editorRef.value, toValue(props).fieldDate] as const,
+    ([editor, fieldDate]) => {
+      if (editor) warnFieldDateChanged(createdFieldDate, fieldDate);
     },
     { flush: 'post' }
   );

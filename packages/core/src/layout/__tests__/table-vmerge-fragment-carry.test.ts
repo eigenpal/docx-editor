@@ -35,6 +35,7 @@ function fixture({
   count = 42,
   fitting = false,
   unknown = false,
+  pageBreak = false,
   borders = false,
   rowTwips = 360,
   wrap = false,
@@ -91,7 +92,10 @@ function fixture({
       '/><w:vAlign w:val="' +
       (center ? 'center' : 'top') +
       '"/><w:shd w:fill="D9E2F3"/></w:tcPr>' +
-      (index === 0 ? (unknown ? '<w:p><w:r><w:br/></w:r></w:p>' : '') + merged : p('')) +
+      (index === 0
+        ? (unknown ? `<w:p><w:r><w:br${pageBreak ? ' w:type="page"' : ''}/></w:r></w:p>` : '') +
+          merged
+        : p('')) +
       '</w:tc>' +
       '<w:tc>' +
       p(text(`ROW-${String(index + 1).padStart(2, '0')}`)) +
@@ -478,8 +482,23 @@ describe('merged text across protected physical rows', () => {
     ).toBe(false);
   });
 
-  test('leaves manual-break content on the existing conservative path', () => {
+  test('carries a line break in merged text over fixed rows', () => {
+    // A break without a type (`w:br`, 17.3.3.1) stays in the line flow of the merged cell.
     const layout = layoutSemanticDocument(fixture({ unknown: true }), 0, { geometry, measurer });
+    expect(
+      tables(layout)
+        .flat()
+        .flatMap((table) => table.rows)
+        .some((row) => row.isContinuation && row.box.height === 0)
+    ).toBe(true);
+    expect(merged(layout)).toHaveLength(42);
+  });
+
+  test('leaves a page break in merged text on the existing conservative path', () => {
+    const layout = layoutSemanticDocument(fixture({ unknown: true, pageBreak: true }), 0, {
+      geometry,
+      measurer,
+    });
     expect(
       tables(layout)
         .flat()

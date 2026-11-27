@@ -83,28 +83,12 @@ export function findGraphicData(anchor: OoxmlElement): OoxmlElement | null {
   return data;
 }
 
-const GROUP_PROPERTY_NAMES = new Set([
-  'xfrm',
-  'extLst',
-  'noFill',
-  'solidFill',
-  'gradFill',
-  'pattFill',
-  'grpFill',
-]);
-
-/** Refuse visibility and visual effects that grouped members cannot represent. */
-export function supportedGroupVisuals(
-  owner: OoxmlElement,
-  properties: OoxmlElement,
-  group: boolean
-): boolean {
-  const nonVisual = findDirectChild(owner.children, {
-    namespaceUri: owner.namespaceUri,
-    localName: 'cNvPr',
-  });
-  if (nonVisual && !schemaFlagIsUnset(schemaAttributeValue(nonVisual.attributes, 'hidden')))
-    return false;
+/**
+ * Whether a member has no visibility setting and no visual effect that its fill and outline
+ * do not carry. A text box member that passes, and has no fill or outline, paints nothing.
+ */
+export function supportedGroupVisuals(owner: OoxmlElement, properties: OoxmlElement): boolean {
+  if (!supportedMemberVisibility(owner)) return false;
   const mode = schemaAttributeValue(properties.attributes, 'bwMode');
   if (mode !== undefined && !['auto', 'clr'].includes(collapseSchemaWhitespace(mode))) return false;
   for (const child of properties.children) {
@@ -115,10 +99,21 @@ export function supportedGroupVisuals(
       continue;
     }
     if (['effectDag', 'scene3d', 'sp3d'].includes(child.localName)) return false;
-    // A group paints no fill of its own; the fill it sets is the one `a:grpFill` members paint.
-    if (group && !GROUP_PROPERTY_NAMES.has(child.localName)) return false;
   }
   return true;
+}
+
+/**
+ * Whether a member's `cNvPr/@hidden` is a legal "not hidden" (CT_NonVisualDrawingProps,
+ * ECMA-376 Part 1, 20.1.2.2.8). The member walk already leaves out a legally hidden member.
+ * An invalid spelling leaves the display unknown, so the member paints nothing.
+ */
+export function supportedMemberVisibility(member: OoxmlElement): boolean {
+  const nonVisual = findDirectChild(member.children, {
+    namespaceUri: member.namespaceUri,
+    localName: 'cNvPr',
+  });
+  return !nonVisual || schemaFlagIsUnset(schemaAttributeValue(nonVisual.attributes, 'hidden'));
 }
 
 /** A group payload and the child coordinate space its members are authored in. */
@@ -178,7 +173,8 @@ export function readDrawingGroupFrame(
       })
     : null;
   if (!group || !groupProperties || !childExtent) return null;
-  if (!supportedGroupVisuals(group, groupProperties, true)) return null;
+  // A group effect, such as a shadow or a 3-D scene, is not painted: the members paint flat.
+  if (!supportedMemberVisibility(group)) return null;
   let turn: GroupTurn | null = null;
   if (xfrm && options.turned) {
     turn = groupTurn(xfrm);
@@ -209,7 +205,7 @@ export function readDrawingGroupFrame(
 }
 
 /** The schema-valid turn and flips of a group's `a:xfrm`, or null for an invalid spelling. */
-function groupTurn(xfrm: OoxmlElement): GroupTurn | null {
+export function groupTurn(xfrm: OoxmlElement): GroupTurn | null {
   const rotationDegrees = shapeRotationDegrees(xfrm);
   if (rotationDegrees === null) return null;
   const flips = ['flipH', 'flipV'].map((name) => schemaAttributeValue(xfrm.attributes, name));
@@ -221,12 +217,16 @@ function groupTurn(xfrm: OoxmlElement): GroupTurn | null {
   };
 }
 
-/** Group bookkeeping children that are not painted members. */
+/**
+ * Group bookkeeping children that are not painted members, the trailing `wpg:extLst` too
+ * (CT_OfficeArtExtensionList, ECMA-376 Part 1, 20.1.2.2.15).
+ */
 export function isGroupPropertyChild(child: OoxmlElement): boolean {
   return (
     child.namespaceUri === WPG_NAMESPACE_URI &&
     (child.localName === 'cNvPr' ||
       child.localName === 'cNvGrpSpPr' ||
-      child.localName === 'grpSpPr')
+      child.localName === 'grpSpPr' ||
+      child.localName === 'extLst')
   );
 }

@@ -1,4 +1,5 @@
-// Auto multiple line spacing on a line that holds raised or lowered (`w:position`) text.
+// Auto multiple line spacing on a line that holds raised or lowered (`w:position`) text, or a list
+// marker whose face rises above the text.
 
 import { applyLineSpacing, type ParagraphLineSpacing } from './paragraph-style.ts';
 import { isHeightlessWhitespace, lineBandText } from './pending-line.ts';
@@ -46,14 +47,62 @@ export function withPositionedRunSpacing(
   return { ...spaced, height: naturalHeight + band * (spacing.value / 240 - 1) };
 }
 
-/** {@link applyLineSpacing} for a laid-out line, with {@link withPositionedRunSpacing} applied. */
+/**
+ * Raise a first line whose list marker ascends above its text: the baseline moves down to the
+ * marker's ascent and the line grows by the same amount. Returns that rise, or 0.
+ */
+export function raiseLineToMarker(
+  line: { height: number; baseline: number },
+  markerAscent: number
+): number {
+  const rise = markerAscent - line.baseline;
+  if (!(rise > 0)) return 0;
+  line.baseline = markerAscent;
+  line.height += rise;
+  return rise;
+}
+
+/**
+ * Apply an auto multiple to a line that a list marker's taller face raised by `rise`: the
+ * multiple scales the text band, and the rise adds once, above or below single. A 22pt bullet on
+ * 11pt text at 1.5 spacing grows the line by half of the 11pt band plus the bullet's extra
+ * ascent; at 0.9 spacing it shrinks the 11pt band alone. Grid lines keep `spaced` as is.
+ *
+ * `w:spacing` (`CT_Spacing`, ECMA-376 Part 1 17.3.1.33) with `w:lineRule` `auto`
+ * (`ST_LineSpacingRule`, 17.18.48).
+ */
+function withUnscaledRise(
+  spaced: ReturnType<typeof applyLineSpacing>,
+  spacing: ParagraphLineSpacing,
+  rise: number
+): ReturnType<typeof applyLineSpacing> {
+  if (!(rise > 0) || spacing.rule !== 'auto' || spacing.gridPitch !== undefined) return spaced;
+  const extra = rise * (spacing.value / 240 - 1);
+  if (extra === 0) return spaced;
+  const height = spaced.height - extra;
+  // Above single the baseline stays put unless the growth goes above the band. Below single
+  // `applyLineSpacing` scales the baseline, so the unscaled rise moves it back down.
+  const movesBaseline = spacing.descentAnchored || extra < 0;
+  const baseline = movesBaseline ? spaced.baseline - extra : spaced.baseline;
+  return { ...spaced, height, baseline: Math.max(0, Math.min(baseline, height)) };
+}
+
+/**
+ * {@link applyLineSpacing} for a laid-out line, with {@link withPositionedRunSpacing} applied,
+ * or else the list marker's `unscaledRise`. A caller passes no rise for a line without text:
+ * the marker is then the line's only band, and the multiple scales all of it.
+ */
 export function spacedLine(
   spacing: ParagraphLineSpacing,
   naturalHeight: number,
   naturalBaseline: number,
   spans: Parameters<typeof withPositionedRunSpacing>[3],
-  measurer: Pick<TextMeasurer, 'lineMetrics'>
+  measurer: Pick<TextMeasurer, 'lineMetrics'>,
+  options: { readonly unscaledRise?: number } = {}
 ): ReturnType<typeof applyLineSpacing> {
   const spaced = applyLineSpacing(spacing, naturalHeight, naturalBaseline);
-  return withPositionedRunSpacing(spaced, spacing, naturalHeight, spans, measurer);
+  const positioned = withPositionedRunSpacing(spaced, spacing, naturalHeight, spans, measurer);
+  // A positioned line's band already leaves the marker out of the multiple.
+  if (positioned !== spaced) return positioned;
+  return withUnscaledRise(spaced, spacing, options.unscaledRise ?? 0);
 }

@@ -169,6 +169,15 @@ export interface DocxEditorConfig {
    */
   fieldResults?: FieldResultsMode;
   /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local time.
+   * The saved document keeps the saved results. Printing and PDF export from the File menu pass
+   * the date to the PDF handler as `ChromeExportView.fieldDate`. Absent (the default), fields
+   * show their saved results. Day and month names are English; a picture with a
+   * name keeps its saved result in a run of another language. Fixed for the instance. Refused with
+   * a `TypeError` when it is not a valid `Date`, or with the `editable` {@link fieldResults} mode.
+   */
+  fieldDate?: Date;
+  /**
    * How the caret moves through an inline control with a content lock. `'atomic'` makes such a
    * control one caret unit; `'characters'` (the default) walks through its characters, as Word
    * does. Fixed for the instance.
@@ -497,6 +506,13 @@ export interface DocxEditorInstance extends Editor {
    * `stateVersion()`.
    */
   getReviewAuthors(): readonly ReviewAuthorInfo[];
+  /**
+   * A copy of the moment DATE and TIME fields show ({@link DocxEditorConfig.fieldDate}), or
+   * undefined when fields show their saved results. Fixed for the instance, but each call answers
+   * a new `Date`: compare results with `getTime()`. `runChromeExport` and `runChromePrint` read it
+   * to pass the date to the PDF handler.
+   */
+  getFieldDate(): Date | undefined;
   /** Whether this author's revisions and comments are shown in the current review view. */
   isReviewAuthorVisible(author: string): boolean;
   /**

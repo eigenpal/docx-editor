@@ -17,6 +17,7 @@ import type {
   StoryPageFieldNeeds,
 } from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
+import { formatPageFormula } from './field-formula.ts';
 import { formatNumericPicture } from './field-numeric-picture.ts';
 import {
   formatPageFieldNumber,
@@ -135,17 +136,35 @@ export function pageFieldMeasuredText(
   return pageFieldPlaceholder(switches, sectionFormat);
 }
 
+/** The finalize marker for a body page field. */
+export interface PageFieldMarker extends AllowlistedPageFieldMatch {
+  /**
+   * The saved result of a formula field, painted when the formula has no value on the page it
+   * lands on (a division by zero, say).
+   */
+  readonly savedResult?: string;
+  /**
+   * Set on another field's result that holds body page fields (`{ QUOTE "x" { PAGE } }`): its
+   * saved text around each nested field's marker. Finalize paints the text with each nested
+   * field's value in place. Nested markers never carry segments.
+   */
+  readonly segments?: readonly (string | PageFieldMarker)[];
+}
+
 /**
- * The finalize marker for a body page field: its kind and only the switches it states.
+ * The finalize marker for a body page field: its kind, only the switches it states, and a
+ * formula's compiled expression and saved result.
  */
 export function pageFieldMarker(
   kind: AllowlistedPageField,
-  switches: PageFieldSwitches
-): AllowlistedPageFieldMatch {
+  switches: PageFieldSwitches & Pick<AllowlistedPageFieldMatch, 'formula'>,
+  savedResult = ''
+): PageFieldMarker {
   return {
     kind,
     ...(switches.picture !== undefined ? { picture: switches.picture } : {}),
     ...(switches.numberFormat !== undefined ? { numberFormat: switches.numberFormat } : {}),
+    ...(switches.formula !== undefined ? { formula: switches.formula, savedResult } : {}),
   };
 }
 
@@ -191,6 +210,27 @@ export function formatPageNumber(value: number, format: string | undefined): str
 }
 
 /**
+ * False when a formula's page operand is not a number under the section's page-number format.
+ *
+ * A `PAGE` operand without a number format yields the page number in `w:pgNumType/@w:fmt`
+ * (ECMA-376 Part 1, 17.6.12, `CT_PageNumber`). Only `decimal` and `decimalZero` give ASCII
+ * digits. A roman, letter, dashed, or full-width value is not a number, so the formula (17.16.3)
+ * has no value, and the field keeps its saved result.
+ */
+export function formulaOperandIsNumber(
+  match: Pick<AllowlistedPageFieldMatch, 'formulaOperandFollowsSection'>,
+  sectionFormat: string | undefined
+): boolean {
+  if (match.formulaOperandFollowsSection !== true) return true;
+  return (
+    sectionFormat === undefined ||
+    sectionFormat === '' ||
+    sectionFormat === 'decimal' ||
+    sectionFormat === 'decimalZero'
+  );
+}
+
+/**
  * Digit / formatted string for an allowlisted page field under a page context.
  *
  * `switches` are the field's own. A `\*` number format renders the value first; the parser
@@ -221,6 +261,27 @@ export function projectPageFieldValue(
   }
   if (kind !== 'PAGE') return formatDecimal(Math.floor(value));
   return formatSectionPageNumber(value, context.format);
+}
+
+/**
+ * The text a page field or page formula shows under a page context, or null when a formula has
+ * no value on that page (a division by zero, or a result its switches cannot render). The
+ * caller then keeps the field's saved result.
+ */
+export function pageFieldText(
+  match: Pick<AllowlistedPageFieldMatch, 'kind' | 'picture' | 'numberFormat' | 'formula'>,
+  context: FieldPageContext
+): string | null {
+  if (match.formula === undefined) return projectPageFieldValue(match.kind, context, match);
+  return formatPageFormula(
+    match.formula,
+    {
+      page: context.pageNumber,
+      numPages: context.pageCount,
+      sectionPages: context.sectionPageCount ?? context.pageCount,
+    },
+    match
+  );
 }
 
 /**
@@ -520,9 +581,9 @@ export function pageRefAssignmentToken(pages: readonly PageRecord[]): string {
  * substituted text length is — paint and the offset accounting clamp to that width, so a
  * multi-digit page number never lengthens the model.
  *
- * A page-field placeholder can still reach layout as several spans (a font or script change
- * inside a picture's literal text, or a break inside it). They all carry the same marker, so
- * only the first paints the value and the rest paint nothing. `previous` is the last span of
+ * A page-field placeholder or a `PAGEREF` result can still reach layout as several spans (a
+ * space, a font or script change inside a picture's literal text, or a break inside it). They
+ * all carry the same marker, so only the first paints the value and the rest paint nothing. `previous` is the last span of
  * the line before, so a placeholder that continues onto this line is recognized too.
  */
 function substituteBodyPageFieldLine(
@@ -553,16 +614,23 @@ function substituteBodyPageFieldLine(
       // pre-note number — neither the cache nor the truth. A never-live field already paints
       // its cache, so the restore is an identity no-op there.
       const text = live ? computed : pageRef.cached;
-      if (text.length === 0 || text === span.text) continue;
+      if (text.length === 0) continue;
+      // A result with spaces reaches layout as one span per word, all under the same marker:
+      // the first paints the whole value, the rest paint nothing. A `PAGEREF` result
+      // (ECMA-376 Part 1, 17.16.5.45) takes the target section's `w:pgNumType/@w:fmt`
+      // (`CT_PageNumber`, 17.6.12), and `ST_NumberFormat` (17.18.59) `numberInDash` gives
+      // "- 2 -" and `cardinalText` gives words.
+      const painted = sameFieldAtom(before, span, 'pageRef') ? '' : text;
+      if (painted === span.text) continue;
       if (!spans) spans = line.spans.slice();
-      spans[index] = { ...span, text };
+      spans[index] = { ...span, text: painted };
       continue;
     }
     const marker = span.fieldAtom?.pageField;
     if (!marker) continue;
-    const text = samePageFieldAtom(before, span)
+    const text = sameFieldAtom(before, span, 'pageField')
       ? ''
-      : projectPageFieldValue(marker.kind, context, marker);
+      : pageFieldMarkerText(marker, context);
     if (text === span.text) continue;
     if (!spans) spans = line.spans.slice();
     spans[index] = { ...span, text };
@@ -570,10 +638,26 @@ function substituteBodyPageFieldLine(
   return spans ? { ...line, spans } : line;
 }
 
-/** True when `before` is an earlier piece of the same body page-field atom as `span`. */
-function samePageFieldAtom(before: StyleSpanRecord | undefined, span: StyleSpanRecord): boolean {
+/** What a body page-field marker paints on a page: its value, or its segments with values. */
+function pageFieldMarkerText(marker: PageFieldMarker, context: FieldPageContext): string {
+  const valueOf = (field: PageFieldMarker): string =>
+    pageFieldText(field, context) ?? field.savedResult ?? '';
+  if (marker.segments === undefined) return valueOf(marker);
+  let text = '';
+  for (const segment of marker.segments) {
+    text += typeof segment === 'string' ? segment : valueOf(segment);
+  }
+  return text;
+}
+
+/** True when `before` is an earlier piece of the same body page-field or PAGEREF atom as `span`. */
+function sameFieldAtom(
+  before: StyleSpanRecord | undefined,
+  span: StyleSpanRecord,
+  kind: 'pageField' | 'pageRef'
+): boolean {
   return (
-    before?.fieldAtom?.pageField !== undefined &&
+    before?.fieldAtom?.[kind] !== undefined &&
     before.range.paragraphId === span.range.paragraphId &&
     before.range.start === span.range.start
   );

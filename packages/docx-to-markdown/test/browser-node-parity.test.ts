@@ -6,7 +6,7 @@ import {
   type EditorModule,
 } from '@docx-editor.dev/core/editor';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -71,15 +71,18 @@ const localFontFetch = (async (input: RequestInfo | URL): Promise<Response> => {
 }) as typeof fetch;
 
 async function fontsSettled(editor: DocxEditorInstance): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const state = editor.fontMeasurement();
-    if (!state.resolving) {
-      expect(state.measurer).toBe('shaped');
-      return;
-    }
+  // A glyph fallback face loads after the layout that finds a character without a glyph, so
+  // the fonts settle when the layout stops changing, not at the first idle moment.
+  let last: unknown;
+  let stable = 0;
+  for (let attempt = 0; attempt < 400 && stable < 8; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 25));
+    const layout = editor.surface?.publishedLayout();
+    stable = !editor.fontMeasurement().resolving && layout === last ? stable + 1 : 0;
+    last = layout;
   }
-  throw new Error('browser font shaping did not settle');
+  if (stable < 8) throw new Error('browser font shaping did not settle');
+  expect(editor.fontMeasurement().measurer).toBe('shaped');
 }
 
 function hasPendingResource(value: unknown, seen = new WeakSet<object>()): boolean {
@@ -97,8 +100,16 @@ async function browserLayout(bytes: Uint8Array): Promise<{
   readonly layout: SemanticLayout;
   readonly dispose: () => void;
 }> {
-  const fonts = await loadDefaultFonts({ fetcher: localFontFetch });
-  expect(fonts.failures).toHaveLength(0);
+  // The on-demand resolver, as the server uses: both hosts then hold the same faces, also the
+  // stand-in faces that the shared font fallback rules name. The Markdown export serves no
+  // glyph fallback face, so the editor's host serves none here.
+  const failures: unknown[] = [];
+  const fonts = packagedFonts({
+    fetcher: localFontFetch,
+    loading: 'eager',
+    fallbackFaces: false,
+    onFailure: (failure) => failures.push(failure),
+  });
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
@@ -108,6 +119,7 @@ async function browserLayout(bytes: Uint8Array): Promise<{
     modules: [parityReviewModule],
   });
   await fontsSettled(editor);
+  expect(failures).toHaveLength(0);
   let layout = editor.surface?.publishedLayout();
   for (let attempt = 0; layout && hasPendingResource(layout) && attempt < 200; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 25));
@@ -267,9 +279,11 @@ test('a real 500-page shaped export holds a bounded live set on a default heap',
   expect(measurement.peakRssBytes).toBeLessThan(RESIDENT_BACKSTOP);
 }, 120_000);
 
-// The one-shot export releases the layout before measurement, so its live heap settles far
-// below the retained-layout case: 224 MiB on `main` and 230 MiB with the PDF export work, on
-// the same machine, against the 256 MiB ceiling asserted below. Its old-space cap only bounds
+// The one-shot export releases the layout and yields to a timer before it returns, so the
+// runtime can drop the `WeakRef` targets it keeps for the current job. Its live heap after two
+// consecutive exports settles near 63 MiB on Node 24 (macOS arm64), against the 256 MiB ceiling
+// asserted below. Without that yield, one export measured 256 MiB and two exceeded the 400 MiB
+// cap, because each pinned its whole disposed document. Its old-space cap only bounds
 // transient growth during the forced collections, and 364 MiB proved marginal for that on the
 // Linux runners, which aborted with SIGABRT on two consecutive runs while macOS passed. 400 MiB
 // keeps a hard bound well under the 512 MiB the retained case needs, for the same reason that
@@ -281,11 +295,12 @@ const RETAINED_LAYOUT_NODE_ARGUMENTS = [
   '--max-semi-space-size=8',
 ] as const;
 
-test('the one-shot 500-page export fits a constrained 400 MiB heap', () => {
+test('two consecutive one-shot 500-page exports fit a constrained 400 MiB heap', () => {
   const measurement = performanceMeasurement(ONE_SHOT_NODE_ARGUMENTS, 'one-shot-performance');
   expectProductionFixture(measurement, { inspectLayout: false });
   // The one-shot entry point returns markdown and drops the layout, so it settles well below the
-  // retained-layout ceiling. That gap is the point: it proves the export does not pin the layout.
+  // retained-layout ceiling. That gap is the point: it proves the export does not pin the layout,
+  // and the second export proves that the first one's document does not stay live.
   expect(measurement.liveHeapBytes).toBeLessThan(ONE_SHOT_LIVE_HEAP_CEILING);
   expect(measurement.externalBytes).toBeLessThan(EXTERNAL_MEMORY_CEILING);
 }, 120_000);

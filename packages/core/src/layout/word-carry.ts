@@ -5,6 +5,7 @@ import { automaticTextSpacingBefore, withAutomaticTextSpacing } from './cjk-auto
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { growLineMetricsForText, lineBandText, type PendingLine } from './pending-line.ts';
+import { runBorderGapBetween } from './run-border-advance.ts';
 import { displayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -87,7 +88,9 @@ function placeOpeningWord(
 function relayWord(context: WordCarryContext, carried: readonly StyleSpanRecord[]): void {
   const line = context.line();
   for (const [index, span] of carried.entries()) {
-    const gap = index === 0 ? 0 : automaticTextSpacingBefore(span);
+    // The word's first span leaves its gap behind and opens a border on its new line.
+    const gap =
+      index === 0 ? runBorderGapBetween(line.spans.at(-1), span) : automaticTextSpacingBefore(span);
     line.width += gap;
     line.spans.push(
       withAutomaticTextSpacing(
@@ -184,7 +187,8 @@ export function carryPartialWord(
   const wordWidth = carried.reduce(
     (sum, span, index) =>
       sum + span.box.width + (index === 0 ? 0 : automaticTextSpacingBefore(span)),
-    pendingWidth
+    // A bordered word opens its border where it lands.
+    pendingWidth + (carried[0] ? runBorderGapBetween(undefined, carried[0]) : 0)
   );
   context.setProbeWidth(wordWidth);
   let next = start;

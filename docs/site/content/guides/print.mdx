@@ -62,8 +62,9 @@ Before conversion, the packaged dialog asks for **Markup** and **Print comments*
 | `displayMode` | The chosen markup: All Markup, Simple Markup, No Markup, or Original. Starts at the current review view. |
 | `comments` | Whether comments print. Defaults to on. |
 | `revisionMarkup`, `revisionAuthorSlots` | The current markup preferences and author slots. |
+| `fieldDate` | The editor's `fieldDate`, so the print shows the dates that the editor shows. Absent when the editor shows saved results. |
 
-Forward all four fields to `exportPdf`, as in [Convert PDF on the server](/docs/2.x/guides/export#convert-pdf-on-the-server). A handler that ignores `view` ignores both settings. A handler that drops `comments` always prints comments.
+Forward all five fields to `exportPdf`, as in [Convert PDF on the server](/docs/2.x/guides/export#convert-pdf-on-the-server). That section also shows how to send `fieldDate` to a server in another time zone. A handler that ignores `view` ignores both settings. A handler that drops `comments` always prints comments.
 
 | Menu option | Effect |
 | --- | --- |

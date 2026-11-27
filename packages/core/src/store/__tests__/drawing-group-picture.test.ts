@@ -1,8 +1,8 @@
 // A `wpg:wgp` group can hold a raster picture beside its vector members, for example a
 // scanned page with ruled lines drawn over it. The vector projection accepts `wps:wsp`
 // members only, so a picture member made the whole group project as nothing. These tests pin
-// the group picture projection: which groups it accepts, where the picture lands inside the
-// drawing extent, and every group it still refuses.
+// the group picture projection: where the picture lands inside the drawing extent, which
+// members paint beside it and in which order, and the pictures that paint nothing.
 
 import { createPackageShapeThemeResolvers } from '../package/theme-color-resolution.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
@@ -107,6 +107,35 @@ function projectionsOf(run: string) {
   return projectDrawingsInPart(parsePart(`<w:p><w:r>${run}</w:r></w:p>`));
 }
 
+interface TreeNode {
+  readonly id: string;
+  readonly localName?: string;
+  readonly children?: readonly TreeNode[];
+}
+
+/** The node ids of the group members: the `wpg:wgp` children after the group properties. */
+function memberNodeIds(run: string): string[] {
+  const find = (node: TreeNode): TreeNode | null => {
+    if (node.localName === 'wgp') return node;
+    for (const child of node.children ?? []) {
+      const found = find(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const part = parsePart(`<w:p><w:r>${run}</w:r></w:p>`);
+  const group = find(part.root as unknown as TreeNode);
+  if (!group) throw new Error('no wpg:wgp in the run');
+  return (group.children ?? [])
+    .filter((child) => !['cNvPr', 'cNvGrpSpPr', 'grpSpPr'].includes(child.localName ?? ''))
+    .map((child) => child.id);
+}
+
+/** The diagnostic of one member that paints nothing while the other members paint. */
+function notShown(nodeId: string) {
+  return { code: 'group-member-not-shown', nodeId, detail: null };
+}
+
 describe('group picture projection', () => {
   test('an MC-wrapped group projects its picture member and its vector members', () => {
     const drawing = groupDrawing(
@@ -151,18 +180,24 @@ describe('group picture projection', () => {
     const [painted] = projectionsOf(mcWrapped(groupDrawing(pictureMember() + filled)));
     expect(painted!.groupPicture).not.toBeNull();
     expect(painted!.vectorShape?.components.map((c) => c.fillHex)).toEqual(['00FF00']);
-    // A text box with an effect the group cannot paint still leaves the group unpainted.
+    // A text box without paint keeps its text when it carries an effect. The picture paints.
     const shadowed = textboxMember().replace(
       '</a:prstGeom>',
       '</a:prstGeom><a:effectLst><a:outerShdw dist="38100"/></a:effectLst>'
     );
-    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + shadowed)))).toHaveLength(1);
-    // So does one whose theme effect the group cannot resolve.
+    // So does one whose theme effect does not resolve.
     const themed = textboxMember().replace(
       '</wps:spPr>',
       '</wps:spPr><wps:style><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef></wps:style>'
     );
-    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + themed)))).toHaveLength(1);
+    for (const box of [shadowed, themed]) {
+      const projections = projectionsOf(mcWrapped(groupDrawing(pictureMember() + box)));
+      expect(projections).toHaveLength(1);
+      expect(projections[0]!.groupPicture).toMatchObject({ embeddedRelationshipId: 'rIdImg' });
+      expect(projections[0]!.vectorShape).toBeNull();
+      expect(projections[0]!.groupTextboxes).toHaveLength(1);
+      expect(projections[0]!.diagnostics).toEqual([]);
+    }
   });
 
   test('the picture frame maps through the group child offset and extent', () => {
@@ -202,8 +237,17 @@ describe('group picture projection', () => {
     expect(projectionsOf(drawing)[0]!.groupPicture?.alternateContent).toBe(false);
   });
 
+  test('a picture outside the group extent, within one extent of it, paints', () => {
+    // A member is not cut at the group extent.
+    for (const member of [pictureMember({ x: 3100 }), pictureMember({ y: -800 })]) {
+      const [projection] = projectionsOf(groupDrawing(member));
+      expect(projection!.groupPicture).not.toBeNull();
+      expect(projection!.diagnostics).toEqual([]);
+    }
+  });
+
   test('a picture frame partly outside the group extent keeps its frame', () => {
-    // Half the picture lies left of the child offset; paint clips it to the extent.
+    // Half the picture lies left of the child offset; it paints whole, past the extent.
     const [projection] = projectionsOf(groupDrawing(pictureMember({ x: -1400 })));
     expect(projection!.groupPicture?.frameEmu).toEqual({
       x: -1500 * SCALE,
@@ -243,17 +287,26 @@ describe('group picture projection', () => {
       ['scene', '<a:scene3d/>'],
       ['3D shape', '<a:sp3d/>'],
     ]) {
-      test(`${kind} group refuses unsupported ${name} without partial rendering`, () => {
+      test(`${kind} group ignores its own ${name} and paints its members flat`, () => {
         const drawing = groupDrawing(members!).replace(
           '</wpg:grpSpPr>',
           `${property}</wpg:grpSpPr>`
         );
-        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
+        // The group paints as the same group paints without the effect.
+        const [plain] = projectionsOf(groupDrawing(members!));
         const [bare] = projectionsOf(drawing);
-        expect(bare!.groupPicture).toBeNull();
-        expect(bare!.vectorShape).toBeNull();
+        expect(bare!.groupPicture !== null).toBe(kind !== 'vector');
+        expect(bare!.groupPicture).toEqual(plain!.groupPicture);
+        expect(bare!.vectorShape?.components ?? []).toHaveLength(kind === 'picture' ? 0 : 1);
+        expect(bare!.vectorShape).toEqual(plain!.vectorShape);
         expect(bare!.picture).toBeNull();
-        expect(bare!.diagnostics.map((item) => item.code)).toContain('unsupported-graphic');
+        expect(bare!.diagnostics).toEqual([]);
+        // No member is left out, so the MC-wrapped group stands for the drawing.
+        const wrapped = projectionsOf(mcWrapped(drawing));
+        expect(wrapped).toHaveLength(1);
+        expect(wrapped[0]!.groupPicture?.frameEmu).toEqual(plain!.groupPicture?.frameEmu);
+        expect(wrapped[0]!.vectorShape).toEqual(plain!.vectorShape);
+        expect(wrapped[0]!.diagnostics).toEqual([]);
       });
     }
     // A group's own fill paints nothing: only members that say `a:grpFill` paint it.
@@ -291,43 +344,105 @@ describe('group picture projection', () => {
         .replace('</wpg:grpSpPr>', '<a:noFill/><a:effectLst/><a:extLst/></wpg:grpSpPr>');
       expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
     });
-    test(`${kind} group refuses nonidentity color mode and nested groups`, () => {
+    test(`${kind} group ignores a color mode and leaves out a nested group without a frame`, () => {
+      const [plain] = projectionsOf(groupDrawing(members!));
       const drawing = groupDrawing(members!).replace(
         '<wpg:grpSpPr>',
         '<wpg:grpSpPr bwMode="gray">'
       );
-      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
-      expect(projectionsOf(mcWrapped(groupDrawing(members! + '<wpg:grpSp/>')))).toHaveLength(1);
+      const gray = projectionsOf(mcWrapped(drawing));
+      expect(gray).toHaveLength(1);
+      expect(gray[0]!.groupPicture?.frameEmu).toEqual(plain!.groupPicture?.frameEmu);
+      expect(gray[0]!.vectorShape).toEqual(plain!.vectorShape);
+      expect(gray[0]!.diagnostics).toEqual([]);
+      // A nested group without `a:xfrm` has no place. The other members paint.
+      const nested = groupDrawing(members! + '<wpg:grpSp/>');
+      const [bare] = projectionsOf(nested);
+      expect(bare!.groupPicture).toEqual(plain!.groupPicture);
+      expect(bare!.vectorShape).toEqual(plain!.vectorShape);
+      expect(bare!.diagnostics).toEqual([notShown(memberNodeIds(nested).at(-1)!)]);
+      // The fallback of this wrapper does not paint, so the group still stands for the drawing.
+      const wrapped = projectionsOf(mcWrapped(nested));
+      expect(wrapped).toHaveLength(1);
+      expect(wrapped[0]!.vectorShape).toEqual(plain!.vectorShape);
+      expect(wrapped[0]!.diagnostics.map((item) => item.code)).toEqual(['group-member-not-shown']);
     });
   }
 
   for (const members of [barMember(2100), pictureMember() + barMember(2100)]) {
+    const group = members.includes('<pic:pic>') ? 'a picture group' : 'a vector group';
     for (const property of [
       '<a:effectLst><a:glow rad="12700"/></a:effectLst>',
       '<a:scene3d/>',
       '<a:sp3d/>',
     ]) {
-      test(`a group refuses a vector member with ${property}`, () => {
+      test(`${group} paints a vector member with ${property} without the effect`, () => {
         const drawing = groupDrawing(members.replace('</wps:spPr>', `${property}</wps:spPr>`));
-        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
-        expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
-        expect(projectionsOf(drawing)[0]!.vectorShape).toBeNull();
+        const [plain] = projectionsOf(groupDrawing(members));
+        const [bare] = projectionsOf(drawing);
+        expect(bare!.vectorShape?.components).toHaveLength(1);
+        expect(bare!.vectorShape?.components[0]!.fillHex).toBe('000000');
+        expect(bare!.vectorShape).toEqual(plain!.vectorShape);
+        expect(bare!.groupPicture !== null).toBe(members.includes('<pic:pic>'));
+        expect(bare!.groupPicture).toEqual(plain!.groupPicture);
+        expect(bare!.diagnostics).toEqual([]);
+        const wrapped = projectionsOf(mcWrapped(drawing));
+        expect(wrapped).toHaveLength(1);
+        expect(wrapped[0]!.vectorShape).toEqual(plain!.vectorShape);
       });
     }
-    test('a group refuses a hidden vector member', () => {
+    test(`${group} paints a vector member with its outer shadow`, () => {
+      const shadow =
+        '<a:effectLst><a:outerShdw blurRad="12700" dist="12700" dir="0">' +
+        '<a:srgbClr val="FF0000"/></a:outerShdw></a:effectLst>';
+      const drawing = groupDrawing(members.replace('</wps:spPr>', `${shadow}</wps:spPr>`));
+      const [bare] = projectionsOf(drawing);
+      expect(bare!.vectorShape?.components).toHaveLength(1);
+      expect(bare!.vectorShape?.components[0]!.fillHex).toBe('000000');
+      expect(bare!.vectorShape?.components[0]!.shadow).toMatchObject({ hex: 'FF0000', dyEmu: 0 });
+      expect(bare!.groupPicture !== null).toBe(members.includes('<pic:pic>'));
+      expect(bare!.diagnostics).toEqual([]);
+    });
+    test('a hidden vector member paints nothing, and the rest of the group paints', () => {
       const drawing = groupDrawing(members.replace('name="Bar"', 'name="Bar" hidden="1"'));
-      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
-      expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
+      const [projection] = projectionsOf(drawing);
+      expect(projection!.vectorShape?.components ?? []).toHaveLength(0);
+      expect(projection!.groupPicture !== null).toBe(members.includes('<pic:pic>'));
     });
   }
 
-  test('a picture member refuses an unsupported color mode', () => {
-    const drawing = groupDrawing(pictureMember().replace('<pic:spPr>', '<pic:spPr bwMode="gray">'));
-    expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
-    expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
+  test('a hidden second picture paints nothing, and the first still paints', () => {
+    const [projection] = projectionsOf(
+      groupDrawing(
+        pictureMember() +
+          pictureMember({ y: 1500 }).replace('name="Picture"', 'name="Picture" hidden="1"')
+      )
+    );
+    expect(projection!.groupPicture).not.toBeNull();
+    expect(projection!.groupPictureLayers ?? []).toHaveLength(0);
   });
 
-  test('theme effects refuse the whole group while empty theme defaults remain supported', () => {
+  test('a group whose only member is hidden paints nothing and no placeholder', () => {
+    const [projection] = projectionsOf(
+      groupDrawing(barMember(2100).replace('name="Bar"', 'name="Bar" hidden="1"'))
+    );
+    expect(projection!.vectorShape?.components).toEqual([]);
+    expect(projection!.diagnostics.map((d) => d.code)).not.toContain('unsupported-graphic');
+  });
+
+  test('a picture member with a color mode paints as a plain picture', () => {
+    const drawing = groupDrawing(pictureMember().replace('<pic:spPr>', '<pic:spPr bwMode="gray">'));
+    const [plain] = projectionsOf(groupDrawing(pictureMember()));
+    const [bare] = projectionsOf(drawing);
+    expect(bare!.groupPicture).toMatchObject({ embeddedRelationshipId: 'rIdImg' });
+    expect(bare!.groupPicture).toEqual(plain!.groupPicture);
+    expect(bare!.diagnostics).toEqual([]);
+    const wrapped = projectionsOf(mcWrapped(drawing));
+    expect(wrapped).toHaveLength(1);
+    expect(wrapped[0]!.groupPicture?.alternateContent).toBe(true);
+  });
+
+  test('a theme effect never refuses the group, and a theme shadow paints on its shape', () => {
     const themeFor = (effect: string) => {
       const theme = readOoxmlPart(
         `<a:theme xmlns:a="${A}"><a:themeElements><a:fmtScheme name="Anonymous">` +
@@ -350,11 +465,12 @@ describe('group picture projection', () => {
       '<a:effectLst><a:outerShdw blurRad="40000" dist="200000" dir="0"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst>'
     );
     const scene = themeFor('<a:effectLst/><a:scene3d/>');
-    for (const [index, theme, admitted] of [
-      ['0', shadow, true],
-      [' +00 ', shadow, true],
-      ['1', empty, true],
-      ['1', shadow, false],
+    // The third value tells whether the reference resolves to a shadow that paint draws.
+    for (const [index, theme, shadowed] of [
+      ['0', shadow, false],
+      [' +00 ', shadow, false],
+      ['1', empty, false],
+      ['1', shadow, true],
       ['1', scene, false],
       ['2', empty, false],
       ['1', undefined, false],
@@ -373,91 +489,53 @@ describe('group picture projection', () => {
         const drawing = groupDrawing(members);
         const project = (xml: string) =>
           projectDrawingsInPart(parsePart(`<w:p><w:r>${xml}</w:r></w:p>`), theme);
-        const [wrapped] = project(mcWrapped(drawing));
-        expect(Boolean(wrapped!.vectorShape || wrapped!.groupPicture)).toBe(admitted);
+        // A local empty effect list overrides the theme effect.
         const cleared = drawing
           .replace('</wps:spPr>', '<a:effectLst/></wps:spPr>')
           .replace('</pic:spPr>', '<a:effectLst/></pic:spPr>');
-        const [clearedProjection] = project(mcWrapped(cleared));
-        expect(Boolean(clearedProjection!.vectorShape || clearedProjection!.groupPicture)).toBe(
-          admitted || (theme === shadow && index === '1')
-        );
-        if (!admitted) {
-          const [bare] = project(drawing);
-          expect(bare!.vectorShape).toBeNull();
-          expect(bare!.groupPicture).toBeNull();
+        for (const [xml, expectShadow] of [
+          [mcWrapped(drawing), shadowed],
+          [drawing, shadowed],
+          [mcWrapped(cleared), false],
+        ] as const) {
+          const projections = project(xml);
+          expect(projections).toHaveLength(1);
+          const projection = projections[0]!;
+          expect(projection.diagnostics).toEqual([]);
+          expect(projection.groupPicture !== null).toBe(members.includes('<pic:pic>'));
+          if (members === picture) {
+            // A picture member paints as a plain picture, without its theme effect.
+            expect(projection.vectorShape).toBeNull();
+            continue;
+          }
+          const components = projection.vectorShape?.components ?? [];
+          expect(components).toHaveLength(1);
+          expect(components[0]!.fillHex).toBe('000000');
+          expect(components[0]!.shadow?.hex).toBe(expectShadow ? '000000' : undefined);
         }
       }
     }
   });
 
+  // A fill rectangle with insets paints: see `drawing-group-picture-fill-rect.test.ts`.
   const refused: readonly (readonly [string, string])[] = [
-    [
-      'a displaced fill rectangle',
-      groupDrawing(pictureMember({ fill: '<a:stretch><a:fillRect l="50000"/></a:stretch>' })),
-    ],
-    [
-      'a malformed fill rectangle',
-      groupDrawing(pictureMember({ fill: '<a:stretch><a:fillRect l="unknown"/></a:stretch>' })),
-    ],
-    [
-      'a picture shadow',
-      groupDrawing(
-        pictureMember().replace(
-          '</pic:spPr>',
-          '<a:effectLst><a:outerShdw blurRad="12700" dist="12700" dir="0"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst></pic:spPr>'
-        )
-      ),
-    ],
-    [
-      'a picture 3D transform',
-      groupDrawing(pictureMember().replace('</pic:spPr>', '<a:sp3d z="12700"/></pic:spPr>')),
-    ],
     [
       'a hidden picture member',
       groupDrawing(pictureMember().replace('name="Picture"', 'name="Picture" hidden="1"')),
     ],
     [
-      'a second picture above a vector member',
-      groupDrawing(pictureMember() + barMember(2100) + pictureMember({ y: 1500 })),
-    ],
-    [
-      'a second picture member that is hidden',
-      groupDrawing(
-        pictureMember() +
-          pictureMember({ y: 1500 }).replace('name="Picture"', 'name="Picture" hidden="1"')
-      ),
-    ],
-    ['a picture above a vector member', groupDrawing(barMember(2100) + pictureMember())],
-    ['a rotated picture', groupDrawing(pictureMember({ xfrmAttributes: ' rot="5400000"' }))],
-    ['a flipped picture', groupDrawing(pictureMember({ xfrmAttributes: ' flipH="1"' }))],
-    [
-      'a picture with a blip effect',
-      groupDrawing(pictureMember({ blip: '<a:blip r:embed="rIdImg"><a:grayscl/></a:blip>' })),
-    ],
-    [
       'a tiled picture',
       groupDrawing(pictureMember({ fill: '<a:tile tx="0" ty="0" sx="100000" sy="100000"/>' })),
     ],
-    [
-      'a picture with a non-rectangle geometry',
-      groupDrawing(
-        pictureMember({ geometry: '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>' })
-      ),
-    ],
     ['a picture without a relationship', groupDrawing(pictureMember({ blip: '<a:blip/>' }))],
     ['a picture without an extent', groupDrawing(pictureMember({ cx: 0 }))],
-    ['a picture beside a nested group', groupDrawing(pictureMember() + '<wpg:grpSp/>')],
-    ['a rotated group', groupDrawing(pictureMember(), ' rot="60000"')],
     // A zero child extent is legal for a group of straight lines, but leaves a picture no size.
     [
       'a group with a zero child extent',
       groupDrawing(pictureMember()).replace('<a:chExt cx="3000"', '<a:chExt cx="0"'),
     ],
-    // Frame bounds: a frame with no visible part, or one that reaches more than one extent
-    // past the group, is refused before its coordinates reach any output.
-    ['a picture right of the group extent', groupDrawing(pictureMember({ x: 3100 }))],
-    ['a picture above the group extent', groupDrawing(pictureMember({ y: -800 }))],
+    // Frame bounds: a frame that reaches more than one extent past the group paints nothing,
+    // so its coordinates reach no output.
     [
       'a picture offset far past the group extent',
       groupDrawing(pictureMember({ x: 999999999999999 }) + barMember(2100)),
@@ -465,23 +543,6 @@ describe('group picture projection', () => {
     [
       'a picture reaching more than one extent past the group',
       groupDrawing(pictureMember({ x: -2950, cx: 3200 })),
-    ],
-    // The picture makes its vector members visible, so they get the same outer bound.
-    [
-      'a vector member far past a picture group',
-      groupDrawing(pictureMember() + barMember(2100, 999999999999999)),
-    ],
-    [
-      'a vector member stroke wider than a picture group',
-      groupDrawing(
-        pictureMember() +
-          barMember(
-            2100,
-            600,
-            // Line widths are absolute, so only a width past the group extent is wider.
-            '<a:ln w="20116800"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>'
-          )
-      ),
     ],
   ];
 
@@ -510,6 +571,147 @@ describe('group picture projection', () => {
       expect(bare!.picture).toBeNull();
     });
   }
+
+  const PLAIN_FRAME = { x: 0, y: 0, cx: 3000 * SCALE, cy: 1000 * SCALE };
+
+  // The picture paints without its shape effects and its 3D properties. Its blip colour
+  // effects and its geometry clip do paint: see `drawing-group-picture-fill-rect.test.ts`.
+  const plainPictures: readonly (readonly [string, string])[] = [
+    [
+      'a picture shadow',
+      pictureMember().replace(
+        '</pic:spPr>',
+        '<a:effectLst><a:outerShdw blurRad="12700" dist="12700" dir="0"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst></pic:spPr>'
+      ),
+    ],
+    [
+      'a picture 3D transform',
+      pictureMember().replace('</pic:spPr>', '<a:sp3d z="12700"/></pic:spPr>'),
+    ],
+  ];
+  for (const [name, member] of plainPictures) {
+    test(`${name} paints as a plain rectangle picture`, () => {
+      const [plain] = projectionsOf(groupDrawing(pictureMember()));
+      const [bare] = projectionsOf(groupDrawing(member));
+      expect(bare!.groupPicture).toMatchObject({
+        embeddedRelationshipId: 'rIdImg',
+        frameEmu: PLAIN_FRAME,
+      });
+      expect(bare!.groupPicture).toEqual(plain!.groupPicture);
+      expect(bare!.groupPicture?.clipUnit).toBeUndefined();
+      expect(bare!.vectorShape).toBeNull();
+      expect(bare!.picture).toBeNull();
+      expect(bare!.diagnostics).toEqual([]);
+      const wrapped = projectionsOf(mcWrapped(groupDrawing(member)));
+      expect(wrapped).toHaveLength(1);
+      expect(wrapped[0]!.groupPicture).toMatchObject({
+        frameEmu: PLAIN_FRAME,
+        alternateContent: true,
+      });
+    });
+  }
+
+  test('a vector member records the pictures that paint under it', () => {
+    // A picture after the bar paints above it: the bar has no picture below.
+    const [above] = projectionsOf(groupDrawing(barMember(2100) + pictureMember()));
+    expect(above!.groupPicture?.frameEmu).toEqual(PLAIN_FRAME);
+    expect(above!.groupPictureLayers).toBeUndefined();
+    expect(above!.vectorShape?.components.map((c) => c.picturesBelow)).toEqual([0]);
+    // A bar between two pictures paints above the first and below the second.
+    const [between] = projectionsOf(
+      groupDrawing(pictureMember() + barMember(2100) + pictureMember({ y: 1500 }))
+    );
+    expect(between!.groupPicture?.frameEmu).toEqual(PLAIN_FRAME);
+    expect(between!.groupPictureLayers?.map((picture) => picture.frameEmu)).toEqual([
+      { ...PLAIN_FRAME, y: 1300 * SCALE },
+    ]);
+    expect(between!.vectorShape?.components.map((c) => c.picturesBelow)).toEqual([1]);
+    expect(between!.vectorShape?.components[0]!.subpathsEmu[0]![0]).toEqual({
+      x: 500 * SCALE,
+      y: 1900 * SCALE,
+    });
+    // A bar after every picture carries no count: it paints above all pictures.
+    const [below] = projectionsOf(groupDrawing(pictureMember() + barMember(2100)));
+    expect(below!.vectorShape?.components.map((c) => c.picturesBelow)).toEqual([undefined]);
+    for (const projection of [above, between, below]) {
+      expect(projection!.diagnostics).toEqual([]);
+    }
+  });
+
+  test('a turned or flipped picture keeps its upright frame and records its turn', () => {
+    for (const [xfrmAttributes, rotationDegrees, flipH] of [
+      [' rot="5400000"', 90, undefined],
+      [' flipH="1"', undefined, true],
+      // A vertical flip is a horizontal flip and a half turn.
+      [' flipV="1"', 180, true],
+    ] as const) {
+      const drawing = groupDrawing(pictureMember({ xfrmAttributes }));
+      const [bare] = projectionsOf(drawing);
+      expect(bare!.groupPicture?.frameEmu).toEqual(PLAIN_FRAME);
+      expect(bare!.groupPicture?.rotationDegrees).toBe(rotationDegrees);
+      expect(bare!.groupPicture?.flipH).toBe(flipH);
+      expect(bare!.diagnostics).toEqual([]);
+      const wrapped = projectionsOf(mcWrapped(drawing));
+      expect(wrapped).toHaveLength(1);
+      expect(wrapped[0]!.groupPicture?.rotationDegrees).toBe(rotationDegrees);
+    }
+  });
+
+  test('a picture in a turned group turns about the centre of the group', () => {
+    // The picture centre is 3000000 EMU above the group centre. A quarter turn moves it right.
+    const [quarter] = projectionsOf(groupDrawing(pictureMember(), ' rot="5400000"'));
+    expect(quarter!.groupPicture?.frameEmu).toEqual({ ...PLAIN_FRAME, x: 3000000, y: 3000000 });
+    expect(quarter!.groupPicture?.rotationDegrees).toBe(90);
+    expect(quarter!.groupPicture?.flipH).toBeUndefined();
+    // One degree moves the centre by 3000000 * sin(1 deg) right and 3000000 * (1 - cos(1 deg)) down.
+    const [degree] = projectionsOf(groupDrawing(pictureMember(), ' rot="60000"'));
+    const frame = degree!.groupPicture!.frameEmu;
+    expect(frame.x).toBeCloseTo(3000000 * Math.sin(Math.PI / 180), 3);
+    expect(frame.y).toBeCloseTo(3000000 * (1 - Math.cos(Math.PI / 180)), 3);
+    expect({ cx: frame.cx, cy: frame.cy }).toEqual({ cx: 3000 * SCALE, cy: 1000 * SCALE });
+    expect(degree!.groupPicture?.rotationDegrees).toBe(1);
+    expect(degree!.diagnostics).toEqual([]);
+  });
+
+  test('a nested group without a frame beside a picture paints nothing, and the picture paints', () => {
+    const drawing = groupDrawing(pictureMember() + '<wpg:grpSp/>');
+    const [bare] = projectionsOf(drawing);
+    expect(bare!.groupPicture?.frameEmu).toEqual(PLAIN_FRAME);
+    expect(bare!.vectorShape).toBeNull();
+    expect(bare!.diagnostics).toEqual([notShown(memberNodeIds(drawing)[1]!)]);
+  });
+
+  // The picture makes its vector members visible, so they get the same outer bound.
+  const pastBound: readonly (readonly [string, string])[] = [
+    ['a vector member far past a picture group', barMember(2100, 999999999999999)],
+    [
+      'a vector member stroke wider than a picture group',
+      barMember(
+        2100,
+        600,
+        // Line widths are absolute, so only a width past the group extent is wider.
+        '<a:ln w="20116800"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>'
+      ),
+    ],
+  ];
+  for (const [name, member] of pastBound) {
+    test(`${name} paints nothing, and the rest of the group paints`, () => {
+      const [alone] = projectionsOf(groupDrawing(pictureMember() + member));
+      expect(alone!.groupPicture?.frameEmu).toEqual(PLAIN_FRAME);
+      expect(alone!.vectorShape).toBeNull();
+      expect(alone!.diagnostics.map((item) => item.code)).not.toContain('unsupported-graphic');
+      // A second bar inside the bound still paints.
+      const [beside] = projectionsOf(groupDrawing(pictureMember() + member + barMember(2600, 700)));
+      expect(beside!.groupPicture?.frameEmu).toEqual(PLAIN_FRAME);
+      expect(beside!.vectorShape?.components).toHaveLength(1);
+      expect(beside!.vectorShape?.components[0]!.strokeHex).toBeNull();
+      expect(beside!.vectorShape?.components[0]!.subpathsEmu[0]![0]).toEqual({
+        x: 600 * SCALE,
+        y: 2400 * SCALE,
+      });
+      expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + member)))).toHaveLength(1);
+    });
+  }
 });
 
 describe('members that paint the group fill', () => {
@@ -521,25 +723,48 @@ describe('members that paint the group fill', () => {
     groupDrawing(members).replace('</wpg:grpSpPr>', `${fill}</wpg:grpSpPr>`);
   const groupFillBox = () => textboxMember().replace('</a:prstGeom>', '</a:prstGeom><a:grpFill/>');
 
-  test('a text box with a:grpFill before a picture orders it, so the group refuses', () => {
+  test('a text box with a:grpFill before a picture paints the group fill under it', () => {
     const [projection] = projectionsOf(filledGroup(SOLID, groupFillBox() + pictureMember()));
-    expect(projection!.groupPicture).toBeNull();
+    expect(projection!.groupPicture).toMatchObject({ embeddedRelationshipId: 'rIdImg' });
+    expect(projection!.vectorShape?.components.map((c) => c.fillHex)).toEqual(['FF0000']);
+    expect(projection!.vectorShape?.components.map((c) => c.picturesBelow)).toEqual([0]);
+    expect(projection!.groupTextboxes).toHaveLength(1);
+    expect(projection!.diagnostics).toEqual([]);
     // After the picture, the text box paints the group fill above it.
     const [after] = projectionsOf(filledGroup(SOLID, pictureMember() + groupFillBox()));
     expect(after!.groupPicture).not.toBeNull();
     expect(after!.vectorShape?.components.map((c) => c.fillHex)).toEqual(['FF0000']);
+    expect(after!.vectorShape?.components.map((c) => c.picturesBelow)).toEqual([undefined]);
   });
 
-  test('a gradient group fill spans the group box, so its members refuse', () => {
-    // Word paints one gradient across the group box, not one per member (2026-11-12 render).
+  test('a member paints a gradient group fill', () => {
+    // One gradient spans the box of the group: see `drawing-group-spanning-gradient.test.ts`.
     const bar = barMember(2100).replace(
       '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
       '<a:grpFill/>'
     );
-    expect(projectionsOf(filledGroup(GRADIENT, bar))[0]!.vectorShape).toBeNull();
-    // A text box that paints the gradient is not text alone, so its text does not render bare.
+    const [alone] = projectionsOf(filledGroup(GRADIENT, bar));
+    const [component] = alone!.vectorShape!.components;
+    expect(alone!.vectorShape!.components).toHaveLength(1);
+    expect(component!.fillGradient?.stops.map((stop) => stop.hex)).toEqual(['FF0000', '0000FF']);
+    expect(alone!.diagnostics).toEqual([]);
+    // A text box that paints the gradient paints its shape, and its text lays out.
     const [box] = projectionsOf(filledGroup(GRADIENT, groupFillBox()));
-    expect(box!.vectorShape).toBeNull();
-    expect(box!.groupTextboxes).toBeUndefined();
+    expect(box!.vectorShape!.components[0]!.fillGradient).toBeDefined();
+    expect(box!.groupTextboxes).toHaveLength(1);
+    expect(box!.diagnostics).toEqual([]);
+  });
+
+  test('a member that takes a picture group fill paints nothing, and the rest paints', () => {
+    const picture =
+      '<a:blipFill><a:blip r:embed="rIdImg"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>';
+    const bar = barMember(2100).replace(
+      '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
+      '<a:grpFill/>'
+    );
+    const group = filledGroup(picture, bar + barMember(2600));
+    const [mixed] = projectionsOf(group);
+    expect(mixed!.vectorShape?.components.map((c) => c.fillHex)).toEqual(['000000']);
+    expect(mixed!.diagnostics).toEqual([notShown(memberNodeIds(group)[0]!)]);
   });
 });

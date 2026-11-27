@@ -1,4 +1,4 @@
-import { withExportGlyphFallbacks } from './export-glyph-fallback.ts';
+import { withGlyphFallbacks } from '../layout/glyph-fallback-shaper.ts';
 // Process-wide shaped measurement shared by Node exporters.
 
 import {
@@ -146,7 +146,7 @@ export async function createSessionExportShaping(
   }
   const policy = fontShapingPolicy(execution, EXPORT_HARFBUZZ_SHAPER_POLICY);
   const shaper = await acquireNativeProcessWideExportShaper();
-  const shaping = withExportGlyphFallbacks(
+  const shaping = withGlyphFallbacks(
     await createLayoutShapingWithTextShaper(
       prepared,
       shaper,
@@ -154,7 +154,9 @@ export async function createSessionExportShaping(
       instrumentation,
       documentLigatures
     ),
-    glyphFallbacks
+    glyphFallbacks,
+    // An export with no fallback face still draws the hyphen and small caps as others do.
+    { withoutFaces: true }
   );
   return Object.freeze({
     createMeasurer: () => shapedMeasurer(shaping),

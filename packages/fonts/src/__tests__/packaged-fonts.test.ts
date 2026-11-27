@@ -16,6 +16,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { FACES, FAMILY_PLANS, planFaceFile } from '../family-plans.ts';
 import {
+  GLYPH_FALLBACK_FACE_FAMILIES,
   FONT_ASSET_MANIFEST,
   DEFAULT_FONT_FAMILIES,
   loadDefaultFonts,
@@ -406,5 +407,76 @@ describe('packagedFonts', () => {
 
     await expect(pending).rejects.toBe('superseded');
     expect(failures).toEqual([]);
+  });
+});
+
+describe('packagedFonts under the own names of its faces', () => {
+  const fileOf = (url: string): string => url.slice(url.lastIndexOf('/') + 1);
+
+  test('serves a substitute that the request names itself, one face for one face', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Liberation Serif'],
+      defaultFamily: 'No Such Family',
+      faces: [{ family: 'Liberation Serif', weight: 700, style: 'normal' }],
+    });
+    expect(requested.map(fileOf)).toEqual(['LiberationSerif-Bold.ttf']);
+    expect(fragment.sources.map((source) => source.request)).toEqual([
+      { family: 'Liberation Serif', weight: 700, style: 'normal' },
+    ]);
+  });
+
+  test('serves a glyph fallback face by name', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Noto Sans Symbols 2'],
+      defaultFamily: 'No Such Family',
+      faces: [],
+    });
+    expect(requested.map(fileOf)).toEqual(['NotoSansSymbols2-Regular.ttf']);
+    expect(fragment.sources.map((source) => source.request.family)).toEqual([
+      'Noto Sans Symbols 2',
+    ]);
+  });
+
+  test('every glyph fallback family has a packaged face', async () => {
+    const { fetcher } = countingFetcher();
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: [...GLYPH_FALLBACK_FACE_FAMILIES],
+      defaultFamily: 'No Such Family',
+    });
+    expect(fragment.sources.map((source) => source.request.family).sort()).toEqual(
+      [...GLYPH_FALLBACK_FACE_FAMILIES].sort()
+    );
+    expect(fragment.failures).toEqual([]);
+  });
+
+  test('loads no glyph fallback face that the request does not name', async () => {
+    const { fetcher, requested } = countingFetcher();
+    await packagedFonts({ fetcher, install: false, loading: 'eager' })({
+      families: ['Arial'],
+      defaultFamily: 'Calibri',
+    });
+    expect(requested.map(fileOf).filter((file) => /Noto|Twemoji/.test(file))).toEqual([]);
+  });
+
+  test('fallbackFaces: false serves no glyph fallback face', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await packagedFonts({ fetcher, install: false, fallbackFaces: false })({
+      families: ['Noto Sans Symbols 2', 'Twemoji Mozilla'],
+      defaultFamily: 'No Such Family',
+    });
+    expect(requested).toEqual([]);
+    expect(fragment.sources).toEqual([]);
+  });
+
+  test('a face that an earlier origin paints is not loaded again', async () => {
+    const { fetcher, requested } = countingFetcher();
+    await packagedFonts({ fetcher, install: false })({
+      families: ['Noto Sans Math'],
+      defaultFamily: 'No Such Family',
+      resolvedFaces: [{ family: 'Noto Sans Math', weight: 400, style: 'normal' }],
+    });
+    expect(requested).toEqual([]);
   });
 });

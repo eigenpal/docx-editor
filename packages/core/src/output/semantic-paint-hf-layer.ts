@@ -19,6 +19,11 @@ import type {
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
 import {
+  compareDrawingStackOrder,
+  paintLayerOf,
+  shiftAnchoredDrawing,
+} from '../layout/drawing-overlap.ts';
+import {
   appendHeaderFooterHoverChrome,
   headerFooterBandHeightPt,
   headerFooterBandIsActive,
@@ -50,37 +55,14 @@ function hfAnchorOnPageSheet(
   drawing: AnchoredDrawingRecord,
   pageBox: { readonly x: number; readonly y: number }
 ): AnchoredDrawingRecord {
-  const pb = drawing.paintBounds;
   // Layout resolves page-frame axes in page-CONTENT coordinates; the record's frame origin is
   // the page edge in that space (−margin), so the sheet position needs the page box, not the
   // story box — a footer story's own Y would double-count most of the page height. Axes on
   // story-relative frames keep the story box base.
   const absoluteOrigin = headerFooterAnchoredDrawingOrigin(drawing, story.box, pageBox);
-  const dx = absoluteOrigin.x - drawing.x;
-  const dy = absoluteOrigin.y - drawing.y;
-  const shift = (box: LayoutBox): LayoutBox =>
-    Object.freeze({ x: box.x + dx, y: box.y + dy, width: box.width, height: box.height });
-  return Object.freeze({
-    ...drawing,
-    x: drawing.x + dx,
-    y: drawing.y + dy,
-    paintBounds: shift(pb),
-    hitBounds: shift(drawing.hitBounds),
-    geometry: Object.freeze({
-      ...drawing.geometry,
-      contentBounds: shift(drawing.geometry.contentBounds),
-      paintBounds: shift(drawing.geometry.paintBounds),
-      ...(drawing.geometry.clipPolygon
-        ? {
-            clipPolygon: Object.freeze(
-              drawing.geometry.clipPolygon.map((point) =>
-                Object.freeze({ x: point.x + dx, y: point.y + dy })
-              )
-            ),
-          }
-        : {}),
-    }),
-  });
+  // Every geometry field moves together, the corners of a group picture included; a field
+  // left behind paints at the story offset.
+  return shiftAnchoredDrawing(drawing, absoluteOrigin.x - drawing.x, absoluteOrigin.y - drawing.y);
 }
 
 /**
@@ -115,16 +97,63 @@ function appendHfBehindDrawingLayer(
   if (clip.childElementCount > 0) sheet.append(clip);
 }
 
-/** The band: the story's text and its story-relative in-front drawings. */
+/** One run of in-front drawings that share a frame, lowest first. */
+interface HfFrontRun {
+  readonly pageRelative: boolean;
+  readonly drawings: AnchoredDrawingRecord[];
+}
+
+/** A story's in-front drawings, split between the band and the sheet. */
+interface HfFrontDrawings {
+  /** Runs for the band, lowest first: all drawings up to the top story-relative one. */
+  readonly band: readonly HfFrontRun[];
+  /** The page-frame drawings above all story-relative ones; they paint on the sheet. */
+  readonly sheet: readonly AnchoredDrawingRecord[];
+}
+
+/**
+ * Split a story's in-front drawings between the band and the sheet, and keep their stack
+ * order. `relativeHeight` on `wp:anchor` (CT_Anchor; ECMA-376 Part 1, 20.4.2.3) gives the
+ * z-order of a drawing among the drawings of its layer, for all position frames. The band
+ * paints below the sheet layer, so a page-frame drawing below a story-relative one must
+ * paint in the band. Otherwise a full-page header picture covers a text box that the file
+ * puts above it.
+ */
+function splitHfFrontDrawings(story: HeaderFooterStoryRecord): HfFrontDrawings {
+  const front = (story.anchoredDrawings ?? [])
+    .filter((drawing) => paintLayerOf(drawing) === 'inFront')
+    .sort(compareDrawingStackOrder);
+  let top = front.length - 1;
+  while (top >= 0 && isPageRelativeHfAnchor(front[top]!)) top -= 1;
+  const band: HfFrontRun[] = [];
+  for (const drawing of front.slice(0, top + 1)) {
+    const pageRelative = isPageRelativeHfAnchor(drawing);
+    const last = band[band.length - 1];
+    if (last && last.pageRelative === pageRelative) last.drawings.push(drawing);
+    else band.push({ pageRelative, drawings: [drawing] });
+  }
+  return { band, sheet: front.slice(top + 1) };
+}
+
+/** The band: the story's text and the in-front drawings up to its top story-relative one. */
 function appendHfBand(
   document: Document,
   sheet: HTMLElement,
   page: PageRecord,
   story: HeaderFooterStoryRecord,
   painter: HeaderFooterLayerPainter,
-  active: boolean
+  active: boolean,
+  split: HfFrontDrawings
 ): HTMLElement {
   const { scale } = painter.chrome;
+  const storyOrigin = Object.freeze({
+    x: 0,
+    y: 0,
+    width: story.box.width,
+    height: story.box.height,
+  });
+  // A lifted drawing holds sheet coordinates; the band's own origin on the sheet removes them.
+  const bandOnSheet = Object.freeze({ ...storyOrigin, x: story.box.x, y: story.box.y });
   const container = document.createElement('div');
   container.className = 'docx-hf';
   container.dataset.docxHf = story.kind;
@@ -167,16 +196,15 @@ function appendHfBand(
   for (const fragment of story.fragments) {
     container.append(painter.paintFragment(fragment, story.box.x - page.box.x));
   }
-  const storyRelative = (story.anchoredDrawings ?? []).filter(
-    (drawing) => !isPageRelativeHfAnchor(drawing)
-  );
-  const storyOrigin = Object.freeze({
-    x: 0,
-    y: 0,
-    width: story.box.width,
-    height: story.box.height,
-  });
-  painter.appendDrawings(container, storyRelative, storyOrigin, 'inFront', active);
+  // Page-frame drawings that sit below a story-relative one paint here too, in stack order.
+  for (const run of split.band) {
+    if (run.pageRelative) {
+      const lifted = run.drawings.map((drawing) => hfAnchorOnPageSheet(story, drawing, page.box));
+      painter.appendDrawings(container, lifted, bandOnSheet, 'inFront', active);
+    } else {
+      painter.appendDrawings(container, run.drawings, storyOrigin, 'inFront', active);
+    }
+  }
   sheet.append(container);
   return container;
 }
@@ -210,13 +238,14 @@ export function paintHeaderFooterLayer(
     // Furniture ink is inert while the band is not being edited, wherever on the sheet it
     // was lifted to.
     const active = headerFooterBandIsActive(story, page.index, painter.chrome);
-    const band = appendHfBand(document, sheet, page, story, painter, active);
+    const split = splitHfFrontDrawings(story);
+    const band = appendHfBand(document, sheet, page, story, painter, active, split);
     // The hover target goes right before the band; the pill, if any, comes back to the caller.
     const hint = appendHeaderFooterHoverChrome(document, band, page, story, painter.chrome.scale);
     if (hint) hints.push(hint);
-    const pageRelative = (story.anchoredDrawings ?? [])
-      .filter(isPageRelativeHfAnchor)
-      .map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
+    const pageRelative = split.sheet.map((drawing) =>
+      hfAnchorOnPageSheet(story, drawing, pageOrigin)
+    );
     painter.appendDrawings(sheet, pageRelative, pageOrigin, 'inFront', active, story.kind);
   }
   return hints;

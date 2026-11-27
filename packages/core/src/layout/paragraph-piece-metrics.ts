@@ -4,10 +4,12 @@
 // budget; it is the only consumer.
 
 import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
+import { STARTS_WITH_BREAKING_SPACE, ZERO_WIDTH_SPACE } from './cjk-line-break.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldAwarePiece, PositionalTab } from './field-projection.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
 import { measureInlineDrawing } from './drawing-layout.ts';
+import { canChopPiece } from './layout-owned-piece.ts';
 import { displayText, runStylesEqual, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
@@ -86,6 +88,94 @@ export function placeableContentSuffixes(
     follows = suffix[0] === 1;
   }
   return suffixes;
+}
+
+/**
+ * Whether a piece is one optional hyphen (`w:softHyphen`): layout gives it the text U+00AD and no
+ * advance. A literal U+00AD in `w:t` is a visible hyphen and no break, so it does not match.
+ */
+const isOptionalHyphenPiece = (piece: Piece): boolean =>
+  piece.text === '\u00ad' && piece.measureText === '';
+
+/** Where the line breaker may end a line inside or before a piece. */
+export interface TabWordBreaks {
+  /** Candidate break offsets inside the piece, as the line breaker lists them. */
+  boundaries(piece: Piece): readonly number[];
+  /** Whether a line may open at `offset` of the piece, after the text `before`. */
+  opensAt(piece: Piece, offset: number, before: string): boolean;
+}
+
+/** The word right after a tab: its width, and whether every piece of it may be chopped. */
+export interface WordAfterTab {
+  readonly width: number;
+  readonly choppable: boolean;
+}
+
+/**
+ * The word right after a tab: its text up to the first break opportunity. That is a breaking
+ * space, a zero-width space, another tab, a line break, a break the line breaker takes (`breaks`:
+ * after a dash, between ideographs, at a seam of pieces), or an optional hyphen (kept, with the
+ * width of the hyphen that a break there shows). No-break spaces belong to the word. A picture or
+ * an equation ends it. `choppable` is false when a piece of the word cannot be chopped, for
+ * example a page number.
+ */
+export function measureWordAfterTab(
+  pieces: readonly Piece[],
+  pieceIndex: number,
+  offsetInPiece: number,
+  measurer: TextMeasurer,
+  breaks: TabWordBreaks,
+  pageBreaksIgnored = false
+): WordAfterTab {
+  let width = 0;
+  let word = '';
+  let choppable = true;
+  const result = (): WordAfterTab => ({ width, choppable });
+  for (let index = pieceIndex; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.unsupported || piece.inlineDrawing || piece.equation) return result();
+    const style = styleForFontSlot(piece.style, piece.fontSlot);
+    if (isOptionalHyphenPiece(piece)) {
+      if (word) width += measurer.measure('-', style);
+      return result();
+    }
+    const from = index === pieceIndex ? offsetInPiece : 0;
+    if (index > pieceIndex && word && breaks.opensAt(piece, 0, word)) return result();
+    const inner = breaks
+      .boundaries(piece)
+      .find(
+        (at) =>
+          at > from &&
+          at < piece.text.length &&
+          breaks.opensAt(piece, at, word + piece.text.slice(from, at))
+      );
+    let to = from;
+    let ended = false;
+    while (to < piece.text.length) {
+      const ch = piece.text[to]!;
+      if (
+        to === inner ||
+        ch === '\t' ||
+        ch === '\n' ||
+        ch === ZERO_WIDTH_SPACE ||
+        (ch === PAGE_BREAK_CHAR && !pageBreaksIgnored) ||
+        STARTS_WITH_BREAKING_SPACE.test(ch)
+      ) {
+        ended = true;
+        break;
+      }
+      to += 1;
+    }
+    const slice = piece.text.slice(from, to);
+    const visible = pageBreaksIgnored ? slice.replaceAll(PAGE_BREAK_CHAR, '') : slice;
+    if (visible) {
+      width += measurer.measure(displayText(visible, style), style);
+      if (!canChopPiece(piece)) choppable = false;
+    }
+    if (ended) return result();
+    word += slice;
+  }
+  return result();
 }
 
 /**

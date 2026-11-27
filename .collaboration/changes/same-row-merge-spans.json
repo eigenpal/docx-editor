@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A shorter vertical merge that started in the same row as a longer merge was clipped at its first row, even over fixed-height rows.",
+  "after": "A shorter merge over fixed-height rows flows through all of its rows and is clipped at their bottom. Row heights are unchanged.",
+  "reason": "The change is in table row layout only. Shared state, operations, and synchronization are unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/table-vmerge-same-head-row.test.ts"],
+  "changeset": "same-row-merge-spans",
+  "migration": null
+}

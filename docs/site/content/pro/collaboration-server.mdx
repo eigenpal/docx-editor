@@ -232,6 +232,7 @@ The client reports the server's code in `error.code` or in the session status:
 - **Implement `backUp`**, and keep the earlier state until you accept an upgrade.
 - **Plan for blocking work.** An export and an upgrade run on the server's thread: 0.2 and 0.5 seconds for a 75 KB document, 2 and 7 seconds for a 521-page document. For long documents, set `exportIntervalMs`. See [Plan for the cost of exports and upgrades](/docs/2.x/pro/collaboration#plan-for-the-cost-of-exports-and-upgrades).
 - **Compress stored state.** A room state is about five times its uncompressed XML, and gzip reduces it about eight times.
+- **Plan for many joins at once.** Each join encodes the whole room on the server's thread: about 30 ms for a 75 KB document. When 100 participants join within seconds, edits wait up to 0.6 seconds, and memory peaks near 1 GB. The process keeps that peak after the joins end, so size memory for it. Leave WebSocket compression off: it compresses each update again for each participant and multiplies server CPU. To measure your own documents, run the [load benchmark](https://github.com/eigenpal/docx-editor/tree/main/benchmarks/collaboration-server).
 - **Alert on `room-upgrade-refused` and `room-export-failed`.**
 
 ## Try an upgrade

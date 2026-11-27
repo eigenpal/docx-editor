@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/fonts",
-  "version": "2.39.0",
+  "version": "2.41.1",
   "description": "Open-licensed substitutes for common document fonts, packaged for @docx-editor.dev shaped measurement.",
   "sideEffects": false,
   "type": "module",
@@ -55,7 +55,7 @@
     "email": "jedr@eigenpal.com",
     "url": "https://github.com/jedrazb"
   },
-  "license": "Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License",
+  "license": "Apache-2.0 AND OFL-1.1 AND CC-BY-4.0 AND LicenseRef-GUST-Font-License",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

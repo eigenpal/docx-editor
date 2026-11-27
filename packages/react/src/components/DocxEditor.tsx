@@ -44,7 +44,7 @@ import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
 import { DocxEditorSplitCellDialog } from '../editor/DocxEditorSplitCell';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
-import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
+import { DocxEditorFontNotice, warnFontNoticeRender } from '../editor/DocxEditorFontNotice';
 import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
@@ -264,6 +264,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       renderTitleBarLeft,
       renderTitleBarRight,
       renderOpenFailureActions,
+      renderFontNotice,
       loadingIndicator,
       colorMode = 'light',
       author,
@@ -279,6 +280,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       onRevisionMarkupChange,
       reviewDisplayMode,
       fieldResults,
+      fieldDate,
       contentLockPolicy,
       lockedControlNavigation,
       onReady,
@@ -291,10 +293,12 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       menu = true,
       navigation = true,
       openFailure = true,
+      fontNotice = true,
       rulers = true,
     } = props;
     if (!chrome && loadingIndicator !== undefined) warnLoadingIndicatorWithoutChrome();
     warnOpenFailureActions(openFailure, renderOpenFailureActions !== undefined);
+    warnFontNoticeRender(fontNotice, renderFontNotice !== undefined, chrome);
 
     // Chrome colour mode: 'system' subscribes to the OS setting. The same rule `Root`
     // applies, which this also hands the mode to for the parts that scope themselves.
@@ -412,9 +416,16 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
             <DocxEditorHorizontalRuler />
           </div>
         ) : null}
-        {/* Word's font compatibility bar: shown when the document's declared faces render
-          in substitutes, dismissible per set of missing families. */}
-        <DocxEditorFontNotice t={translate} />
+        {/* The font compatibility bar: shown when the document's declared faces render
+          in substitutes, dismissible per set of missing families. `fontNotice={false}`
+          removes it; `renderFontNotice` draws the host's own from the same state. */}
+        {fontNotice === false ? null : (
+          <DocxEditorFontNotice
+            t={translate}
+            {...(typeof fontNotice === 'object' ? fontNotice : {})}
+            {...(renderFontNotice ? { children: renderFontNotice } : {})}
+          />
+        )}
         {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
           column beside it: it floats over the gutter to the left of the centred page and
           leaves the page alone until the window is too narrow to hold both. Without a
@@ -469,6 +480,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         onRevisionMarkupChange={onRevisionMarkupChange}
         reviewDisplayMode={reviewDisplayMode}
         {...(fieldResults !== undefined ? { fieldResults } : {})}
+        {...(fieldDate !== undefined ? { fieldDate } : {})}
         {...(contentLockPolicy !== undefined ? { contentLockPolicy } : {})}
         {...(lockedControlNavigation !== undefined ? { lockedControlNavigation } : {})}
         {...(zoomMode !== undefined ? { zoomMode } : {})}

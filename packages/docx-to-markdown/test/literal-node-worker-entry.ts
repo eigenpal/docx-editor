@@ -39,6 +39,10 @@ if (mode === 'performance' || mode === 'one-shot-performance') {
 }
 const fixture = await readFile(fixturePath);
 if (mode === 'one-shot-performance') {
+  // Export twice in a row, as a batch converter does. The second export must not inherit the
+  // first one's document: an export that returns inside the same microtask checkpoint keeps
+  // every `WeakRef` target of the engine caches alive, and two such exports exceed the cap.
+  await exportMarkdown(fixture);
   const translated = await exportMarkdown(fixture);
   process.stdout.write(
     JSON.stringify({

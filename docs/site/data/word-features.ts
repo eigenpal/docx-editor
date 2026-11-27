@@ -181,7 +181,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The editor loads embedded fonts without configuration or network requests and uses them to measure text. Saving preserves the font files, but you cannot embed additional fonts. Bold text gets a synthesized bold when the embedded bold slot holds a regular face.',
+      'The editor loads embedded fonts without configuration or network requests and uses them to measure text. Saving preserves the font files, but you cannot embed additional fonts. A style that the file does not embed draws as a synthesized style of the nearest embedded face.',
   },
   {
     id: 'text.color',
@@ -192,7 +192,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Apply RGB colors or document theme colors to text. Saving preserves theme references so colors can follow the document theme.',
+      'Apply RGB colors or document theme colors to text. Saving preserves theme references so colors can follow the document theme. Automatic text paints white on a dark shading or shape fill and black on a light one.',
   },
   {
     id: 'text.highlight',
@@ -421,7 +421,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/toolbar#create-and-continue-lists',
     notes:
-      'Create bulleted lists, continue existing lists, and change levels with Tab or the indent controls. Switching between bullets and numbers preserves item indents. List changes support tracked changes.',
+      'Create bulleted lists, continue existing lists, and change levels with Tab or the indent controls. Switching between bullets and numbers preserves item indents, and list changes support tracked changes. Symbol and Wingdings bullets use Unicode fallbacks without the font.',
   },
   {
     id: 'lists.numbered',
@@ -687,7 +687,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Preset and supported custom shapes and groups display with fills, outlines, outer shadows, rotation, and flips. You can set solid fills, outline colors, widths, dashes, and text wrap, and move or delete shapes. Resizing, rotation, shape text, gradients, and patterns are read-only, and some rotated or flipped groups show placeholders.',
+      'Supported shapes and groups display with fills, outlines, outer shadows, rotation, and flips; you can restyle, move, and delete them. Resizing, rotation, shape text, gradients, and patterns are read-only. A group leaves out an unsupported member, or shows a placeholder when no member displays.',
   },
   {
     id: 'images.legacy-vml',
@@ -1048,7 +1048,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page fields calculate page numbers and totals in the body, headers, and footers. Supported number formats follow section settings or field switches. Unsupported switches keep saved results, and wider calculated values do not move following text.',
+      'Page fields, and `=` formulas with arithmetic over them, calculate page numbers and totals in the body, headers, and footers. Supported number formats follow section settings or field switches. Unsupported switches and formula terms keep saved results, and wider values do not move following text.',
   },
   {
     id: 'fields.toc',
@@ -1118,7 +1118,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Most fields display saved results without recalculation; supported symbol and metadata fields display their values. You can enable editing for selected field results outside collaboration. The editor never executes macros or external field instructions.',
+      'Supported fields show computed values, DATE and TIME can show a host-supplied date, and others show saved results. You can enable editing for selected field results outside collaboration. The editor never executes macros or external field instructions.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {

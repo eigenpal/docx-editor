@@ -2,7 +2,6 @@ import { sectionPrepassInputsMatch } from './section-prepass-inputs.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
 import { carryLayoutReadCaches } from './layout-read-caches.ts';
-import { withFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorToken } from './style-separator-group.ts';
 import {
@@ -226,7 +225,12 @@ import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import { convergeExclusionLayout } from './exclusion-layout-steps.ts';
 import { withAlignedProgress, withInterimLayout, withRelabeledProgress } from './interim-layout.ts';
 import { layoutWithFurnitureRetry } from './furniture-retry-layout.ts';
-import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
+import {
+  drainLayoutSteps,
+  stepsInFieldScope,
+  withFieldScope,
+  type LayoutSteps,
+} from './layout-steps.ts';
 import { preparedBlocks } from './prepared-block-memo.ts';
 import { tableTopLeads } from './cell-edge-neighbours.ts';
 import {
@@ -259,7 +263,7 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  return withFieldResultsMode(options.fieldResults, () =>
+  return withFieldScope(options, () =>
     drainLayoutSteps(layoutSemanticDocumentSteps(part, revision, options))
   );
 }
@@ -279,7 +283,7 @@ export function layoutSemanticDocumentSteps(
   // reuse the last one's work, as a cold open with a session does.
   const opts =
     options.notes && !options.session ? { ...options, session: createLayoutSession() } : options;
-  return stepsInFieldResultsMode(options.fieldResults, layoutInModeSteps(part, revision, opts));
+  return stepsInFieldScope(options, layoutInModeSteps(part, revision, opts));
 }
 
 function* layoutInModeSteps(
@@ -1117,8 +1121,15 @@ function* layoutBlocksPass(
       overrun: cursorY + extent - contentHeight(),
     });
   /** Records that `anchorId` reached `anchorY` on the page being filled. */
-  const noteAnchor = (anchorId: string, anchorY = cursorY): void =>
-    positionedFlow.note(floatSignals, anchorId, flowColumnIndex, pageFragments.length, anchorY);
+  // `cursorY` is declared below, so it is read in the body and not in a parameter default.
+  const noteAnchor = (anchorId: string, anchorY?: number): void =>
+    positionedFlow.note(
+      floatSignals,
+      anchorId,
+      flowColumnIndex,
+      pageFragments.length,
+      anchorY ?? cursorY
+    );
   // Pass-local: the shared flow token prevents checkpoint resume inside this group.
   const terminalTextTableIds = new Set<string>();
   // A continuous section resumes the previous section's column rather than opening a
@@ -2217,7 +2228,8 @@ function* layoutBlocksPass(
         );
       // An own object that cannot end at the bottom margin takes the paragraph along.
       const ownY = () => cursorY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
-      const anchorMoves = !!lines[0] && pageFit.crosses(lines[0], lines.length <= 1, ownY, cursorY);
+      const anchorMoves =
+        !!lines[0] && pageFit.crosses(lines[0], lines.length <= 1, ownY, cursorY, lead + topExtent);
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {
         const need = keepChains.need(index, previousSpaceAfter, {
@@ -2566,7 +2578,8 @@ function* layoutBlocksPass(
           pendingLine,
           isLastLine,
           () => anchorParagraphY(pending.length > 0 ? undefined : skipBefore),
-          cursorY + skipBefore - (pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent)
+          cursorY + skipBefore - (pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent),
+          pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent
         );
       // An intrinsically oversized line cannot fit another empty sheet; publish it once.
       const overflowsPage =
@@ -2704,8 +2717,12 @@ function* layoutBlocksPass(
       pending.push(record);
       cursorY += pendingLine.height;
       // An own object that still crosses the bottom margin here ends the page after its line.
-      const lineY = record.box.y - (pending.length > 1 ? 0 : fragmentBefore + fragmentTopExtent);
-      if (!frame && pageFit.crosses(pendingLine, isLastLine, () => anchorParagraphY(), lineY))
+      const opening = pending.length > 1 ? 0 : fragmentBefore + fragmentTopExtent;
+      const lineY = record.box.y - opening;
+      if (
+        !frame &&
+        pageFit.crosses(pendingLine, isLastLine, () => anchorParagraphY(), lineY, opening)
+      )
         cursorY = Math.max(cursorY, contentHeight());
       if (pendingLine.columnBreakAfter) {
         const priorColumnWidth = columnWidth();

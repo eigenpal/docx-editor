@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "DATE and TIME fields paint their saved results in every editor.",
+  "after": "An editor created with fieldDate paints DATE and TIME fields that have a date-time picture at that date. Without the option, they paint their saved results.",
+  "reason": "The date only changes painted text and local layout cache keys. Shared nodes, paragraph text, offsets, operations, and package serialization remain unchanged, so participants with and without the option share the saved results.",
+  "tests": [
+    "packages/core/src/layout/__tests__/field-date.test.ts",
+    "packages/core/src/editor/__tests__/field-date-editor.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-field-date.test.ts"
+  ],
+  "changeset": "field-date-option",
+  "migration": null
+}

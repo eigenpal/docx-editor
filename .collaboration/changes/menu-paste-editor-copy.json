@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A context menu Paste whose clipboard read the browser refused pasted nothing, also after a copy in the editor.",
+  "after": "The editor remembers its last copy or cut per window, and a context menu Paste uses it when the read is refused. The paste runs the existing paste command.",
+  "reason": "The change touches only the local clipboard read and a per-window memory of the editor's own copy. The paste uses the existing paste command, so shared state, operations, and presence data do not change.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-editor-copy.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-drawing-clipboard.test.ts"
+  ],
+  "changeset": "menu-paste-editor-copy",
+  "migration": null
+}

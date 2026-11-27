@@ -109,6 +109,27 @@ A DOCX file can embed a font with a bold slot that holds a copy of the regular f
 
 The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAULT_FONT_FAMILIES` replace the deprecated `WordDefaultFamily`, `WORD_DOCUMENT_DEFAULT_FAMILIES`, and `ALL_WORD_DEFAULT_FAMILIES`. The deprecated aliases still work.
 
+### Fallback fonts
+
+A document can name a font that no source supplies, or use a character that its font lacks. `packagedFonts()` then serves a fallback face. [PDF export](/docs/2.x/export/pdf/fonts) uses the same face, so the editor and the PDF break lines at the same places.
+
+| Text | Fallback face |
+| --- | --- |
+| A missing family with a serif, sans-serif, or monospaced name | Liberation Serif, Liberation Sans, or Liberation Mono |
+| Georgia, Verdana | Liberation Serif, Liberation Sans |
+| Cambria Math, mathematical operators and letters | Noto Sans Math |
+| Symbols, a missing symbol family | Noto Sans Symbols 2 |
+| Arabic | Noto Sans Arabic |
+| Emoji | Twemoji Mozilla, then Noto Emoji |
+| Chinese, Japanese, and Korean | Noto Sans CJK JP, with [`cjkFonts()`](/docs/2.x/guides/cjk#packaged-browser-fallback) |
+
+- A fallback face loads when the document's text needs it. A document whose fonts cover its text loads none.
+- A family that the browser has installed keeps its own face.
+- A fixed `FontConfiguration` loads nothing after the document opens. A fallback face that it holds is in use from the first layout.
+- `defaultFonts()` loads no fallback face. Use `packagedFonts()`, or a resolver that serves these families under their own names.
+- To turn off the symbol, mathematics, Arabic, and emoji faces, pass `packagedFonts({ fallbackFaces: false })`. The `allow` option does not limit them.
+- Small capitals in a font without a small-capitals feature follow the browser in the editor. PDF export draws them at 80% of the font size, so such a line can differ.
+
 ### Load fonts before or after the document opens
 
 `packagedFonts()` and `defaultFonts()` measure the same for the families they share.
@@ -238,6 +259,8 @@ Resolvers run when the editor resolves fonts and again when an edit adds a famil
 | Rule | Behavior |
 | --- | --- |
 | Precedence | An explicit source beats an embedded face. An embedded face beats a substitution. The first fragment wins between equal sources. |
+| Fallback | A family that no source serves falls back to a face of its class. A family that your resolver substitutes for any face is served, when the substitution target loaded. |
+| Partial families | A face that a served family lacks uses the nearest face of the family that serves it, with a synthesized bold or italic style. The editor and PDF export draw it the same way, and the export report shows the family as partial. A font table alternate (`w:altName`) counts only when it has bytes of its own. A family with faces under its own name, from your resolver or embedded in the DOCX, uses its own nearest face for each face it lacks. Faces under another name of the same font count too, such as `メイリオ` for a document that names `Meiryo`, and the reverse. It never uses the class fallback or the font table alternate for those faces. The nearest face has the requested style first, then the nearest weight. A face that your resolver substitutes for such a family in the same style measures and paints in your face, and the family's missing faces can stand in through it. PDF export reports synthesized faces with an `incomplete-font` information diagnostic, and strict font policy refuses the family. A family whose faces reach several target families paints through the regular face's target. |
 | Duplicates | Composition removes duplicate faces. |
 | Retry | The editor requests each family once per load. Reload the document to retry a failed request. |
 | Updates | Later family requests read current arguments. Reload to replace loaded faces. |
@@ -302,6 +325,70 @@ Read `editor.fontMeasurement()` to inspect measurement.
 
 `{ measurer: 'fixed', resolving: false }` means no usable font source remains.
 
+### Customize the font notice
+
+If a document renders families in substitute faces, the packaged editor shows a bar that names them. The reader can dismiss the bar. It shows again when the set of families changes.
+
+Set `fontNotice` to `false` to remove the bar. Pass an object to restyle it with `className` and `style`. The bar is part of the packaged frame, so `chrome={false}` renders no bar.
+
+To show your own component in the same row, pass `renderFontNotice` in React, or fill the `#fontNotice` slot in Vue. The component renders only while there are substituted families that the reader has not dismissed. Keep `role="status"` on it, so that assistive technology announces the notice.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor
+      document={bytes}
+      renderFontNotice={({ fonts, dismiss }) => (
+        <div role="status" className="my-font-banner">
+          <span>Substituted fonts: {fonts.join(', ')}</span>
+          <button type="button" onClick={dismiss}>
+            Hide
+          </button>
+        </div>
+      )}
+    />
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditor :document="bytes">
+    <template #fontNotice="{ fonts, dismiss }">
+      <div role="status" class="my-font-banner">
+        <span>Substituted fonts: {{ fonts.join(', ') }}</span>
+        <button type="button" @click="dismiss">Hide</button>
+      </div>
+    </template>
+  </DocxEditor>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+| Context field | Meaning |
+| --- | --- |
+| `fonts` | The families that render in a substitute face. The names come from the document, so render them as text. |
+| `message` | The packaged message, translated, with the families in it |
+| `dismiss` | Hides the notice for this set of families |
+
+In a composed editor, `DocxEditor.FontNotice` takes the same function as `children` in React. In Vue, `DocxEditorFontNotice` takes it as the default slot. To report the families somewhere else, read `fontSubstitutions` from the editor snapshot with `useEditorState`.
+
 ## Deploy font assets
 
 ### Serve the HarfBuzz WASM asset
@@ -362,8 +449,8 @@ Since 2.18.0, font loaders supply bytes for private editor registration only. Yo
 - Never build a font URL from a document family name. Match file-supplied names against a closed `Map` or catalog.
 - A remote font host can learn which families a document uses.
 - Embedded fonts register under private aliases. A document cannot replace a page-wide font family in your app.
-- Packaged faces do not cover every script. For example, Liberation Sans has no Arabic glyphs. Native fallback renders missing glyphs.
-- The font notice lists rendered families with no compatible face. It excludes metric-compatible substitutions.
+- A character that no supplied face covers draws in a font that the browser picks. See [Fallback fonts](#fallback-fonts).
+- The font notice lists rendered families with no compatible face, and families that render in a fallback face with different widths. It excludes metric-compatible substitutions.
 - A custom `TextMeasurer` can implement `inkBounds(text, style)` for CJK punctuation fitting. Return `{ left, right }`: conservative horizontal ink bounds for one grapheme, in points from its origin. Include font size and horizontal scale, not trailing character spacing. Return `undefined` when bounds are unknown. To measure, use left-aligned text, negate `actualBoundingBoxLeft`, and convert pixels to points before you apply horizontal scale.
 - Font slot selection, font name parsing, and theme font defaults follow [DOCX feature support](/docs/2.x/docx-fidelity).
 

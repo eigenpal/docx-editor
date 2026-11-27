@@ -123,6 +123,26 @@ export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[] = [
     hash: 'sha256:058ea80864aef09a23f45cbec2bb5400bc3dfbdea01c3f10538a21fcb497fb74',
   },
   {
+    file: 'NotoEmoji-Regular.ttf',
+    byteLength: 886628,
+    hash: 'sha256:8db3470f6990515b6c3303667c133d41c94a6465797ff27b88a07595378d5f07',
+  },
+  {
+    file: 'NotoSansArabic-Regular.ttf',
+    byteLength: 194336,
+    hash: 'sha256:97ad7c9db540d795730cda54885e1e5741a0494ef13681d78a73f8a0fbc60b9f',
+  },
+  {
+    file: 'NotoSansMath-Regular.ttf',
+    byteLength: 1015396,
+    hash: 'sha256:3f495fe933c06786e4d5f6d86b8ee70b6753a68ee3b9d87528726de0f6e2c47d',
+  },
+  {
+    file: 'NotoSansSymbols2-Regular.ttf',
+    byteLength: 1233128,
+    hash: 'sha256:7d5fb73b7ca67a6798101741f5d280a3d016a56a197afcd4199dbb57b4b82a21',
+  },
+  {
     file: 'Selawik-Bold.ttf',
     byteLength: 44068,
     hash: 'sha256:f0db5e174a90e0956ad7d2844bdca1d5e6da92ec65b2c04e57ba9b180668c904',
@@ -151,6 +171,11 @@ export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[] = [
     file: 'TeXGyreAdventor-Regular.otf',
     byteLength: 174340,
     hash: 'sha256:17bfc0a97d48393453f28422f109d47099d54875600ea88a8d61c5ddd2dbffc4',
+  },
+  {
+    file: 'TwemojiMozilla.ttf',
+    byteLength: 1474284,
+    hash: 'sha256:6d90152ee0d29e82fe2a87793af5aa4b7ad13e6538360889e141e81ed299ee8e',
   },
 ];
 
@@ -199,6 +224,13 @@ export const FONT_ASSET_URLS: Readonly<Record<string, URL | string>> = {
   ),
   'LiberationSerif-Italic.ttf': new URL('../assets/LiberationSerif-Italic.ttf', import.meta.url),
   'LiberationSerif-Regular.ttf': new URL('../assets/LiberationSerif-Regular.ttf', import.meta.url),
+  'NotoEmoji-Regular.ttf': new URL('../assets/NotoEmoji-Regular.ttf', import.meta.url),
+  'NotoSansArabic-Regular.ttf': new URL('../assets/NotoSansArabic-Regular.ttf', import.meta.url),
+  'NotoSansMath-Regular.ttf': new URL('../assets/NotoSansMath-Regular.ttf', import.meta.url),
+  'NotoSansSymbols2-Regular.ttf': new URL(
+    '../assets/NotoSansSymbols2-Regular.ttf',
+    import.meta.url
+  ),
   'Selawik-Bold.ttf': new URL('../assets/Selawik-Bold.ttf', import.meta.url),
   'Selawik-Regular.ttf': new URL('../assets/Selawik-Regular.ttf', import.meta.url),
   'TeXGyreAdventor-Bold.otf': new URL('../assets/TeXGyreAdventor-Bold.otf', import.meta.url),
@@ -208,4 +240,5 @@ export const FONT_ASSET_URLS: Readonly<Record<string, URL | string>> = {
   ),
   'TeXGyreAdventor-Italic.otf': new URL('../assets/TeXGyreAdventor-Italic.otf', import.meta.url),
   'TeXGyreAdventor-Regular.otf': new URL('../assets/TeXGyreAdventor-Regular.otf', import.meta.url),
+  'TwemojiMozilla.ttf': new URL('../assets/TwemojiMozilla.ttf', import.meta.url),
 };

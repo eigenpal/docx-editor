@@ -47,6 +47,11 @@ export interface WrapExclusionInput {
    * mode 15 and later (`largestWrapTieLeft`).
    */
   readonly largestTie?: 'left' | 'right';
+  /**
+   * The bottom of a polygon wrap whose contour meets the object's bottom edge, with its bottom
+   * distance and effect extent. A line whose top meets it still wraps (`CONTOUR_FOOT_REACH_PT`).
+   */
+  readonly contourFoot?: number;
   readonly contentLeft: number;
   readonly contentRight: number;
 }
@@ -149,9 +154,9 @@ function edgeCrossingsAtY(
     if (y0 === y1) continue;
     const minY = Math.min(y0, y1);
     const maxY = Math.max(y0, y1);
-    if (y < minY || y > maxY) continue;
-    if (y === maxY && y1 > y0) continue;
-    if (y === minY && y1 < y0) continue;
+    // Each edge owns its top end and not its bottom end, in either direction, so a scanline
+    // through a vertex counts every edge that continues below it exactly once.
+    if (y < minY || y >= maxY) continue;
     const t = (y - y0) / (y1 - y0);
     const x = current.x + t * (next.x - current.x);
     if (Number.isFinite(x)) {
@@ -346,6 +351,14 @@ export function minkowskiExcludedIntervalsAtY(
   const right = finite(insets.right);
   const yMin = y - bottom;
   const yMax = y + top;
+  // Without a vertical distance the slab is the scanline itself: no boundary can split it.
+  if (!(yMax > yMin)) {
+    return mergeScanlineIntervals(
+      sourceIntervalsAtY(polygon, clipPolygon, y, fillRule).map((interval) =>
+        Object.freeze({ start: interval.start - left, end: interval.end + right })
+      )
+    );
+  }
   const boundaries = collectSlabBoundaries(
     clipPolygon && clipPolygon.length >= 3 ? [polygon, clipPolygon] : [polygon],
     yMin,
@@ -473,8 +486,27 @@ export function excludedIntervalsOnScanline(
       : boundedRectanglePolygon(input.contentBounds);
   const fillRule = input.mode === 'through' ? 'evenodd' : 'nonzero';
   const insets = combinedInsets(wrapDistances, effectInsets);
-  const excluded = minkowskiExcludedIntervalsAtY(polygon, y, insets, fillRule, input.clipPolygon);
-  return clampIntervalsToContent(excluded, contentLeft, contentRight);
+  const foot = input.contourFoot;
+  // A scanline in the reach below the contour's foot reads its bottom row.
+  const atY =
+    foot !== undefined && y >= foot && y <= foot + CONTOUR_FOOT_REACH_PT ? foot - FOOT_ROW_PT : y;
+  const excluded = minkowskiExcludedIntervalsAtY(polygon, atY, insets, fillRule, input.clipPolygon);
+  return clampIntervalsToContent(tightSpan(input, excluded), contentLeft, contentRight);
+}
+
+/**
+ * Tight wrap (20.4.2.19 wrapTight) keeps text out of the whole span between the contour's
+ * leftmost and rightmost points on a line, so a concave outline leaves no passage inside it.
+ * Through wrap (20.4.2.18 wrapThrough) keeps those inner passages.
+ */
+function tightSpan(
+  input: WrapExclusionInput,
+  excluded: readonly ScanlineInterval[]
+): readonly ScanlineInterval[] {
+  if (input.mode !== 'tight' || excluded.length < 2) return excluded;
+  return Object.freeze([
+    Object.freeze({ start: excluded[0]!.start, end: excluded[excluded.length - 1]!.end }),
+  ]);
 }
 
 function exclusionSpan(
@@ -533,6 +565,180 @@ export function availableTextIntervalsOnScanline(
   );
 }
 
+/** How far, in points, the foot of a line band may touch a contour and stay clear of it. */
+const BAND_FOOT_TOUCH_PT = 0.01;
+
+/** How far above and below a contour vertex a band reads it, past a spike's single tip point. */
+const VERTEX_SIDE_PT = 0.000_1;
+
+/** Contour vertices a line band probes one by one; a denser band is sampled. */
+const MAX_BAND_VERTEX_PROBES = 12;
+
+/**
+ * The scanlines that resolve a polygon wrap over the band from `top` to `foot`.
+ *
+ * The band's outer extents are exact: they lie on the band edges or at the vertex with the
+ * least or greatest x in the band, and tight wrap needs no more. Through wrap also probes the
+ * vertices inside the band for its inner passages; past the limit it keeps the most extreme
+ * vertices on each side and samples the rest in even steps.
+ */
+function polygonBandProbes(top: number, foot: number, input: WrapExclusionInput): number[] {
+  const insetTop = (input.wrapDistances?.top ?? 0) + (input.effectInsets?.top ?? 0);
+  const insetBottom = (input.wrapDistances?.bottom ?? 0) + (input.effectInsets?.bottom ?? 0);
+  const inside: DrawingPoint[] = [];
+  for (const polygon of [input.polygon, input.clipPolygon]) {
+    for (const point of polygon ?? []) {
+      for (const y of [point.y - insetTop, point.y + insetBottom])
+        if (y > top && y < foot) inside.push({ x: point.x, y });
+    }
+  }
+  const probes = [top, foot];
+  // Tight wrap keeps only the span between the outer extents, which those probes give exactly.
+  if (input.mode === 'tight') {
+    let least: DrawingPoint | undefined;
+    let most: DrawingPoint | undefined;
+    for (const at of inside) {
+      if (!least || at.x < least.x) least = at;
+      if (!most || at.x > most.x) most = at;
+    }
+    // A vertex can be the tip of a spike, which a scanline through it meets in a single point:
+    // read just above and just below it as well.
+    for (const at of least && most ? [least, most] : [])
+      probes.push(
+        at.y,
+        Math.max(top, at.y - VERTEX_SIDE_PT),
+        Math.min(foot, at.y + VERTEX_SIDE_PT)
+      );
+    return probes;
+  }
+  const near = (at: DrawingPoint) =>
+    probes.push(at.y, Math.max(top, at.y - VERTEX_SIDE_PT), Math.min(foot, at.y + VERTEX_SIDE_PT));
+  if (inside.length <= MAX_BAND_VERTEX_PROBES) {
+    for (const at of inside) near(at);
+    return probes;
+  }
+  const quarter = MAX_BAND_VERTEX_PROBES / 4;
+  inside.sort((a, b) => a.x - b.x);
+  for (let index = 0; index < quarter; index += 1) {
+    near(inside[index]!);
+    near(inside[inside.length - 1 - index]!);
+  }
+  inside.sort((a, b) => a.y - b.y);
+  const step = inside.length / (MAX_BAND_VERTEX_PROBES - 2 * quarter);
+  for (let index = 0; index < inside.length; index += step) near(inside[Math.floor(index)]!);
+  return probes;
+}
+
+/** Bands already resolved per wrap input. Line placement asks again for each candidate. */
+const bandIntervalCache = new WeakMap<
+  WrapExclusionInput,
+  Map<string, readonly ScanlineInterval[]>
+>();
+const BAND_CACHE_ENTRIES = 512;
+
+/**
+ * The text passages beside a wrap for a line band from `top` to `bottom`.
+ *
+ * Polygon wrap (20.4.2.19 wrapTight, 20.4.2.18 wrapThrough, contour from 20.4.2.16
+ * wrapPolygon) keeps text off the contour over the whole band. The widest part of the
+ * contour in the band can be at the band's edges or at any vertex inside it, so those
+ * scanlines are combined. Other modes and an empty band probe the scanline at `top`.
+ */
+export function availableTextIntervalsOverBand(
+  top: number,
+  bottom: number,
+  input: WrapExclusionInput
+): readonly ScanlineInterval[] {
+  const foot = bottom - BAND_FOOT_TOUCH_PT;
+  if ((input.mode !== 'tight' && input.mode !== 'through') || !(foot > top))
+    return availableTextIntervalsOnScanline(top, input);
+  let cache = bandIntervalCache.get(input);
+  const key = `${top}:${foot}`;
+  const cached = cache?.get(key);
+  if (cached) return cached;
+  const probes = polygonBandProbes(top, foot, input);
+  const excluded = tightSpan(
+    input,
+    mergeScanlineIntervals(probes.flatMap((probe) => excludedIntervalsOnScanline(probe, input)))
+  );
+  const available = filterByTextSide(
+    invertIntervals(excluded, input.contentLeft, input.contentRight),
+    excluded,
+    input.textSide,
+    input.contentLeft,
+    input.contentRight,
+    input.largestTie
+  );
+  if (!cache || cache.size >= BAND_CACHE_ENTRIES) {
+    cache = new Map();
+    bandIntervalCache.set(input, cache);
+  }
+  cache.set(key, available);
+  return available;
+}
+
+/**
+ * The vertical extent a wrap excludes, across the whole column. A polygon wrap reaches from its
+ * contour or its box, whichever extends further, plus distances and effect extents, and past a
+ * `contourFoot` by `CONTOUR_FOOT_REACH_PT`.
+ */
+export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
+  if (input.mode === 'topAndBottom' || input.mode === 'square') {
+    return squareExclusionBounds(input.contentBounds, input.effectInsets, input.wrapDistances);
+  }
+  const ys = [input.contentBounds.y, input.contentBounds.y + input.contentBounds.height];
+  if (input.polygon) {
+    for (const point of input.polygon) ys.push(point.y);
+  }
+  const top = Math.min(...ys) - input.effectInsets.top - input.wrapDistances.top;
+  const bottom = Math.max(
+    Math.max(...ys) + input.effectInsets.bottom + input.wrapDistances.bottom,
+    input.contourFoot === undefined ? -Infinity : input.contourFoot + CONTOUR_FOOT_REACH_PT
+  );
+  return Object.freeze({
+    x: input.contentLeft,
+    y: top,
+    width: Math.max(0, input.contentRight - input.contentLeft),
+    height: Math.max(0, bottom - top),
+  });
+}
+
+/**
+ * {@link availableTextIntervalsOverBand} for a paragraph that spans `paragraphLeft` to
+ * `paragraphRight`. The float's passages stop at the edges of the column it was placed in. A
+ * paragraph with a negative left or right indent (`w:ind`, `CT_Ind`, 17.3.1.12) keeps that reach
+ * beside the float: a passage that starts at the column's left edge starts at the paragraph's
+ * left bound, and a passage that ends at the column's right edge ends at its right bound.
+ */
+export function paragraphTextIntervalsOverBand(
+  top: number,
+  bottom: number,
+  input: WrapExclusionInput,
+  paragraphLeft: number,
+  paragraphRight: number
+): readonly ScanlineInterval[] {
+  const available = availableTextIntervalsOverBand(top, bottom, input);
+  const reachesLeft = paragraphLeft < input.contentLeft;
+  const reachesRight = paragraphRight > input.contentRight;
+  if (!reachesLeft && !reachesRight) return available;
+  const leftEdge = input.contentLeft + 0.000_001;
+  const rightEdge = input.contentRight - 0.000_001;
+  let reached: ScanlineInterval[] | undefined;
+  for (let index = 0; index < available.length; index += 1) {
+    const interval = available[index]!;
+    const start = reachesLeft && interval.start <= leftEdge ? paragraphLeft : interval.start;
+    const end = reachesRight && interval.end >= rightEdge ? paragraphRight : interval.end;
+    if (start === interval.start && end === interval.end) {
+      reached?.push(interval);
+      continue;
+    }
+    // A fresh copy: the passages are short-lived scanline values, so it stays unfrozen.
+    reached ??= available.slice(0, index);
+    reached.push({ start, end });
+  }
+  return reached ?? available;
+}
+
 /** Point-in effect-expanded clipped shape via exact scanline Minkowski region at `y`. */
 export function pointInEffectExpandedClip(
   x: number,
@@ -583,6 +789,21 @@ export function expandPolygonAnisotropic(
   return boundedRectanglePolygon(bounds);
 }
 
+/**
+ * How far, in points, a polygon wrap (20.4.2.19 wrapTight, 20.4.2.18 wrapThrough) reaches below
+ * its `contourFoot`: the bottom of a contour that meets the object's bottom edge, as the default
+ * rectangle does. A scanline in that reach reads the contour's bottom row.
+ *
+ * A line whose top meets that bottom edge wraps beside the object, unlike a line that touches a
+ * square wrap or any other edge of a contour (`WRAP_EDGE_TOUCH_PT`, 0.01 pt). The reach is past
+ * that margin plus the 0.001 pt line probe offset, and short of 0.02 pt, so a line that clears
+ * the bottom edge by 0.01 pt stays full width.
+ */
+const CONTOUR_FOOT_REACH_PT = 0.015;
+
+/** How far above the contour's foot its bottom row is read. */
+const FOOT_ROW_PT = 0.000_1;
+
 export function wrapExclusionFromProjection(options: {
   readonly mode: 'square' | 'tight' | 'through' | 'topAndBottom';
   readonly contentBounds: LayoutBox;
@@ -597,12 +818,6 @@ export function wrapExclusionFromProjection(options: {
   readonly contentLeft: number;
   readonly contentRight: number;
 }): WrapExclusionInput {
-  const wrapDistances: DrawingInsets = Object.freeze({
-    top: finite(options.wrapDistancesEmu.top / EMU_PER_POINT),
-    right: finite(options.wrapDistancesEmu.right / EMU_PER_POINT),
-    bottom: finite(options.wrapDistancesEmu.bottom / EMU_PER_POINT),
-    left: finite(options.wrapDistancesEmu.left / EMU_PER_POINT),
-  });
   const polygon =
     options.mode === 'tight' || options.mode === 'through'
       ? normalizeWrapPolygonToPage({
@@ -615,6 +830,20 @@ export function wrapExclusionFromProjection(options: {
           transform: options.transform,
         })
       : null;
+  const wrapDistances: DrawingInsets = Object.freeze({
+    top: finite(options.wrapDistancesEmu.top / EMU_PER_POINT),
+    right: finite(options.wrapDistancesEmu.right / EMU_PER_POINT),
+    bottom: finite(options.wrapDistancesEmu.bottom / EMU_PER_POINT),
+    left: finite(options.wrapDistancesEmu.left / EMU_PER_POINT),
+  });
+  const bounds = options.contentBounds;
+  const boxBottom = bounds.y + bounds.height;
+  const polygonBottom =
+    polygon === null ? null : polygon.length < 3 ? boxBottom : Math.max(...polygon.map((p) => p.y));
+  const contourFoot =
+    polygonBottom !== null && polygonBottom >= boxBottom - 0.000_1
+      ? polygonBottom + wrapDistances.bottom + finite(options.geometry.effectInsets?.bottom ?? 0)
+      : undefined;
   return Object.freeze({
     mode: options.mode,
     contentBounds: options.contentBounds,
@@ -623,6 +852,7 @@ export function wrapExclusionFromProjection(options: {
     wrapDistances,
     effectInsets: options.geometry.effectInsets,
     textSide: options.textSide,
+    ...(contourFoot === undefined ? {} : { contourFoot }),
     contentLeft: options.contentLeft,
     contentRight: options.contentRight,
   });

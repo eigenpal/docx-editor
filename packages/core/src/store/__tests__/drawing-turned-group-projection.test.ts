@@ -286,22 +286,35 @@ describe('turned groups', () => {
     ]);
   });
 
-  test('a turned group keeps its placeholder for paint and text that do not turn with it', () => {
+  test('a turned group paints a pattern fill as its mean colour', () => {
     const pattern = member(0, 72, 72, 'rect', 'FF0000').replace(
       '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>',
       '<a:pattFill prst="pct50"><a:fgClr><a:srgbClr val="FF0000"/></a:fgClr>' +
         '<a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill>'
     );
     expect(group({ members: pattern })?.components[0]!.fillPattern).toBeTruthy();
-    expect(group({ rot: 30, members: pattern })).toBeNull();
+    // A pattern does not turn with the group: half red on white paints as the mean of both.
+    const turned = group({ rot: 30, members: pattern })!;
+    expect(turned.rotationDegrees).toBe(30);
+    expect(turned.components).toHaveLength(1);
+    expect(turned.components[0]!.fillPattern).toBeUndefined();
+    expect(turned.components[0]!.fillHex).toBe('FF8080');
+    // The square turns as a solid square does.
+    expectCorners(turned, 0, [
+      [27.64, -31.18],
+      [90, 4.82],
+      [54, 67.18],
+      [-8.36, 31.18],
+    ]);
     const textbox =
       '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/>' +
       `<a:ext cx="${72 * EMU}" cy="${72 * EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/>` +
       '</a:prstGeom><a:solidFill><a:srgbClr val="FFFF00"/></a:solidFill></wps:spPr>' +
       '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:txbxContent>' +
       '</wps:txbx><wps:bodyPr/></wps:wsp>';
-    expect(group({ rot: 30, members: textbox })).toBeNull();
-    // A schema-invalid group turn refuses too.
+    // A text box member's shape turns with its group; its text follows in the text projection.
+    expect(group({ rot: 30, members: textbox })?.rotationDegrees).toBe(30);
+    // A schema-invalid group turn keeps the placeholder.
     expect(
       projectDrawingsInPart(
         parsePart(groupXml({ rot: 30 }).replace('rot="1800000"', 'rot="30deg"'))

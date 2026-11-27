@@ -10,6 +10,7 @@ import { furnitureTableZones, storyHasFloatingTable } from './furniture-table-ex
 import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 import type { PageFurniture } from './page-furniture-insets.ts';
 import { TablePaginationError } from './semantic-table-layout.ts';
+import { failedGroupPictureCount } from './drawing-group-picture-layers.ts';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { HeaderFooterStoryRecord, PageRecord } from './semantic-records.ts';
 
@@ -65,11 +66,12 @@ export function retainedFurnitureWrap(
 // Pending picture resources and supported vector/text drawings retain their authored wrap.
 function unsupportedPlaceholder(drawing: AnchoredDrawingRecord): boolean {
   if (drawing.groupPicture) {
-    const failed = (resource: AnchoredDrawingRecord['resource']) =>
-      resource.kind !== 'ready' && resource.kind !== 'pending';
+    // A group shows the placeholder only when no picture can paint and no other member paints.
+    const pictures = 1 + (drawing.groupPictureLayers?.length ?? 0);
     return (
-      failed(drawing.resource) ||
-      (drawing.groupPictureLayers?.some((layer) => failed(layer.resource)) ?? false)
+      failedGroupPictureCount(drawing) === pictures &&
+      !(drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0) &&
+      !drawing.groupTextboxStories?.length
     );
   }
   return (

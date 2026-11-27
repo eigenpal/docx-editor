@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The measurer's installed-face probe counted a synthesized stand-in face of a partly served family as installed.",
+  "after": "The probe answers false for a synthesized stand-in face until its own face loads; measurement and paint are unchanged.",
+  "reason": "The change is in local font measurement only. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/host-family-paint.test.ts",
+    "packages/fonts/src/__tests__/engine-request.test.ts"
+  ],
+  "changeset": "served-family-background-faces",
+  "migration": null
+}

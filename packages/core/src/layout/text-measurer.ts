@@ -46,8 +46,19 @@ export interface TextMeasurer {
    * Undefined when the face cannot answer; the shape then paints nothing rather than guess.
    */
   textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
-  /** Whether line metrics use an admitted face instead of approximate fallback metrics. */
+  /**
+   * Whether the style's own face is admitted, so line metrics use it instead of approximate
+   * fallback metrics. A face that stands in as a synthesized style of another face (a bold
+   * drawn from the regular face) answers false until its own face loads. Layout decisions
+   * that only need real metrics count that stand-in as measurable instead.
+   */
   hasResolvedFont?(style: ResolvedRunStyle): boolean;
+  /**
+   * Optional: whether line metrics come from an admitted face, which can be a synthesized
+   * stand-in through another face of the family. Absent means `hasResolvedFont` answers this.
+   * @internal
+   */
+  hasMeasurableFont?(style: ResolvedRunStyle): boolean;
   /**
    * Optional: whether the resolved face itself has a glyph for every character of `text`, with
    * no glyph fallback. Undefined when no face resolves or the measurer cannot tell.
@@ -71,4 +82,20 @@ export interface TextMeasurer {
   ): import('./sfnt-strikeout-metrics.ts').StrikeoutStrokePt | undefined;
   /** Line metrics for the actual text faces; omitted text measures the primary face. */
   lineMetrics(style: ResolvedRunStyle, text?: string): { height: number; baseline: number };
+}
+
+/**
+ * Whether layout can measure `style` with real face metrics: its own face, or a synthesized
+ * stand-in through another face of its family, which measures through that face plus the
+ * synthetic bold advance. Undefined when the measurer cannot tell. Layout decisions that need
+ * real metrics (an end-of-cell line, East Asian optical fit) ask this, never whether the
+ * style's own face is installed.
+ * @internal
+ */
+export function measuresWithAdmittedFace(
+  measurer: Pick<TextMeasurer, 'hasResolvedFont' | 'hasMeasurableFont'>,
+  style: ResolvedRunStyle
+): boolean | undefined {
+  if (measurer.hasMeasurableFont) return measurer.hasMeasurableFont(style);
+  return measurer.hasResolvedFont?.(style);
 }

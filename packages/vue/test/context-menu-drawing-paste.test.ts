@@ -45,29 +45,42 @@ const SOURCE = documentBytes(
 const t = (key: string): string => key;
 
 let clipboard: { text: string; html: string | null } = { text: '', html: null };
+/** Whether the browser lets the page read the clipboard. */
+let readAllowed = true;
+const refused = () => Promise.reject(new Error('Read permission denied.'));
 const hadClipboardItem = 'ClipboardItem' in globalThis;
 const unmounts: (() => void)[] = [];
 
 beforeEach(() => {
   clipboard = { text: '', html: null };
+  readAllowed = true;
+  // A new window focus period: an earlier test's copy is not the clipboard content.
+  window.dispatchEvent(new Event('blur'));
   if (!hadClipboardItem) (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {};
   Object.defineProperty(globalThis.navigator, 'clipboard', {
     value: {
       writeText: async () => {},
-      readText: async () => clipboard.text,
-      read: async () => [
-        {
-          types: clipboard.html ? ['text/plain', 'text/html'] : ['text/plain'],
-          getType: async (type: string) =>
-            new Blob([type === 'text/html' ? (clipboard.html ?? '') : clipboard.text]),
-        },
-      ],
+      write: async () => {},
+      readText: async () => (readAllowed ? clipboard.text : refused()),
+      read: async () => (readAllowed ? clipboardItems() : refused()),
     },
     configurable: true,
   });
 });
 
+function clipboardItems() {
+  return [
+    {
+      types: clipboard.html ? ['text/plain', 'text/html'] : ['text/plain'],
+      getType: async (type: string) =>
+        new Blob([type === 'text/html' ? (clipboard.html ?? '') : clipboard.text]),
+    },
+  ];
+}
+
 afterEach(() => {
+  // Leave no copy behind for the next test file in a serial run.
+  window.dispatchEvent(new Event('blur'));
   for (const unmount of unmounts.splice(0)) unmount();
   document.body.innerHTML = '';
   if (!hadClipboardItem) delete (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
@@ -118,6 +131,10 @@ function selectDrawing(editor: DocxEditorInstance, index: number): void {
 }
 
 async function pasteRow(container: HTMLElement): Promise<HTMLElement> {
+  return menuRow(container, 'edit.paste');
+}
+
+async function menuRow(container: HTMLElement, slot: string): Promise<HTMLElement> {
   container.querySelector('.docx-editor__scroll-container')!.dispatchEvent(
     new MouseEvent('contextmenu', {
       bubbles: true,
@@ -128,8 +145,8 @@ async function pasteRow(container: HTMLElement): Promise<HTMLElement> {
     })
   );
   await flush();
-  const row = container.querySelector<HTMLElement>('[data-slot="edit.paste"]');
-  if (!row) throw new Error('no Paste row');
+  const row = container.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
+  if (!row) throw new Error(`no ${slot} row`);
   return row;
 }
 
@@ -180,5 +197,32 @@ describe('Paste in the context menu with a shape that has no text selected', () 
     selectDrawing(editor, 0);
     await flush();
     expect((await pasteRow(container)).getAttribute('aria-disabled')).toBeNull();
+  });
+});
+
+describe('Copy and Paste in the context menu when the clipboard read is refused', () => {
+  test('a line copied from the menu pastes from the menu, and Paste stays live', async () => {
+    const { container, editor } = await mount();
+    readAllowed = false;
+    selectDrawing(editor, 1);
+    await flush();
+    (await menuRow(container, 'edit.copy')).click();
+    await flush();
+    // Paste into the first paragraph's text, at its start.
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 0 },
+    });
+    await flush();
+    (await pasteRow(container)).click();
+    await flush();
+    const first = await firstParagraphXml(editor);
+    expect(first.match(/name="Rule"/g)).toHaveLength(1);
+    expect(document.querySelector('[data-docx-dialog="imageInsertError"]')).toBeNull();
+    // The refused read does not disable Paste while the editor copy can still paste.
+    const again = await pasteRow(container);
+    expect(again.getAttribute('aria-disabled')).toBeNull();
+    expect(again.getAttribute('title')).toBeNull();
   });
 });

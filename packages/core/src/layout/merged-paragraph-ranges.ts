@@ -39,6 +39,21 @@ interface MergeMember {
 export interface MergeBoundaries {
   readonly members: readonly MergeMember[];
   readonly total: number;
+  /** The members share a line through field codes; see {@link joinStartHidden}. */
+  readonly fieldCode?: true;
+}
+
+/** Per remapped line of a field-code merge: the members after the first one. */
+const fieldCodeJoinMembers = new WeakMap<LineRecord, ReadonlySet<string>>();
+
+/**
+ * Whether the start of `paragraphId` on `line` is the same caret position as the end of the
+ * paragraph before it on the line: the two sides of field codes that hold paragraph marks
+ * (ECMA-376 Part 1, 17.16.18). The caret has one stop there, at the end of the first side,
+ * where an insert stays outside the field codes. A revision view's merged line keeps both.
+ */
+export function joinStartHidden(line: LineRecord, paragraphId: string): boolean {
+  return fieldCodeJoinMembers.get(line)?.has(paragraphId) ?? false;
 }
 
 /** Member bases, in the merged paragraph's own offset space. */
@@ -64,7 +79,7 @@ export function mergeBoundariesOf(
     });
     base += length;
   });
-  return { members, total: base };
+  return { members, total: base, ...(group.fieldCode ? { fieldCode: true as const } : {}) };
 }
 
 /**
@@ -121,6 +136,7 @@ export function remapMergedLines(
   const joins = boundaries.members
     .filter((member) => member.markChangeSites !== undefined)
     .map((member) => ({ offset: member.base + member.length, sites: member.markChangeSites! }));
+  const laterMembers = new Set(boundaries.members.slice(1).map((member) => member.paragraphId));
   return lines.map((line) => {
     const joinSites = joins
       .filter(
@@ -178,7 +194,7 @@ export function remapMergedLines(
         start: deleted.start - (member?.base ?? 0),
         end: deleted.end - (member?.base ?? 0),
       }));
-    return {
+    const remapped: LineRecord = {
       ...line,
       range: lineRange,
       spans,
@@ -186,5 +202,7 @@ export function remapMergedLines(
       ...(deletedRanges ? { deletedRanges } : {}),
       ...(changeSites ? { changeSites } : {}),
     };
+    if (boundaries.fieldCode) fieldCodeJoinMembers.set(remapped, laterMembers);
+    return remapped;
   });
 }

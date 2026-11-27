@@ -7,7 +7,10 @@
 
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { textboxStoriesInPart, type TextboxStoryRoot } from '../store/package/textbox-stories.ts';
+import {
+  textboxReadStoriesInPart,
+  type TextboxStoryRoot,
+} from '../store/package/textbox-stories.ts';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { SemanticPosition } from '../layout/semantic-interaction.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -22,7 +25,9 @@ const storyIndexes = new WeakMap<readonly TextboxStoryRoot[], Map<string, Textbo
 
 /** The part's text box stories by root id; a scan per ancestor was quadratic in boxes. */
 function storiesByRootId(part: OoxmlPart): ReadonlyMap<string, TextboxStoryRoot> {
-  const stories = textboxStoriesInPart(part);
+  // Every story with readable text, so a paragraph in one that layout lays out none of still
+  // resolves to its frame, not to the body.
+  const stories = textboxReadStoriesInPart(part);
   let index = storyIndexes.get(stories);
   if (!index) {
     index = new Map(stories.map((story) => [story.root.id, story]));

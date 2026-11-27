@@ -7,6 +7,7 @@
 
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 import { withFieldResultsMode, type FieldResultsMode } from '../store/package/field-result-mode.ts';
+import { withFieldDate } from './field-date.ts';
 
 /** Body rows a table paginator places between two pause points. */
 export const TABLE_ROWS_PER_STEP = 8;
@@ -49,22 +50,31 @@ export function drainLayoutSteps<T>(steps: LayoutSteps<T>): T {
   }
 }
 
+/** How a layout call shows saved field results: their addressing, and the moment DATE shows. */
+export interface FieldScope {
+  readonly fieldResults?: FieldResultsMode;
+  readonly fieldDate?: Date;
+}
+
+/** Run `run` with the field results mode and the field date of `scope` installed. */
+export function withFieldScope<T>(scope: FieldScope, run: () => T): T {
+  return withFieldResultsMode(scope.fieldResults, () => withFieldDate(scope.fieldDate, run));
+}
+
 /**
- * `steps` with `mode` installed around every resume, and around the `finalize` of each report,
- * so a pass that pauses reads the same field offsets as one that runs straight through.
+ * `steps` with `scope` installed around every resume, and around the `finalize` of each report,
+ * so a pass that pauses reads the same field offsets and dates as one that runs straight
+ * through.
  */
-export function* stepsInFieldResultsMode<T>(
-  mode: FieldResultsMode | undefined,
-  steps: LayoutSteps<T>
-): LayoutSteps<T> {
-  if (mode === undefined) return yield* steps;
+export function* stepsInFieldScope<T>(scope: FieldScope, steps: LayoutSteps<T>): LayoutSteps<T> {
+  if (scope.fieldResults === undefined && scope.fieldDate === undefined) return yield* steps;
   for (;;) {
-    const next = withFieldResultsMode(mode, () => steps.next());
+    const next = withFieldScope(scope, () => steps.next());
     if (next.done) return next.value;
     const progress = next.value;
     const finalize = progress?.finalize;
     yield finalize
-      ? { ...progress, finalize: (pages) => withFieldResultsMode(mode, () => finalize(pages)) }
+      ? { ...progress, finalize: (pages) => withFieldScope(scope, () => finalize(pages)) }
       : progress;
   }
 }

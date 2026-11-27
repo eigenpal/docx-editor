@@ -37,6 +37,9 @@ const BAR_MEMBER =
   '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
   '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></wps:spPr><wps:bodyPr/></wps:wsp>';
 
+/** The red bar, 1pt high, 100pt under the group top, in the group's own space. */
+const BAR_COMMANDS = '1 0 0 rg\n0 100 m 100 100 l 100 101 l 0 101 l h\nf*';
+
 interface GroupInput {
   /** Wrap the drawing in `mc:AlternateContent`, as Word does. Defaults to true. */
   readonly alternateContent?: boolean;
@@ -136,10 +139,10 @@ async function refusedGroupCommands(bytes: Uint8Array, message: string) {
 test('a group picture paints in its member frame, under the vector members', async () => {
   const { imageCount, commands } = await pageCommands(input(pictureMember(0) + BAR_MEMBER));
   expect(imageCount).toBe(1);
-  // Clipped to the 100pt x 200pt group at (72pt, 72pt) on the 792pt page; the image fills
-  // only the 100pt x 50pt picture member at the top of the group.
+  // Clipped to the 100pt x 200pt group at (72pt, 72pt) on the 792pt page, then to its own
+  // frame; the image fills only the 100pt x 50pt picture member at the top of the group.
   expect(commands).toMatch(
-    /q 72 720 m 172 720 l 172 520 l 72 520 l h W n 100 0 0 50 72 670 cm \/Im\d+ Do Q/
+    /q 72 720 m 172 720 l 172 520 l 72 520 l h W n 72 720 m 172 720 l 172 670 l 72 670 l h W n 100 0 0 50 72 670 cm \/Im\d+ Do Q/
   );
   const image = commands.search(/\/Im\d+ Do/);
   const bar = commands.indexOf('1 0 0 rg');
@@ -186,17 +189,25 @@ test('a group with two pictures paints both in order, with their crops, under th
   expect(commands).toContain('/ActualText <FEFF004c006100620065006c>');
 });
 
-test('an MC-wrapped group whose second picture is missing refuses strict export', async () => {
+test('an MC-wrapped group whose second picture is missing paints its other members', async () => {
   const second = pictureMember(635000, 0, '<a:blip r:embed="rIdMissing"/>');
   const bytes = input(pictureMember(0) + second + BAR_MEMBER, {
     relationships:
       `<Relationship Id="rIdImg" Type="${IMAGE_RELATIONSHIP}" Target="media/image1.png"/>` +
       `<Relationship Id="rIdMissing" Type="${IMAGE_RELATIONSHIP}" Target="media/none.png"/>`,
   });
-  const { commands } = await refusedGroupCommands(bytes, 'Image has no validated raster bytes');
-  // The first image can remain in PDF resources, but no member paints after the second fails.
-  expect(commands).not.toMatch(/\/Im\d+ Do/);
-  expect(commands).not.toContain('1 0 0 rg');
+  // Strict export still refuses the missing picture. Best-effort export leaves it out.
+  const { imageCount, commands } = await refusedGroupCommands(
+    bytes,
+    'Image has no validated raster bytes'
+  );
+  expect(imageCount).toBe(1);
+  // Only the first picture paints, in its member frame at the top of the group.
+  expect(commands.match(/\/Im\d+ Do/g)).toHaveLength(1);
+  const first = commands.search(/100 0 0 50 72 670 cm \/Im\d+ Do Q/);
+  const bar = commands.indexOf(BAR_COMMANDS);
+  expect(first).toBeGreaterThan(-1);
+  expect(bar).toBeGreaterThan(first);
 });
 
 const LINKED = {
@@ -205,59 +216,65 @@ const LINKED = {
 } as const;
 const LINKED_PICTURE = pictureMember(0, 0, '<a:blip r:link="rIdLink"/>');
 
-// Unsupported visible groups keep placeholders in the editor. Strict PDF export refuses
-// their omission; best-effort export reports it and paints no partial group.
+// A picture that cannot paint is left out. Strict PDF export refuses the omission;
+// best-effort export reports it and paints the other members.
 for (const [name, picture, options] of [
   ['linked', LINKED_PICTURE, LINKED],
   ['missing', pictureMember(0), { media: null }],
   ['corrupt', pictureMember(0), { media: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9]) }],
 ] as const) {
-  test(`an MC-wrapped group with a ${name} picture refuses strict export`, async () => {
-    for (const members of [picture, picture + BAR_MEMBER]) {
+  test(`an MC-wrapped group with a ${name} picture refuses strict export and paints its vector member`, async () => {
+    for (const [members, bars] of [
+      [picture, 0],
+      [picture + BAR_MEMBER, 1],
+    ] as const) {
       const { imageCount, commands } = await refusedGroupCommands(
         input(members, options),
         'Image has no validated raster bytes'
       );
       expect(imageCount).toBe(0);
-      expect(commands).not.toContain('1 0 0 rg');
+      expect(commands).not.toMatch(/\/Im\d+ Do/);
+      expect(commands.split(BAR_COMMANDS)).toHaveLength(bars + 1);
     }
   });
 }
 
-test('an MC-wrapped group with a picture PDF cannot embed is left out with a notice', async () => {
+test('an MC-wrapped group leaves out a picture PDF cannot embed, with a notice', async () => {
   const notice = {
     code: 'drawing',
     severity: 'information' as const,
-    message: 'Shape group left out: picture format not embeddable: image/bmp',
+    message: 'Group picture left out: picture format not embeddable: image/bmp',
   };
-  for (const members of [pictureMember(0), pictureMember(0) + BAR_MEMBER]) {
+  for (const [members, bars] of [
+    [pictureMember(0), 0],
+    [pictureMember(0) + BAR_MEMBER, 1],
+  ] as const) {
     const { imageCount, commands } = await pageCommands(withBmpPicture(input(members)), 'strict', [
       notice,
     ]);
     expect(imageCount).toBe(0);
-    expect(commands).not.toContain('1 0 0 rg');
+    expect(commands).not.toMatch(/\/Im\d+ Do/);
+    // The vector member still paints.
+    expect(commands.split(BAR_COMMANDS)).toHaveLength(bars + 1);
   }
 });
 
-test('a bare group whose picture cannot paint is refused as a whole', async () => {
+test('a bare group whose picture cannot paint refuses strict export and paints its vector member', async () => {
   const bareGroup = (media?: null) =>
     input(pictureMember(0) + BAR_MEMBER, { alternateContent: false, media });
   for (const [bare, message] of [
     [bareGroup(null), 'Image has no validated raster bytes'],
     [withBmpPicture(bareGroup()), 'Unsupported PDF image format: image/bmp'],
   ] as const) {
-    const error = await exportPdf(bare, { useSystemFonts: false }).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(PdfFidelityError);
-    const { imageCount, commands } = await pageCommands(bare, 'best-effort', [
-      { code: 'drawing', severity: 'unsupported', message },
-    ]);
-    // No vector member paints without its picture.
+    const { imageCount, commands } = await refusedGroupCommands(bare, message);
+    // The picture is left out; the vector member paints without it.
     expect(imageCount).toBe(0);
-    expect(commands).not.toContain('1 0 0 rg');
+    expect(commands).not.toMatch(/\/Im\d+ Do/);
+    expect(commands.split(BAR_COMMANDS)).toHaveLength(2);
   }
 });
 
-test('group geometry outside admission refuses strict export without painting partial content', async () => {
+test('a group member outside the bound is left out, and strict export refuses', async () => {
   const farBar = BAR_MEMBER.replace(
     '<a:off x="0" y="1270000"/>',
     '<a:off x="999999999999999" y="0"/>'
@@ -269,28 +286,22 @@ test('group geometry outside admission refuses strict export without painting pa
     input(pictureMember(0, 999_999_999_999_999) + BAR_MEMBER, { alternateContent: false }),
   ];
   for (const bytes of cases) {
-    const { imageCount, commands } = await refusedGroupCommands(
-      bytes,
-      'Unsupported drawing: group'
-    );
-    expect(imageCount).toBe(0);
-    expect(commands).not.toContain('1 0 0 rg');
+    // The member out of bounds is left out, and strict export refuses the lost content.
+    await refusedGroupCommands(bytes, 'Shape group paints without 1 of its members');
   }
 });
 
-const TEXTBOX_MEMBER =
-  '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="1270000"/>' +
-  '<a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-  '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:txbxContent>' +
-  '</wps:txbx><wps:bodyPr/></wps:wsp>';
+/** A member that paint cannot represent. Alone in a group, the group paints nothing. */
+const FRAME_MEMBER =
+  '<wpg:graphicFrame><wpg:cNvPr id="9" name="Frame"/><wpg:cNvFrPr/><wpg:xfrm>' +
+  '<a:off x="0" y="0"/><a:ext cx="100" cy="100"/></wpg:xfrm></wpg:graphicFrame>';
 
 test('an unsupported MC group keeps its wrap band and reports omitted content', async () => {
-  const members = pictureMember(0) + TEXTBOX_MEMBER;
   for (const [wrap, pageCount] of [
     [undefined, 1],
     ['<wp:wrapTopAndBottom/>', 2],
   ] as const) {
-    const bytes = input(members, { bodyLines: 46, wrap });
+    const bytes = input(FRAME_MEMBER, { bodyLines: 46, wrap });
     const {
       imageCount,
       commands,

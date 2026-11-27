@@ -17,15 +17,17 @@ export function isCarriedHeadRow(row: TableRowFragmentRecord): boolean {
 
 /**
  * The carrying row as one row of content: each inert continuation slot takes the head cell
- * copy from `carried`, the zero-height record directly above it, as a cell of this row alone.
- * `row` itself when `carried` is not such a record.
+ * copy from `carried`, the zero-height records directly above it, as a cell of this row alone.
+ * Merges that start in different rows each carry their text in their own record, so several
+ * can stack above one row. `row` itself when no record holds a head cell copy.
  */
 export function withCarriedHeads(
-  carried: TableRowFragmentRecord | undefined,
+  carried: readonly TableRowFragmentRecord[],
   row: TableRowFragmentRecord
 ): TableRowFragmentRecord {
-  if (!carried || !isCarriedHeadRow(carried)) return row;
-  const heads = carried.cells.filter((cell) => cell.blocks.length > 0);
+  const heads = carried
+    .filter(isCarriedHeadRow)
+    .flatMap((record) => record.cells.filter((cell) => cell.blocks.length > 0));
   if (heads.length === 0) return row;
   return {
     ...row,

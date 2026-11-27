@@ -1,5 +1,27 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.41.1
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/fonts@2.41.1, @docx-editor.dev/pro@2.41.1
+
+## 2.41.0
+
+### Patch Changes
+
+- e1a91dd: A bold or italic face that stands in as a synthesized style of another face of its family again keeps the end-of-cell line height and East Asian punctuation fitting. A face that your font resolver substitutes for a family with its own faces now paints in that face. PDF export reports faces drawn from another face of their family as partial coverage, so strict font policy refuses them. An English family name such as `Meiryo` finds faces supplied under its localized name.
+- bfd023e: A font family with faces under its own name, from your font resolver or embedded in the DOCX, now draws each face it lacks as a synthesized style of its nearest own face, in measurement, paint, and PDF export. Before, those faces measured in the class fallback while paint synthesized them.
+- 285d381: A symbol character from a missing symbol font no longer makes its line taller in PDF export. The stand-in symbol face now uses a line box close to a text line, so the lines and pages below keep their positions.
+- Updated dependencies: @docx-editor.dev/core@2.41.0, @docx-editor.dev/fonts-cjk@2.41.0, @docx-editor.dev/fonts@2.41.0, @docx-editor.dev/pro@2.41.0
+
+## 2.40.0
+
+### Patch Changes
+
+- aa385fa: Fill the automatic space between East Asian text and Latin letters or digits with the highlight or shading of the text before it, on screen and in PDF export.
+- Updated dependencies: @docx-editor.dev/core@2.40.0, @docx-editor.dev/fonts-cjk@2.40.0, @docx-editor.dev/fonts@2.40.0, @docx-editor.dev/pro@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

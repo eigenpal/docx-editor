@@ -55,6 +55,8 @@ test('JavaScript option errors precede document parsing and font work', async ()
     { measurer: {} },
     { producer: 'custom' },
     { reuseAcrossRevisions: true },
+    { fieldDate: new Date(Number.NaN) },
+    { fieldDate: '2026-03-05' },
   ]) {
     try {
       await exportPdf(new Uint8Array([1]), { fonts, ...invalid } as PdfExportOptions);

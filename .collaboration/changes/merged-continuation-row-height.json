@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A table row whose cells all continued a vertical merge took the tallest end-of-cell paragraph of its cells, or no height when every cell hid its mark. A hidden merge-head mark took the line of the document default run properties.",
+  "after": "That row takes the end-of-cell paragraph of its first cell, or one line of the default paragraph style when that cell hides its mark. A hidden merge-head mark takes the same line.",
+  "reason": "The change is in table row layout only. Shared state, operations, and synchronization are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-continuation-row-height.test.ts",
+    "packages/core/src/layout/__tests__/table-cell-hide-mark.test.ts",
+    "packages/core/src/editor/__tests__/table-vmerge-head-row-live.test.ts"
+  ],
+  "changeset": "merged-continuation-row-height",
+  "migration": null
+}

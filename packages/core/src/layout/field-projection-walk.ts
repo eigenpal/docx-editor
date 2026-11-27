@@ -42,10 +42,18 @@ import {
 } from './field-instruction.ts';
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { projectSimpleFieldResult } from './field-simple-result.ts';
-import { createNestedPageTracker } from './field-nested-page.ts';
+import {
+  appendNestedPageResult,
+  createNestedPageTracker,
+  nestedPageArming,
+} from './field-nested-page.ts';
 import { modelTextOfRunChild, hyphenDisplayOf, runPropertiesOf } from './field-run-text.ts';
 import { captureInstructionSpecs, formControlMarkerOf } from './field-form.ts';
-import { synthesizeAtomicField } from './field-synthesis.ts';
+import {
+  captureSeparatedInstruction,
+  noteInstructionLanguage,
+  synthesizeAtomicField,
+} from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
@@ -534,6 +542,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
       }
 
       if (isInstrText(grand)) {
+        if (pending) noteInstructionLanguage(pending, field, grand, props);
         ingestInstrTextBounded(field, grand, budget, runDepth + 1);
         continue;
       }
@@ -543,20 +552,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
         const separateLevel = field.nesting;
         const match = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
-          // Capture the allowlisted kind whether or not a page context is present. With one
-          // (header/footer) the flush projects the live value; without one (body) it paints a
-          // placeholder the kind marks, and document finalize substitutes the page's value.
-          // The `\#` picture and `\*` number format ride along: they decide how it renders.
-          pending.kind = match?.kind ?? null;
-          pending.pageSwitches = match ?? {};
-          // Capture the SYMBOL / HYPERLINK / form-field spec while the machine still holds the
-          // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
-          // Nesting overflow refuses exactly as PAGE projection does: a >4-deep hostile field
-          // must not synthesize output from whatever outer fragments the buffer kept.
-          const effective = effectiveFieldInstruction(field);
-          if (!pending.kind && !effective.overflow && !field.nestingOverflow) {
-            captureInstructionSpecs(pending, effective.instruction);
-          }
+          captureSeparatedInstruction(pending, field, match, displayMode);
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
           pending.style = style;
@@ -568,8 +564,11 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
           // duplicates at the tracked level. Overflowed nesting never arms — projection would
           // be replacing content the atom parser already demoted. A field inside an enclosing
           // instruction never arms: its value feeds that instruction and is not displayed.
-          const displayed = pageContext && !isInsideOpenFieldInstruction(field);
-          nestedPage.onSeparate(displayed ? match : null, separateLevel);
+          // A formula over a PAGE operand that is not a number keeps its cached result. In the
+          // body the tracker arms deferred, for document finalize.
+          const shown = !isInsideOpenFieldInstruction(field);
+          const arming = nestedPageArming(match, shown, pageContext, bodyPageFields);
+          nestedPage.onSeparate(arming, separateLevel);
         }
         continue;
       }
@@ -590,7 +589,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
         // pair nested in a tracked result cannot clear tracking mid-field.
         const appendedLive = nestedPage.onEnd(field.nesting, pageContext);
         if (appendedLive !== null && pending?.atomic) {
-          pending.cachedText += appendedLive;
+          appendNestedPageResult(pending, nestedPage, appendedLive);
         }
         onFldCharEnd(field);
         if (outermostEnd) {
@@ -747,7 +746,7 @@ export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): Fi
             // link — exactly like the ordinary result branch: when the atom's first visible
             // result content is the nested digits wrapped in `w:ins` or `w:hyperlink`, the
             // live value that replaces them must paint attributed and linked the same way.
-            nestedPage.noteResult(!style.hidden);
+            nestedPage.noteResult(!style.hidden, hyphen?.measureText ?? text);
             if (style.hidden) continue;
             donateResultCapture(text);
             continue;

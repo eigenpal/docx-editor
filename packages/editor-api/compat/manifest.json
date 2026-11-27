@@ -905,7 +905,7 @@
     },
     {
       "uid": "Word.Field#delete",
-      "note": "Deletes the addressed field atom and its cached result, preserving neighboring content and unrelated fields. With TrackMineOnly, it deletes only the runtime author's own pending field, which it removes outright with no proposal left; any other field refuses with NotSupported and edit.tracked-operation-unsupported. Protected fields refuse with InvalidArgument and edit.protected-content. Deleted handles become stale. Fields inside unsupported structures remain preserved."
+      "note": "Deletes the addressed field atom and its cached result, preserving neighboring content and unrelated fields. With TrackMineOnly, it deletes only the runtime author's own pending field, which it removes outright with no proposal left; any other field refuses with NotSupported and edit.tracked-operation-unsupported. Protected fields refuse with InvalidArgument and edit.protected-content. Deleted handles become stale. Fields inside unsupported structures remain preserved. A field whose field codes span paragraphs is not listed in Body.fields or Range.fields, so Field.delete cannot reach it; an untracked Range.delete over the whole field removes it."
     },
     {
       "uid": "Word.Range#insertContentControl",

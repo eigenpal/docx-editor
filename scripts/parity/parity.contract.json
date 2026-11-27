@@ -20,6 +20,7 @@
       "modules",
       "navigation",
       "openFailure",
+      "fontNotice",
       "rulers",
       "t",
       "title",
@@ -28,6 +29,7 @@
       "revisionMarkup",
       "reviewDisplayMode",
       "fieldResults",
+      "fieldDate",
       "contentLockPolicy",
       "lockedControlNavigation"
     ],
@@ -46,7 +48,8 @@
       "renderTitleBarLeft": "titleBarLeft",
       "renderTitleBarRight": "titleBarRight",
       "loadingIndicator": "loadingIndicator",
-      "renderOpenFailureActions": "openFailureActions"
+      "renderOpenFailureActions": "openFailureActions",
+      "renderFontNotice": "fontNotice"
     },
     "reactClassNameAsVueClass": {
       "className": "class"
