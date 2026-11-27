@@ -299,6 +299,29 @@ describe('mirrored side margins after the notes pass', () => {
     );
   });
 
+  test('a text frame positioned from the page edge keeps its place on a moved page', () => {
+    // `w:framePr/@w:hAnchor="page"` (CT_FramePr, §17.3.1.11), 20pt from the sheet edge.
+    const frame =
+      '<w:p><w:pPr><w:framePr w:w="1000" w:hAnchor="page" w:x="400" w:wrap="around"/></w:pPr>' +
+      '<w:r><w:t>F</w:t></w:r></w:p>';
+    const frameOnSheet = (layout: SemanticLayout) => {
+      for (const page of layout.pages) {
+        const left = page.contentBox.x - page.box.x;
+        for (const fragment of page.fragments) {
+          if (fragment.kind !== 'paragraph' || !fragment.positionedFrame) continue;
+          return [fragment.box.x, fragment.positionedFrame.box.x, fragment.lines[0]!.box.x].map(
+            (x) => Number((left + x).toFixed(2))
+          );
+        }
+      }
+      throw new Error('no frame');
+    };
+    const unmoved = frameOnSheet(overflowLayout(0, true, false, frame));
+    expect(unmoved[1]).toBe(20);
+    expect(frameOnSheet(overflowLayout(1, true, false, frame))).toEqual(unmoved);
+    expect(frameOnSheet(overflowLayout(1, false, false, frame))).toEqual(unmoved);
+  });
+
   test('without the setting no page moves', () => {
     const layout = overflowLayout(1, false);
     for (const page of layout.pages) expect(page.contentBox.x - page.box.x).toBe(108);

@@ -9,14 +9,15 @@
 // Body fragments, anchored drawings, column separators and content-control boundaries are
 // relative to the content box, so they travel with it. The records that hold sheet
 // coordinates are translated here. A floating table (`w:tblpPr/@w:horzAnchor="page"`,
-// CT_TblPPr, §17.4.57) or an anchored drawing (`wp:positionH/@relativeFrom="page"`,
-// ST_RelFromH, §20.4.3.4) positioned from the page edge is moved back, so it keeps its
-// distance to the sheet. The body lines keep the wrap the body pass gave them, and a text
-// frame (`w:framePr`) and an object in a margin band keep their distance to the text.
+// CT_TblPPr, §17.4.57), a text frame (`w:framePr/@w:hAnchor="page"`, CT_FramePr, §17.3.1.11)
+// or an anchored drawing (`wp:positionH/@relativeFrom="page"`, ST_RelFromH, §20.4.3.4)
+// positioned from the page edge is moved back, so it keeps its distance to the sheet. The
+// body lines keep the wrap the body pass gave them, and an object in a margin band keeps its
+// distance to the text.
 
 import { shiftAnchoredDrawing } from './drawing-overlap.ts';
 import type { OverflowPageShell } from './page-furniture-insets.ts';
-import { translateParagraphFragment } from './paragraph-frame.ts';
+import { readParagraphFrame, translateParagraphFragment } from './paragraph-frame.ts';
 import { strippedStoryProjections } from './published-story-projections.ts';
 import type {
   BlockFragmentRecord,
@@ -110,7 +111,17 @@ function pageEdgeRecordsHeld(
   const inCell = new Set<string>();
   let changed = false;
   const fragments = page.fragments.map((fragment) => {
-    if (fragment.kind !== 'table') return fragment;
+    if (fragment.kind !== 'table') {
+      // The record keeps the cascaded `w:framePr`, which names the frame's horizontal anchor.
+      const frame = fragment.positionedFrame;
+      if (!frame || readParagraphFrame(fragment.props)?.horizontalAnchor !== 'page')
+        return fragment;
+      changed = true;
+      return {
+        ...translateParagraphFragment(fragment, dx, 0),
+        positionedFrame: { ...frame, box: { ...frame.box, x: frame.box.x + dx } },
+      };
+    }
     if (!pageEdgeTables.has(fragment.tableId)) {
       if (page.anchoredDrawings?.length) collectCellParagraphs(fragment, inCell);
       return fragment;
