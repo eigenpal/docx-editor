@@ -34,6 +34,10 @@ import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 import type { DocxEditorNavigationProps } from './editor/navigation';
 import type {
+  DocxEditorFontNoticeContext,
+  DocxEditorFontNoticeProps,
+} from './editor/DocxEditorFontNotice';
+import type {
   DocxEditorOpenFailureContext,
   DocxEditorOpenFailureProps,
 } from './editor/DocxEditorOpenFailure';
@@ -102,6 +106,24 @@ export interface DocxEditorProps {
    * ```
    */
   readonly renderOpenFailureActions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
+  /**
+   * Your own font notice, in place of the packaged bar. It renders in the same row, only
+   * while the document has substituted families that the reader has not dismissed. It is
+   * the same as `fontNotice.children`; pass only one. The function can call hooks. It
+   * renders nothing with
+   * `fontNotice={false}`, and nothing with `chrome={false}`: compose `DocxEditor.FontNotice`
+   * yourself there.
+   *
+   * ```tsx
+   * <DocxEditor
+   *   document={bytes}
+   *   renderFontNotice={({ fonts, dismiss }) => (
+   *     <MyBanner onClose={dismiss}>Substituted fonts: {fonts.join(', ')}</MyBanner>
+   *   )}
+   * />
+   * ```
+   */
+  readonly renderFontNotice?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
   /**
    * Your own loading indicator, in place of the packaged spinner. It shows centered on a
    * blank page before the document arrives, then on the document's first page while a large
@@ -240,6 +262,17 @@ export interface DocxEditorProps {
    * removes the dialog, for a host that reports the failure itself through `useOpenFailure`.
    */
   openFailure?: boolean | DocxEditorOpenFailureProps;
+  /**
+   * The bar that names the font families the document renders in substitute faces, on by
+   * default with the packaged chrome. It shows only when there are such families. Requires
+   * `chrome`; without it, compose `DocxEditor.FontNotice` yourself.
+   *
+   * `false` removes it, for a host that does not want it or reports the families itself
+   * from `useEditorState((snapshot) => snapshot.fontSubstitutions)`. An object is
+   * `DocxEditorFontNoticeProps`, passed straight through: restyle the bar with
+   * `className` and `style`, or replace it with `children`.
+   */
+  fontNotice?: boolean | DocxEditorFontNoticeProps;
   /**
    * Horizontal and vertical rulers, on by default with the packaged chrome.
    *

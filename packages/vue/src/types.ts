@@ -29,6 +29,7 @@ import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 import type { DocxEditorNavigationProps } from './editor/navigation';
 import type { DocxEditorOpenFailureProps } from './editor/DocxEditorOpenFailure';
+import type { DocxEditorFontNoticeProps } from './editor/DocxEditorFontNotice';
 
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
@@ -74,6 +75,13 @@ export interface DocxEditorProps {
    * the `openFailureActions` slot.
    */
   openFailure?: boolean | DocxEditorOpenFailureProps;
+  /**
+   * The bar that names the font families the document renders in substitute faces, on by
+   * default with the packaged chrome. `false` removes it. An object is
+   * `DocxEditorFontNoticeProps`, passed straight through. For your own notice, use the
+   * `fontNotice` slot. Requires `chrome`; without it, compose `DocxEditorFontNotice` yourself.
+   */
+  fontNotice?: boolean | DocxEditorFontNoticeProps;
   rulers?: boolean;
   document?: DocumentSource;
   /** Live host mode. */

@@ -1139,7 +1139,15 @@ export interface DocxEditorExportDialogProps {
 export function DocxEditorFontNotice(input: DocxEditorFontNoticeProps): react.JSX.Element | null;
 
 // @public
+export interface DocxEditorFontNoticeContext {
+    readonly dismiss: () => void;
+    readonly fonts: readonly string[];
+    readonly message: string;
+}
+
+// @public
 export interface DocxEditorFontNoticeProps {
+    children?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
     className?: string;
     style?: CSSProperties;
     t?: TFunction;
@@ -1759,6 +1767,7 @@ export interface DocxEditorProps {
     document?: DocumentSource;
     fieldDate?: Date;
     fieldResults?: FieldResultsMode;
+    fontNotice?: boolean | DocxEditorFontNoticeProps;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
     hyperlinkPopup?: boolean;
@@ -1780,6 +1789,7 @@ export interface DocxEditorProps {
     onTitleChange?: (title: string) => void;
     openFailure?: boolean | DocxEditorOpenFailureProps;
     popups?: DocxEditorPopups;
+    readonly renderFontNotice?: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
     readonly renderOpenFailureActions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
     readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)

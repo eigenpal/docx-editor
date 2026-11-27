@@ -80,6 +80,7 @@ Wrap resolvers such as `packagedFonts()` in `useFonts()` to keep one identity. F
 | `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
 | `popups` | `DocxEditorPopups` | Replaces automatic popups with `definePopup(MyPopup)` or render callbacks. See [Customize popups](/docs/2.x/guides/customize-dialogs). |
 | `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Configures the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
+| `fontNotice` | `boolean \| DocxEditorFontNoticeProps` | Toggles or configures the bar that lists substituted font families. See [the font notice](/docs/2.x/guides/fonts#customize-the-font-notice). |
 | `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
 | `i18n` | `Translations` | Live chrome and drawing labels for this editor. See [i18n](/docs/2.x/i18n). |
 
@@ -103,6 +104,7 @@ Wrap resolvers such as `packagedFonts()` in `useFonts()` to keep one identity. F
 | `#titleBarRight` | none | Host content after the title. |
 | `#loadingIndicator` | none | Replaces the loading spinner. See [loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator). |
 | `#openFailureActions` | `{ failure, message, dismiss }` | Adds buttons to the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
+| `#fontNotice` | `{ fonts, message, dismiss }` | Replaces the bar that lists substituted font families. See [the font notice](/docs/2.x/guides/fonts#customize-the-font-notice). |
 
 ## Use the ref
 

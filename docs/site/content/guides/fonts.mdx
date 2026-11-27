@@ -325,6 +325,70 @@ Read `editor.fontMeasurement()` to inspect measurement.
 
 `{ measurer: 'fixed', resolving: false }` means no usable font source remains.
 
+### Customize the font notice
+
+If a document renders families in substitute faces, the packaged editor shows a bar that names them. The reader can dismiss the bar. It shows again when the set of families changes.
+
+Set `fontNotice` to `false` to remove the bar. Pass an object to restyle it with `className` and `style`. The bar is part of the packaged frame, so `chrome={false}` renders no bar.
+
+To show your own component in the same row, pass `renderFontNotice` in React, or fill the `#fontNotice` slot in Vue. The component renders only while there are substituted families that the reader has not dismissed. Keep `role="status"` on it, so that assistive technology announces the notice.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor
+      document={bytes}
+      renderFontNotice={({ fonts, dismiss }) => (
+        <div role="status" className="my-font-banner">
+          <span>Substituted fonts: {fonts.join(', ')}</span>
+          <button type="button" onClick={dismiss}>
+            Hide
+          </button>
+        </div>
+      )}
+    />
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditor :document="bytes">
+    <template #fontNotice="{ fonts, dismiss }">
+      <div role="status" class="my-font-banner">
+        <span>Substituted fonts: {{ fonts.join(', ') }}</span>
+        <button type="button" @click="dismiss">Hide</button>
+      </div>
+    </template>
+  </DocxEditor>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+| Context field | Meaning |
+| --- | --- |
+| `fonts` | The families that render in a substitute face. The names come from the document, so render them as text. |
+| `message` | The packaged message, translated, with the families in it |
+| `dismiss` | Hides the notice for this set of families |
+
+In a composed editor, `DocxEditor.FontNotice` takes the same function as `children` in React. In Vue, `DocxEditorFontNotice` takes it as the default slot. To report the families somewhere else, read `fontSubstitutions` from the editor snapshot with `useEditorState`.
+
 ## Deploy font assets
 
 ### Serve the HarfBuzz WASM asset

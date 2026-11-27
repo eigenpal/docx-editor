@@ -88,6 +88,8 @@ Wrap resolvers such as `packagedFonts()` in `useFonts` to keep one identity. For
 | `loadingIndicator` | `ReactNode` | Replaces the loading spinner. See [loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator). |
 | `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Configures the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
 | `renderOpenFailureActions` | `(context) => ReactNode` | Adds buttons to that dialog, built from `DocxEditor.OpenFailure.Action`. |
+| `fontNotice` | `boolean \| DocxEditorFontNoticeProps` | Toggles or configures the bar that lists substituted font families. See [the font notice](/docs/2.x/guides/fonts#customize-the-font-notice). |
+| `renderFontNotice` | `(context) => ReactNode` | Replaces that bar with your own component. |
 | `children` | `DocxEditorChildren` | Extra chrome inside the viewport after the pages, such as `DocxEditor.UnsupportedElement` components. |
 | `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
 | `i18n` | `Translations` | Live chrome and drawing labels for this editor. See [i18n](/docs/2.x/i18n). |
