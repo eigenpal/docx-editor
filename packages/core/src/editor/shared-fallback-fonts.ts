@@ -33,6 +33,7 @@ import {
   GLYPH_FALLBACK_FACES,
   GLYPH_FALLBACK_FAMILIES,
   glyphFallbackFamiliesFor,
+  COLOR_GLYPH_FALLBACK_FAMILIES,
   hasMetricCompatibleSubstitute,
 } from '../layout/font-fallback-rules.ts';
 import { withGlyphFallbackAliases } from '../layout/glyph-fallback-aliases.ts';
@@ -360,19 +361,26 @@ export function createGlyphFallbackDemand(request: (held: boolean) => void): Gly
           return false;
         }
       };
+      const want = (next: readonly string[]): void => {
+        const added = next.filter((family) => !wanted.has(fold(family)));
+        if (added.length === 0) return;
+        for (const family of added) wanted.add(fold(family));
+        const inFonts = added.some(holds);
+        pending ||= inFonts;
+        request(inFonts);
+      };
       const wrapped = withGlyphFallbacks(
         shaping,
         GLYPH_FALLBACK_FACES.filter((face) => held.has(fold(face.family))),
         {
           synthesizeSmallCaps: !cssSmallCaps,
           onUncovered(characters) {
-            const next = glyphFallbackFamiliesFor(characters, (family) => held.has(fold(family)));
-            const added = next.filter((family) => !wanted.has(fold(family)));
-            if (added.length === 0) return;
-            for (const family of added) wanted.add(fold(family));
-            const inFonts = added.some(holds);
-            pending ||= inFonts;
-            request(inFonts);
+            want(glyphFallbackFamiliesFor(characters, (family) => held.has(fold(family))));
+          },
+          // A character that its run face draws but that selects emoji presentation asks for
+          // the color face alone, once: the other fallback faces would not draw it in color.
+          onEmojiPresentation() {
+            want(COLOR_GLYPH_FALLBACK_FAMILIES);
           },
         }
       );

@@ -4,7 +4,9 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { PDFDocument, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import { createFontSource } from '@docx-editor.dev/core/editor';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { exportPdf } from '../src/index.ts';
 import { docx, paragraph } from './fixture.ts';
@@ -40,4 +42,40 @@ test('an emoji paints its palette layers in color and stays extractable as text'
   } finally {
     await pdf.loadingTask.destroy();
   }
+});
+
+test('an emoji presentation sequence takes the color face though the run face maps it', async () => {
+  // DejaVu Sans maps U+2764 to a monochrome heart. U+FE0F asks for emoji presentation
+  // (Unicode Technical Standard #51), so `❤\uFE0F` paints the color face's red layer; the
+  // bare `❤` keeps the text glyph.
+  const loaded = createFontSource(
+    new Uint8Array(
+      readFileSync(
+        new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url)
+      )
+    ),
+    { family: 'Heart Text', weight: 400, style: 'normal' }
+  );
+  if ('failure' in loaded) throw new Error(JSON.stringify(loaded.failure));
+  const run = (text: string) =>
+    `<w:p><w:r><w:rPr><w:rFonts w:ascii="Heart Text" w:hAnsi="Heart Text"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+  const layers = async (text: string) => {
+    const result = await exportPdf(docx(run(text)), {
+      useSystemFonts: false,
+      fonts: { sources: [loaded.source] },
+    });
+    const parsed = await PDFDocument.load(result.bytes);
+    return parsed.context
+      .enumerateIndirectObjects()
+      .flatMap(([, object]) =>
+        object instanceof PDFRawStream
+          ? [new TextDecoder().decode(decodePDFRawStream(object).decode())]
+          : []
+      )
+      .join('\n');
+  };
+  expect(await layers('A\u2764\uFE0FB')).toMatch(
+    /0\.866667 0\.180392 0\.266667 rg [\d.\- mlch]+ f/
+  );
+  expect(await layers('A\u2764B')).not.toMatch(/0\.866667 0\.180392 0\.266667 rg/);
 });

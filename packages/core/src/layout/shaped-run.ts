@@ -261,8 +261,9 @@ const missingGlyphFallbackShapers = new WeakSet<TextShaper>();
 
 /**
  * Record that `shaper` substitutes a face only for a glyph that the environment's own face
- * lacks: the engine's glyph fallback over a face preserving shaper. Text that the face's cmap
- * maps completely keeps that face. A host's own shaper is never marked.
+ * lacks, or for a character that selects emoji presentation: the engine's glyph fallback over
+ * a face preserving shaper. Other text that the face's cmap maps completely keeps that face. A
+ * host's own shaper is never marked.
  * @internal
  */
 export function markMissingGlyphFallbackShaper<T extends TextShaper>(shaper: T): T {

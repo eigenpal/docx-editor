@@ -68,6 +68,11 @@ const TEXT_GLYPH_FALLBACKS = GLYPH_FALLBACK_FAMILIES.slice(0, 5);
 const EAST_ASIAN_GLYPH_FALLBACKS = GLYPH_FALLBACK_FAMILIES.slice(0, 8);
 const EMOJI_GLYPH_FALLBACKS = [...TEXT_GLYPH_FALLBACKS, ...GLYPH_FALLBACK_FAMILIES.slice(8)];
 
+/** The color face of {@link GLYPH_FALLBACK_FAMILIES}, which draws emoji presentation. */
+export const COLOR_GLYPH_FALLBACK_FAMILIES: readonly string[] = Object.freeze(
+  GLYPH_FALLBACK_FAMILIES.slice(8, 9)
+);
+
 /**
  * {@link GLYPH_FALLBACK_FAMILIES} in the steps a host loads them on demand, by the kind of
  * character that is uncovered. Each step holds every earlier face of the list that can carry
