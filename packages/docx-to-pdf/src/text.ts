@@ -421,7 +421,7 @@ export class TextWriter {
           });
           // The cluster's characters ride an invisible space of an embedded text face, so
           // extraction and search find the emoji even in a reader that ignores ActualText.
-          const host = i === textGlyph && text ? this.textHost(face, page) : null;
+          const host = i === textGlyph && text ? this.textHost(face, page, visit) : null;
           const carrier = host?.carrier(text) ?? null;
           if (host && carrier) {
             // Stretched to the cluster's own advance, so an extractor that reads the pen
@@ -861,10 +861,21 @@ export class TextWriter {
    * color face is too, since it embeds its monochrome glyphs. Another face lends its space
    * when the run's face has none.
    */
-  private textHost(face: EmbeddedFace, page: PDFPage): EmbeddedFace | null {
-    const host = face.hasSpace
+  private textHost(
+    face: EmbeddedFace,
+    page: PDFPage,
+    visit: SemanticSpanVisit
+  ): EmbeddedFace | null {
+    let host = face.hasSpace
       ? face
       : ([...this.faces.values()].find((candidate) => candidate.hasSpace) ?? null);
+    // Before any text face is embedded, as when a document opens with an emoji, the face
+    // that draws a space in the run's own style carries the characters.
+    if (!host) {
+      const space = this.session.shapeLaidOutText({ ...visit.span, text: ' ' });
+      const spaceFace = space ? this.admittedFace(space.font, visit) : undefined;
+      host = spaceFace?.hasSpace ? spaceFace : null;
+    }
     if (host) this.registerFont(page, host);
     return host;
   }

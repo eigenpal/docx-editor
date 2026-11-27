@@ -44,10 +44,8 @@ test('an emoji paints its palette layers in color and stays extractable as text'
   }
 });
 
-test('an emoji presentation sequence takes the color face though the run face maps it', async () => {
-  // DejaVu Sans maps U+2764 to a monochrome heart. U+FE0F asks for emoji presentation
-  // (Unicode Technical Standard #51), so `❤\uFE0F` paints the color face's red layer; the
-  // bare `❤` keeps the text glyph.
+/** DejaVu Sans as the family `Heart Text`: it maps U+2764 to a monochrome heart. */
+function heartText() {
   const loaded = createFontSource(
     new Uint8Array(
       readFileSync(
@@ -57,12 +55,40 @@ test('an emoji presentation sequence takes the color face though the run face ma
     { family: 'Heart Text', weight: 400, style: 'normal' }
   );
   if ('failure' in loaded) throw new Error(JSON.stringify(loaded.failure));
+  return loaded.source;
+}
+
+test('a document that opens with an emoji sequence keeps its characters as text', async () => {
+  // No text face is embedded before the sequence, and the color face has no space to carry
+  // the characters, so the run's own face carries them.
+  const result = await exportPdf(
+    docx(
+      `<w:p><w:r><w:rPr><w:rFonts w:ascii="Heart Text" w:hAnsi="Heart Text"/></w:rPr><w:t>\u2764\uFE0F\u200D\u{1F525} x</w:t></w:r></w:p>`
+    ),
+    { useSystemFonts: false, fonts: { sources: [heartText()] } }
+  );
+  expect(result.diagnostics.filter((d) => d.code !== 'incomplete-font')).toEqual([]);
+  const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
+  try {
+    const content = await (await pdf.getPage(1)).getTextContent();
+    const text = content.items.map((item) => ('str' in item ? item.str : '')).join('');
+    expect(text).toContain('\u2764\uFE0F\u200D\u{1F525}');
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
+});
+
+test('an emoji presentation sequence takes the color face though the run face maps it', async () => {
+  // DejaVu Sans maps U+2764 to a monochrome heart. U+FE0F asks for emoji presentation
+  // (Unicode Technical Standard #51), so `❤\uFE0F` paints the color face's red layer; the
+  // bare `❤` keeps the text glyph.
+  const source = heartText();
   const run = (text: string) =>
     `<w:p><w:r><w:rPr><w:rFonts w:ascii="Heart Text" w:hAnsi="Heart Text"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
   const layers = async (text: string) => {
     const result = await exportPdf(docx(run(text)), {
       useSystemFonts: false,
-      fonts: { sources: [loaded.source] },
+      fonts: { sources: [source] },
     });
     const parsed = await PDFDocument.load(result.bytes);
     return parsed.context
