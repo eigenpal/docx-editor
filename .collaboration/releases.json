@@ -936,6 +936,42 @@
         "package-lock.json": "91a5e047acb72a081d1c0d78b1b06dbe5ffa568f88b638378fd631cbd29d43e4",
         "fixture.json": "8d1be22e7cc22aeb26b243b6e88c860f9a4c57f6f06efa3673ea7390331cbfbb"
       }
+    },
+    {
+      "version": "2.41.1",
+      "commit": "fdaf524be3daf7d274c870e6774251b3677250eb",
+      "sourceLockHash": "63b893b29298618480e3da737f3769e7bfd1bc34891de0e26c4341167eb9b3d0",
+      "format": "docx-collaboration:1.5.5.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 5,
+        "repairVersion": 5,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.41.1",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.41.1.tgz",
+          "integrity": "sha512-M6TsjMnb6ZIEXyY84Qv1hbkUZlXokj7nOXLVlFjoPlgnXgWLSC3+XGITcVHLC5yRopS2pPXfG5tdLMrwozTLQw=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.41.1.tgz",
+          "integrity": "sha512-cAsjgkchMVCt8s6xI8EEfGEpmr9yY5FNrHQCn0ROrGgIUyLvmgBmFtv7JQTTAYI9hpRZEK6vOUZHU+3UiWGVqg=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.41.1.tgz",
+          "integrity": "sha512-XMdj32b4OSDdR8M8zFkGXQWEtv4OS3V5N8WnOfBMKA8Z+CiJnOOyaQWLeMPAUxldYfP7N/6MQda54TTkrV1luQ=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.41.1.tgz",
+          "integrity": "sha512-F4RhXWB+TKI7E4mgyVDq8eAa4TmRB6HznH081g0ULslSeKJX2n7ojyy7Uz59jKpYZv+4WWS0XHsZEFPoIf8XFg=="
+        }
+      },
+      "hashes": {
+        "package.json": "1f36622a60aa0dafb2d93d9db69bb56ab319db88ef1b269a7f899c1edab6ffff",
+        "package-lock.json": "bc3740585da4459c01d3e7ca0914eba303a9d66684df737e03569d7ca203b407",
+        "fixture.json": "03f39ed8deac995cdb4b0e804894dfc5e7e3577239d5e2a89ac1b8c47e3597e5"
+      }
     }
   ]
 }
