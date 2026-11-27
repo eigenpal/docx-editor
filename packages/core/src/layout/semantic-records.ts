@@ -249,8 +249,8 @@ export interface StyleSpanRecord {
    */
   readonly tabLeaderAdvancePt?: number;
   /**
-   * Alignment of the stop a `\t` span advanced to, when it is not `left`. A distributed
-   * line stretches the text after its last tab only when that tab reached a left stop.
+   * Alignment of the stop a `\t` span advanced to, when it is not `left`. Justified and
+   * distributed lines do not stretch the text that such a stop places.
    *
    * @internal
    */

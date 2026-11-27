@@ -142,7 +142,8 @@ function alignLogicalSpans(
   eastAsianSpacing: boolean,
   hangingPunctuationAdvance: number,
   floor?: SpaceShrinkFloor,
-  keepsBalancedSpaces = false
+  keepsBalancedSpaces = false,
+  closedByBreak = endsInBreak(spans)
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -164,7 +165,8 @@ function alignLogicalSpans(
         eastAsianSpacing,
         hangingPunctuationAdvance,
         floor,
-        keepsBalancedSpaces
+        keepsBalancedSpaces,
+        endsInBreak(content)
       )
     );
     if (aligned) return aligned;
@@ -353,29 +355,44 @@ function alignLogicalSpans(
       slotEnd -= 1;
     const centered = (): readonly StyleSpanRecord[] =>
       spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + slack / 2 } }));
+    // The start edge is the right one in a right-to-left paragraph.
+    const atStartEdge = (): readonly StyleSpanRecord[] => {
+      if (!paragraphRtl) return spans;
+      const start = slack - rtlTrailingAdvance;
+      return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
+    };
     // Float advances hold their reserved positions, so a line with one never moves.
     const floatReserved = spans.some((span) => (span.wrapAdvanceBefore ?? 0) > 0.001);
-    // A left-to-right distributed line with a tab stretches only the text after its last
-    // tab, from that tab's stop to the line end, when the stop is a left one. Otherwise, or
-    // when that text has nothing to stretch, the whole line centers with its tab positions.
+    // A line with a tab stretches only the text after its last tab (`w:tab`, CT_Empty,
+    // ECMA-376 §17.3.3.32): the tab holds its stop, so the text before it keeps its natural
+    // spacing. Text that a center, right or decimal stop (ST_TabJc, §17.18.84) places does
+    // not stretch either: the stop decides where it sits. Float advances hold their reserved
+    // positions, and a right-to-left distributed line keeps its own rules.
     const tabIndex =
-      distributed !== undefined && !paragraphRtl && !floatReserved
+      !floatReserved && (distributed === undefined || !paragraphRtl)
         ? lastTabBefore(spans, slotEnd)
         : -1;
     if (tabIndex >= 0) {
       const from = tabIndex + 1;
       const stretched =
-        spans[tabIndex]!.tabAlignment === undefined && from < slotEnd
+        from < slotEnd && !tabPlacesText(spans[tabIndex]!, distributed !== undefined, closedByBreak)
           ? stretchJustifiedLine(
               spans.slice(from),
               measurer,
               slack,
               slotEnd - from,
               distributed,
-              true
+              distributed !== undefined,
+              spans[tabIndex]!.box.x + spans[tabIndex]!.box.width,
+              paragraphRtl,
+              eastAsianSpacing
             )
           : null;
-      return stretched ? [...spans.slice(0, from), ...stretched] : centered();
+      if (stretched) return [...spans.slice(0, from), ...stretched];
+      // Nothing stretches: a distributed line centers with its tab positions, and a justified
+      // line (`w:jc`, CT_Jc, §17.3.1.13) stays at its start edge.
+      if (distributed !== undefined) return centered();
+      return atStartEdge();
     }
     // A distributed line with nothing to stretch, such as a single word or character, centers.
     const centers =
@@ -389,20 +406,52 @@ function alignLogicalSpans(
       slotEnd,
       distributed,
       centers,
+      indentLeft,
       paragraphRtl,
       eastAsianSpacing
     );
     if (stretched) return stretched;
     // Nothing to stretch, such as one word before a manual line break: a distributed line
     // centers; any other line stays at its start edge, the right one in a right-to-left paragraph.
-    if (centers) return centered();
-    if (!paragraphRtl) return spans;
-    const start = slack - rtlTrailingAdvance;
-    return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
+    return centers ? centered() : atStartEdge();
   }
 
   const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
+/**
+ * Whether the stop a tab span reached places the text after it, so that this text cannot
+ * stretch. A left stop never does. A center, right or decimal stop does on a line that a
+ * break closes (`closedByBreak`), while the tab keeps some width. On a line that wraps, the
+ * text runs on past such a stop to the line end, and stretches as plain text. On a
+ * `distributed` line every such stop places its text.
+ */
+function tabPlacesText(
+  tab: StyleSpanRecord,
+  distributed: boolean,
+  closedByBreak: boolean
+): boolean {
+  if (tab.tabAlignment === undefined) return false;
+  if (distributed) return true;
+  return closedByBreak && tab.box.width > OVERFLOW_TOLERANCE_PT;
+}
+
+/**
+ * Whether a zero-width line or page break span closes the line. A table cell ignores its
+ * page breaks (`pageBreaksIgnored`), so there only a line break does.
+ */
+function endsInBreak(spans: readonly StyleSpanRecord[], pageBreaksIgnored = false): boolean {
+  let end = spans.length;
+  if (pageBreaksIgnored)
+    while (end > 0 && spans[end - 1]!.text === PAGE_BREAK_CHAR && spans[end - 1]!.box.width === 0)
+      end -= 1;
+  const last = spans[end - 1];
+  return (
+    last !== undefined &&
+    last.box.width === 0 &&
+    (last.text === '\n' || last.text === PAGE_BREAK_CHAR)
+  );
 }
 
 /** The index of the last tab span before `end`, or -1. */
@@ -414,10 +463,11 @@ function lastTabBefore(spans: readonly StyleSpanRecord[], end: number): number {
 }
 
 /**
- * Stretch a justified line, or the part of a distributed line after its last tab, by `slack`
+ * Stretch a justified or distributed line, or the part of one after its last tab, by `slack`
  * over `spans[0, slotEnd)`. `distributed` is the spacing of a distributed line, undefined for
  * an ordinary justified line. `spreads` says whether the line may spread its characters or
- * center: a distributed line with no reserved position. Returns null when nothing can
+ * center: a distributed line with no reserved position. `origin` is the x where the text to
+ * stretch starts: the line start, or the end of the last tab. Returns null when nothing can
  * stretch, so the caller decides where the line sits.
  */
 function stretchJustifiedLine(
@@ -427,9 +477,39 @@ function stretchJustifiedLine(
   slotEnd: number,
   distributed: DistributedSpacing | undefined,
   spreads: boolean,
+  origin: number,
   paragraphRtl = false,
   eastAsianSpacing = true
 ): readonly StyleSpanRecord[] | null {
+  // Spaces before the first character of a justified line's stretched text keep their
+  // advance, whichever rule below stretches the rest. A space after an inline object is not
+  // such a space: its span starts past `origin`, or past the space before it. A distributed
+  // line keeps them in the space rule only.
+  let lead = 0;
+  let leadEnd = origin;
+  while (
+    distributed === undefined &&
+    lead < slotEnd - 1 &&
+    withoutTrailingSpaces(spans[lead]!.text) === '' &&
+    Math.abs(spans[lead]!.box.x - leadEnd) <= OVERFLOW_TOLERANCE_PT
+  ) {
+    leadEnd = spans[lead]!.box.x + spans[lead]!.box.width;
+    lead += 1;
+  }
+  if (lead > 0) {
+    const rest = stretchJustifiedLine(
+      spans.slice(lead),
+      measurer,
+      slack,
+      slotEnd - lead,
+      distributed,
+      spreads,
+      origin,
+      paragraphRtl,
+      eastAsianSpacing
+    );
+    return rest ? [...spans.slice(0, lead), ...rest] : null;
+  }
   // Character distribution, unless the spaces can take all the slack: the line then sets
   // as a justified line, and only its spaces stretch.
   let spacesOnly = false;
@@ -647,7 +727,9 @@ export function alignSpans(
       eastAsianSpacing,
       hangingPunctuationAdvance,
       pendingLine?.compressesSpaces,
-      keepsBalancedSpaces
+      keepsBalancedSpaces,
+      // Bidi alignment passes the content without the break that closes the line.
+      endsInBreak(split, pageBreaksIgnored)
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {
