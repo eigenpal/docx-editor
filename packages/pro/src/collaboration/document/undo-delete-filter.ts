@@ -139,7 +139,7 @@ function carriesType(item: Y.Item): boolean {
  * nothing to rescue. Repair cannot help here; only prevention can.
  *
  * Retain the record entry in `nodes`, and a record
- * field that carries a shared type — `children` and `t`. Those are the containers a peer's write
+ * field that carries a shared type — the child array and `t`. Those are the containers a peer's write
  * can land inside, and the schema only ever writes them when it builds the record, so pinning one
  * can never strand a replaced container either.
  *

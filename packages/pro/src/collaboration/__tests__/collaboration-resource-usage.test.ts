@@ -22,6 +22,7 @@ import { DocumentRegistry } from '../document/index.ts';
 import { SHARED_BLOBS_KEY, SharedBlobStore } from '../shared-blob-store.ts';
 import { createPeerHarness, type Peer } from './document-peer-support.ts';
 import { collaborationDocx } from './support.ts';
+import { PACKAGE_NODES_KEY, PACKAGE_PARTS_KEY } from '../document/schema.ts';
 
 const harness = createPeerHarness('resource-usage-room');
 
@@ -80,8 +81,8 @@ describe('collaboration resource usage', () => {
     // A hostile peer can write raw shapes the decoded readers skip. The probe must keep
     // returning numbers — a metrics scraper crashes otherwise — and must count what the
     // ENFORCING caps count, or it shows a healthy room right up to the terminal failure.
-    mirror.getMap('docx-package-nodes-v1').set('junk-node', 'not-a-map' as never);
-    mirror.getMap('docx-package-parts-v1').set('junk-part', 'not-a-map' as never);
+    mirror.getMap(PACKAGE_NODES_KEY).set('junk-node', 'not-a-map' as never);
+    mirror.getMap(PACKAGE_PARTS_KEY).set('junk-part', 'not-a-map' as never);
     const usage = readCollaborationResourceUsage(mirror);
     expect(usage.nodes).toBe(clean.nodes + 1);
     expect(usage.parts).toBe(clean.parts + 1);
@@ -93,7 +94,7 @@ describe('collaboration resource usage', () => {
     const { alice, bob } = await harness.pair(collaborationDocx());
     typeText(alice, 'grow ');
     const fromSession = bob.room.session.resourceUsage();
-    const nodesMap = bob.ydoc.getMap('docx-package-nodes-v1') as unknown as {
+    const nodesMap = bob.ydoc.getMap(PACKAGE_NODES_KEY) as unknown as {
       _eH: { l: readonly unknown[] };
       _dEH: { l: readonly unknown[] };
     };

@@ -28,6 +28,7 @@ import {
   NODE_REPLACED_BY_FIELD,
   NODE_SHELL_FIELD,
   NODE_TEXT_FIELD,
+  SPLIT_BRANCH_FIELDS,
   childArrayOf,
   internNamespace,
   namespaceIdOf,
@@ -797,11 +798,7 @@ export class DocumentRegistry {
         (event.path.length === 0 ||
           event.target instanceof Y.Array ||
           (event.target instanceof Y.Map &&
-            [...event.changes.keys.keys()].some((key) =>
-              ['deleted', 'replacedBy', 'splitFrom', 'splitLineage', 'children'].includes(
-                String(key)
-              )
-            )))
+            [...event.changes.keys.keys()].some((key) => SPLIT_BRANCH_FIELDS.has(String(key)))))
       )
         this.splitDedup.invalidate();
       if (event.path.length > 0) this.splitTextSources.noteChanged(keyId(event.path[0]!));

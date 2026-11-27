@@ -21,7 +21,7 @@ import { parseFollowAnchor, type FollowAnchor, type Origin } from './paragraph-t
 import { changedKeysOf, mapEntry, structAt } from './yjs-items.ts';
 
 /** The shared map of the marks, at the document root. */
-export const TEXT_MARKS_KEY = 'docx-text-marks-v1';
+export const TEXT_MARKS_KEY = 'dx:tm';
 
 /** A copy of moved characters, characters an undo put back, or a follow anchor. */
 export type MarkKind = 'move' | 'restore' | 'follow';

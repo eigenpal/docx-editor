@@ -31,6 +31,7 @@ import { readCase, replayOf } from './scenario-case.ts';
 import { configFor, DEFAULT_DOCUMENT, documentFor } from './scenarios.ts';
 import { textIdentities } from '../../packages/pro/src/collaboration/document/paragraph-text-identity.ts';
 import { INLINE_FIELD } from '../../packages/pro/src/collaboration/document/paragraph-text.ts';
+import { NODE_CHILDREN_FIELD } from '../../packages/pro/src/collaboration/document/schema.ts';
 import type { LogicalId } from '../../packages/pro/src/collaboration/document/index.ts';
 import { fingerprint, firstDifference } from './scenario-oracles.ts';
 import { TEXT_DELETIONS_KEY } from '../../packages/pro/src/collaboration/document/paragraph-text-deletions.ts';
@@ -151,7 +152,7 @@ function printListed(replicas: readonly InspectedReplica[], listed: string): voi
   const [parentId, childId] = listed.split(',');
   for (const replica of replicas) {
     const parent = sharedNodes(replica.ydoc).get(parentId!);
-    const children = parent instanceof Y.Map ? parent.get('children') : null;
+    const children = parent instanceof Y.Map ? parent.get(NODE_CHILDREN_FIELD) : null;
     if (!(children instanceof Y.Array)) continue;
     const items: string[] = [];
     for (let item = children._start; item; item = item.right) {
@@ -202,7 +203,7 @@ function printParagraph(
     const { registry, follow } = sessionInternals(replica.session);
     const shown = registry.inline.viewOf(id).shown(text);
     const identities = textIdentities(text);
-    const children = record.get('children');
+    const children = record.get(NODE_CHILDREN_FIELD);
     console.log(
       `== replica ${replica.index} deleted=${String(record.get('deleted'))} children=${JSON.stringify(children instanceof Y.Array ? children.toArray() : [])}`
     );

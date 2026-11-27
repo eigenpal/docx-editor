@@ -27,7 +27,7 @@ function directInsert(peer: Peer, text: string): void {
   peer.port.flushPendingJournals();
 }
 
-for (const version of [4, 6]) {
+for (const version of [5, 7]) {
   test(`the final journal boundary rejects direct store writes after schema ${version} mismatch`, async () => {
     const { alice, bob } = await harness.pair(document());
     alice.ydoc.getMap(PACKAGE_META_KEY).set('sharedSchemaVersion', version);
@@ -40,7 +40,7 @@ for (const version of [4, 6]) {
     expect(nodeText(alice.store.bodyStore().part.root)).toBe('hello');
     expect(bob.room.session.statusSnapshot().reason).toMatchObject({
       code: 'schema-version-mismatch',
-      detail: `sharedSchemaVersion: expected 5, received ${version}`,
+      detail: `sharedSchemaVersion: expected 6, received ${version}`,
     });
     bob.port.flushPendingJournals();
     bob.detach();

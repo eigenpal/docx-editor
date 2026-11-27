@@ -21,22 +21,32 @@ export const PACKAGE_REPAIR_VERSION = DOCUMENT_COLLABORATION_VERSIONS.repairVers
 export const PACKAGE_CANONICAL_MODEL_VERSION =
   DOCUMENT_COLLABORATION_VERSIONS.canonicalModelVersion;
 
+/**
+ * Holds the format fields. Every release reads it to accept or refuse a room, so its name
+ * never changes (`readCollaborationFormatVersion`).
+ */
 export const PACKAGE_META_KEY = 'docx-package-meta-v1';
-export const PACKAGE_NODES_KEY = 'docx-package-nodes-v1';
-export const PACKAGE_PARTS_KEY = 'docx-package-parts-v1';
-export const PACKAGE_RELS_KEY = 'docx-package-rels-v1';
-export const PACKAGE_OVERRIDES_KEY = 'docx-package-overrides-v1';
-export const PACKAGE_DEFAULTS_KEY = 'docx-package-defaults-v1';
-export const PACKAGE_BINARIES_KEY = 'docx-package-binaries-v1';
-export const PACKAGE_NAMESPACES_KEY = 'docx-package-namespaces-v1';
-export const PACKAGE_ATTRIBUTES_KEY = 'docx-package-attributes-v1';
-export const PACKAGE_BINDINGS_KEY = 'docx-package-bindings-v1';
+/*
+ * The other roots have short names. Yjs writes the root's name into every entry of a
+ * root-level map, so a long name repeats once per node and once per attribute. Shared schema
+ * version 6 shortened them; at version 5 these names made up about 18% of a room.
+ */
+export const PACKAGE_NODES_KEY = 'dx:n';
+export const PACKAGE_PARTS_KEY = 'dx:p';
+export const PACKAGE_RELS_KEY = 'dx:r';
+export const PACKAGE_OVERRIDES_KEY = 'dx:o';
+export const PACKAGE_DEFAULTS_KEY = 'dx:d';
+export const PACKAGE_BINARIES_KEY = 'dx:x';
+export const PACKAGE_NAMESPACES_KEY = 'dx:s';
+export const PACKAGE_ATTRIBUTES_KEY = 'dx:a';
+export const PACKAGE_BINDINGS_KEY = 'dx:b';
 
 export const NODE_SHELL_FIELD = 's';
 /** Immutable descriptor fallback for a container retained through creation undo. */
 export const NODE_INITIAL_SHELL_FIELD = 'b';
 export const NODE_TEXT_FIELD = 't';
-export const NODE_CHILDREN_FIELD = 'children';
+/** Short for the same reason as the root names: every node record writes it. */
+export const NODE_CHILDREN_FIELD = 'c';
 export const NODE_DELETED_FIELD = 'deleted';
 export const NODE_REPLACED_BY_FIELD = 'replacedBy';
 /**
@@ -58,6 +68,15 @@ export const NODE_SPLIT_FROM_FIELD = 'splitFrom';
 export const NODE_SPLIT_LINEAGE_FIELD = 'splitLineage';
 /** Source text when a run split, used to rebase a concurrent text edit onto its products. */
 export const NODE_SPLIT_BASE_TEXT_FIELD = 'splitBaseText';
+
+/** Node record fields whose change can change which split branches are reachable. */
+export const SPLIT_BRANCH_FIELDS: ReadonlySet<string> = new Set([
+  NODE_DELETED_FIELD,
+  NODE_REPLACED_BY_FIELD,
+  NODE_SPLIT_FROM_FIELD,
+  NODE_SPLIT_LINEAGE_FIELD,
+  NODE_CHILDREN_FIELD,
+]);
 
 /** Unit separator. XML names and NCName prefixes cannot hold this character. */
 export const FIELD_SEP = '\u001f';

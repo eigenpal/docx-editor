@@ -267,10 +267,10 @@ To upgrade, export each room with the release your servers run, then follow [Upg
 | 2.17.0 | [Upgrade saved rooms](#upgrade-saved-rooms). Text-only rooms need [their earlier editor](#replace-the-experimental-text-collaboration-api). |
 | 2.18.0 to 2.27.0 | [Format 1.4.2.1 steps](#upgrade-rooms-to-format-1421) |
 | 2.28.0 to 2.31.0 | [Format 1.5.2.1 steps](#upgrade-rooms-to-format-1521) |
-| 2.32.0 or 2.33.0 | [Format 1.5.3.1 steps](#upgrade-rooms-to-format-1531), then [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541), [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551), and [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
-| 2.34.0 to 2.37.0 | [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541), then [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551) and [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
-| 2.38.0 | [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551), then [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
-| 2.39.0 to 2.41.1 | [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
+| 2.32.0 or 2.33.0 | [Format 1.5.3.1 steps](#upgrade-rooms-to-format-1531), then [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541), [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551), and [Format 1.6.6.1 steps](#upgrade-rooms-to-format-1661) |
+| 2.34.0 to 2.37.0 | [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541), then [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551) and [Format 1.6.6.1 steps](#upgrade-rooms-to-format-1661) |
+| 2.38.0 | [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551), then [Format 1.6.6.1 steps](#upgrade-rooms-to-format-1661) |
+| 2.39.0 to 2.41.1 | [Format 1.6.6.1 steps](#upgrade-rooms-to-format-1661) |
 
 Refuse clients with a different format. A compatible client does not make an older room compatible.
 
@@ -314,11 +314,19 @@ Format `docx-collaboration:1.5.5.1` lets participants change the text wrap of te
 
 Keep both server calls, and change the browser storage key. Update clients, servers, export workers, and agents together, because your connection check refuses `docx-collaboration:1.5.4.1` clients.
 
-### Upgrade rooms to format 1.5.6.1
+### Upgrade rooms to format 1.6.6.1
 
-Format `docx-collaboration:1.5.6.1` keeps text order when participants split a paragraph at the same time, and that paragraph came from an earlier concurrent split. It also shows each tracked paragraph break on the paragraph that ends at that break, so rejecting the breaks of one participant keeps the breaks of the others. An insert of several lines made at the same time as a split keeps its line order. Format `docx-collaboration:1.5.5.1` participants can show these paragraphs in a different order, so they refuse these rooms. The shared schema version stays the same.
+Format `docx-collaboration:1.6.6.1` makes rooms 5% to 18% smaller, depending on the document. Each participant downloads less data to join, and a room server holds less memory for each room. For a 75 KB document, a room is 3.5 MiB instead of 4.2 MiB. Compressed rooms in storage change little. The format also includes the paragraph split rules of format 1.5.6.1, which no release has on its own.
+
+The shared schema version increases to 6, because the format stores records under other names. Format `docx-collaboration:1.5.5.1` participants and format `docx-collaboration:1.6.6.1` participants refuse each other's rooms.
 
 Export each saved room with your current release. Check the paragraph order in the export before you reseed the room. Change the browser storage key, and upgrade clients, servers, export workers, and agents together.
+
+#### Upgrade rooms to format 1.5.6.1
+
+No stable release has format `docx-collaboration:1.5.6.1`. Its rules are part of format `docx-collaboration:1.6.6.1`, so follow the [Format 1.6.6.1 steps](#upgrade-rooms-to-format-1661).
+
+Format `docx-collaboration:1.6.6.1` keeps text order when participants split a paragraph at the same time, and that paragraph came from an earlier concurrent split. It also shows each tracked paragraph break on the paragraph that ends at that break, so rejecting the breaks of one participant keeps the breaks of the others. An insert of several lines made at the same time as a split keeps its line order. Format `docx-collaboration:1.5.5.1` participants can show these paragraphs in a different order.
 
 ### Replace the experimental text collaboration API
 
