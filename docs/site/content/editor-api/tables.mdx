@@ -133,7 +133,7 @@ await context.sync();
 | `Table.headerRowCount` | Zero through the row count. Zero removes the header flags. |
 | `TableCell.columnWidth` | Finite points. Changes the grid column, matching cells, and table width, and sets fixed layout. |
 | `TableCell.shadingColor` | Six-digit RGB hex with optional `#`. `auto` removes direct shading. |
-| `TableCell.verticalAlignment` | `Top`, `Center`, or `Bottom`. `Mixed` refuses on writes. `VerticalAlignment` exports the enum. |
+| `TableCell.verticalAlignment` | `Top`, `Center`, or `Bottom`. Reads return the cell's own alignment, not the table style's. `Mixed` refuses on writes. `VerticalAlignment` exports the enum. |
 
 In a merged table, a width write changes the last grid column the cell spans. Widths below the minimum, tables without a grid, and legacy horizontal merges refuse. For text formatting, use `cell.body.font` and `cell.body.paragraphs`.
 

@@ -4374,6 +4374,7 @@ export interface SemanticTableRow {
     // (undocumented)
     readonly cells: readonly SemanticTableCell[];
     readonly changeSites?: readonly RevisionAttribution[];
+    readonly conditionalLeadingMarginPt?: number;
     readonly height: TableRowHeight;
     // (undocumented)
     readonly id: string;
@@ -4401,6 +4402,7 @@ export interface SemanticTableStructure {
     readonly float?: TableFloatPosition;
     readonly indentPt: number;
     readonly layoutFixed: boolean;
+    readonly legacyConditionalShiftPt?: number;
     readonly legacyContentAlignment?: true;
     readonly legacyContentOffsetPt?: number;
     readonly legacyTrailingOuterEdge?: true;

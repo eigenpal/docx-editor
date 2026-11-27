@@ -141,8 +141,9 @@ function alignedOriginX(structure: SemanticTableStructure, containerWidthPt: num
   if (structure.bidiVisual) return ruleOffset;
   // Captured controls apply the whole indent whatever the table width: a negative indent
   // pulls the table into the leading margin, and a positive one can push it past the
-  // trailing edge. `readTableIndentPt` bounds the value.
-  return structure.indentPt + ruleOffset;
+  // trailing edge. `readTableIndentPt` bounds the value. A legacy table moves out further
+  // for a conditional left cell margin (`legacyConditionalLeadingShiftPt`).
+  return structure.indentPt + ruleOffset - (structure.legacyConditionalShiftPt ?? 0);
 }
 
 /**

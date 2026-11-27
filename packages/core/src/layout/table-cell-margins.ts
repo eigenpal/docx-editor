@@ -68,8 +68,31 @@ export const DEFAULT_CELL_MARGINS: CellMarginsPt = {
   left: DEFAULT_CELL_MARGIN_SIDE_PT,
 };
 
-function twipsSide(node: OoxmlElement | undefined): number | undefined {
+/**
+ * The sides a `w:tblCellMar` or `w:tcMar` states. A side is a width in points, or `null` when
+ * its `w:type` gives it no width. An omitted side has no key.
+ */
+export type StatedMarginSides = { readonly [Side in keyof CellMarginsPt]?: number | null };
+
+/**
+ * The cell margin of a side that no table property and no table style states: no vertical
+ * padding and 10 twips on the left and the right.
+ */
+export const OMITTED_CELL_MARGINS: CellMarginsPt = { top: 0, right: 0.5, bottom: 0, left: 0.5 };
+
+/** `ST_TblWidth` (17.18.90) values that give a cell margin side no width. */
+const WIDTHLESS_SIDE_TYPES = new Set(['nil', 'auto', 'pct']);
+
+function twipsSide(node: OoxmlElement | undefined): number | null | undefined {
   if (!node) return undefined;
+  // A `nil`, `auto` or `pct` side (`ST_TblWidth`, 17.18.90) has no width in twentieths of a
+  // point, and its `w:w` is not read. 17.4.35 has `pct` and `auto` ignored for a margin.
+  // 17.18.90 words `nil` as a zero width, but a `nil` side pads like the other two in
+  // rendered documents: a cell with a `nil` side inside a table with 300-twip margins keeps
+  // the 300 twips. The side is still stated, so it replaces what a weaker source of the
+  // same level states for it (`mergeTableMargins`, `mergeMargins`).
+  const type = attributeValue(node, 'type');
+  if (type !== undefined && WIDTHLESS_SIDE_TYPES.has(type)) return null;
   const raw = attributeValue(node, 'w');
   const twips = readTwipsMeasure(raw);
   if (twips === null) return undefined;
@@ -82,9 +105,10 @@ function twipsSide(node: OoxmlElement | undefined): number | undefined {
 
 /**
  * Read `tblCellMar` / `tcMar`. Each omitted side stays undefined so callers can fall back
- * per-side (tcMar → tblCellMar → table style → Word's default).
+ * per-side (tcMar → tblCellMar → table style → the omitted-margin default). A side stated
+ * without a width reads as `null`.
  */
-export function readMarginSides(container: OoxmlElement | undefined): Partial<CellMarginsPt> {
+export function readMarginSides(container: OoxmlElement | undefined): StatedMarginSides {
   if (!container) return {};
   // `w:start`/`w:end` are the direction-relative spellings, and the ISO Strict `CT_TcMar` /
   // `CT_TblCellMar` declare only those. Reading `w:left`/`w:right` alone put the text of a
@@ -129,13 +153,33 @@ export function rowExceptionMargins(
 ): CellMarginsPt {
   const exception = childNamed(row, 'tblPrEx');
   const box = exception && childNamed(exception, 'tblCellMar');
-  return box ? mergeMargins(tableDefaults, readMarginSides(box)) : tableDefaults;
+  return box ? mergeTableMargins(tableDefaults, readMarginSides(box)) : tableDefaults;
 }
 
-/** A cell's own `w:tcMar` over the table's per-side defaults. */
+/**
+ * A `w:tblCellMar` (17.4.42, 17.4.41) over the table-level margins a weaker source gave.
+ * A side stated without a width takes the omitted-margin default, not the weaker source's
+ * width: a table's own `auto` side over a style's 300 twips renders without the 300 twips.
+ * The inheritance of 17.4.42 is for an omitted `w:tblCellMar`, and this side is not omitted.
+ */
+export function mergeTableMargins(
+  tableDefaults: CellMarginsPt,
+  stated: StatedMarginSides
+): CellMarginsPt {
+  const side = (name: keyof CellMarginsPt): number => {
+    const width = stated[name];
+    return width === null ? OMITTED_CELL_MARGINS[name] : (width ?? tableDefaults[name]);
+  };
+  return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') };
+}
+
+/**
+ * Cell-level margins (`w:tcMar`, 17.4.68) over the table-level margins. A side the cell level
+ * omits, or states without a width, takes the table-level margin.
+ */
 export function mergeMargins(
   tableDefaults: CellMarginsPt,
-  cellOverride: Partial<CellMarginsPt>
+  cellOverride: StatedMarginSides
 ): CellMarginsPt {
   return {
     top: cellOverride.top ?? tableDefaults.top,

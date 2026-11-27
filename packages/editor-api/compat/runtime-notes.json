@@ -205,7 +205,7 @@
   },
   "Word.TableCell#verticalAlignment": {
     "status": "partial",
-    "notes": "Top, Center, and Bottom write direct cell alignment. Mixed is a read-shape token and refuses as a setter. Other cell properties survive."
+    "notes": "Top, Center, and Bottom write direct cell alignment. Reads return the direct cell alignment; an alignment from the table style reads as Top. Mixed is a read-shape token and refuses as a setter. Other cell properties survive."
   },
   "Word.Paragraph#startNewList": {
     "status": "partial",

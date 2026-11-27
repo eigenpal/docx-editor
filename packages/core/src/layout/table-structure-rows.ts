@@ -61,7 +61,12 @@ import {
   type CellMarginsPt,
 } from './table-cell-margins.ts';
 import { readCellTextDirection } from './table-cell-text-direction.ts';
-import { readCellVerticalAlign } from './table-cell-vertical-align.ts';
+import { readStatedCellVerticalAlign } from './table-cell-vertical-align.ts';
+import {
+  conditionalLeadingMarginGrowthPt,
+  rowStyleCellMargins,
+  styleCellVerticalAlign,
+} from './table-style-cell-properties.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
 import { cellIgnoresEndMark, cellNoWrap } from './table-cell-hide-mark.ts';
 import { rowExceptionAlignment } from './legacy-row-placement.ts';
@@ -470,6 +475,20 @@ function resolveRow(
   const cells: SemanticTableCell[] = [];
   const merged: number[] = [];
   const continues: number[] = [];
+  const cellConditions = plan.starts.map((gridColumn, index) =>
+    conditionalTypesFor({
+      look,
+      rowIndex,
+      rowCount: bodyRows,
+      headerRows,
+      gridColumn: gridColumn + lead,
+      gridSpan: plan.spans[index]!,
+      columnCount: styleColumns,
+    })
+  );
+  // The style's cell margins hold for the row, so they resolve before any one cell does.
+  const styleMargins = rowStyleCellMargins(tableStyle, cellConditions);
+  const rowCellMargins = mergeMargins(rowMargins, styleMargins);
   for (const cellNode of plan.cells) {
     if (cellNode.kind !== 'tableCell') continue;
     const cellProperties = childNamed(cellNode, 'tcPr');
@@ -478,15 +497,7 @@ function resolveRow(
     // Read alongside its siblings, before `cellIndex` moves on — the plan loop and this
     // one skip the same non-cell children, and the indices must stay in lockstep.
     const preferredWidth = plan.preferred[cellIndex] ?? AUTO_PREFERRED_WIDTH;
-    const conditions = conditionalTypesFor({
-      look,
-      rowIndex,
-      rowCount: bodyRows,
-      headerRows,
-      gridColumn: gridColumn + lead,
-      gridSpan,
-      columnCount: styleColumns,
-    });
+    const conditions = cellConditions[cellIndex]!;
     cellIndex += 1;
     let conditionalBorders = EMPTY_CELL_BORDER_BOX;
     // Whole-table tcPr and basedOn layers contribute diagonals before conditions.
@@ -506,10 +517,13 @@ function resolveRow(
       );
     }
     const shading = cellShading(tableStyle, conditions, cellProperties);
-    const cellMargins = mergeMargins(
-      rowMargins,
-      readMarginSides(cellProperties && childNamed(cellProperties, 'tcMar'))
-    );
+    // The cell's own `w:tcMar` (17.4.68) over the style's cell margins (17.7.6.8, 17.7.6.9),
+    // side by side. Both are cell-level: a side either states without a width falls to the
+    // table-level margin, not to the other.
+    const ownMargins = cellProperties && childNamed(cellProperties, 'tcMar');
+    const cellMargins = ownMargins
+      ? mergeMargins(rowMargins, { ...styleMargins, ...readMarginSides(ownMargins) })
+      : rowCellMargins;
     // Content controls inside a cell flatten transparently — same rule as body
     // `storyBlocks`. Without this a `w:sdt` wrapping the cell's paragraphs leaves the
     // cell empty in layout while the tree still holds the text.
@@ -532,7 +546,10 @@ function resolveRow(
       ...(vMerge === 'restart' ? { restartsVerticalMerge: true as const } : {}),
       hideEndMark: cellIgnoresEndMark(tableStyle, conditions, cellProperties),
       ...(cellNoWrap(tableStyle, conditions, cellProperties) ? { noWrap: true as const } : {}),
-      vAlign: readCellVerticalAlign(cellProperties),
+      vAlign:
+        readStatedCellVerticalAlign(cellProperties) ??
+        styleCellVerticalAlign(tableStyle, conditions) ??
+        'top',
       textDirection: readCellTextDirection(cellProperties),
       margins: cellMargins,
       borders: mergeCellBorders(conditionalBorders, ownBorders),
@@ -544,6 +561,14 @@ function resolveRow(
     });
   }
   raiseRowTopMargins(cells);
+  // A first cell with a left margin of its own does not take the style's.
+  const firstCell = plan.cells.find((node) => node.kind === 'tableCell');
+  const firstProperties = firstCell && childNamed(firstCell, 'tcPr');
+  const firstOwnMargins = firstProperties && childNamed(firstProperties, 'tcMar');
+  const leadingGrowth =
+    firstOwnMargins && readMarginSides(firstOwnMargins).left !== undefined
+      ? 0
+      : conditionalLeadingMarginGrowthPt(tableStyle, rowMargins, styleMargins);
   const rowRevision = plan.revision;
   const rowRevisionKind = rowRevision
     ? rowRevision.localName === 'ins'
@@ -563,6 +588,7 @@ function resolveRow(
     isHeader,
     cantSplit: readFlag(rowProperties, 'cantSplit'),
     ...rowExceptionAlignment(rowNode),
+    ...(leadingGrowth > 0 ? { conditionalLeadingMarginPt: leadingGrowth } : {}),
     height: exactRowHeightWithBottomMargin(readRowHeight(rowProperties), cells),
     cells,
   };
