@@ -120,6 +120,40 @@ describe('a justified line with a tab', () => {
     });
   }
 
+  test('text that runs on after a decimal stop to a wrapped line end stretches', () => {
+    // The number sits at the stop; the line wraps, so the text after the number is plain text.
+    const body = (jc: string) => paragraph(`ab\t1.5 ${TAIL}`, stop('decimal', 60), jc);
+    const line = firstLine(body('both'));
+    const natural = firstLine(body('left'));
+    expect(x(line, 'ab')).toBe(0);
+    expect(x(line, '1.5')).toBe(x(natural, '1.5'));
+    const last = words(line).at(-1)!;
+    expect(last[1] + 10 * last[0].length).toBeCloseTo(MEASURE, 4);
+  });
+
+  test('a line in a table cell follows the same rule', () => {
+    const cell =
+      '<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>' +
+      '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>' +
+      '</w:tblPr><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc>' +
+      `<w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr>${paragraph(`ab cd\t${TAIL}`)}` +
+      '</w:tc></w:tr></w:tbl><w:p/>';
+    const line = firstLine(cell);
+    expect(x(line, 'cd') - x(line, 'ab')).toBe(30);
+    expect(x(line, 'ef') - x(line, 'ab')).toBe(72);
+    expect(x(line, 'gh') - x(line, 'ef')).toBeGreaterThan(30);
+  });
+
+  test('East Asian text after the tab keeps the spaces directly after the tab', () => {
+    const line = firstLine(paragraph('ab\t  cd ef 漢字 gh ij kl mn op stuvwxyzabc'));
+    const spaces = line.spans.filter((span) => span.text === ' ');
+    expect(spaces.slice(0, 2).map((span) => span.box.x)).toEqual([36, 46]);
+    expect(x(line, 'cd')).toBe(56);
+    expect(x(line, 'ab')).toBe(0);
+    const last = words(line).at(-1)!;
+    expect(last[1] + 10 * last[0].length).toBeCloseTo(MEASURE, 4);
+  });
+
   test('a right-to-left line stretches only the text after its tab', () => {
     const rtl = (jc: string) =>
       paragraph('אב גד\tהו זח טי כל מנ סע פצ קרשתאבגד הו', '<w:bidi/>', jc, '<w:rtl/>');
@@ -151,6 +185,24 @@ describe('a justified line that starts with spaces', () => {
       expect(last[1] + 10 * last[0].length).toBeCloseTo(MEASURE, 4);
     });
   }
+
+  test('leading spaces keep their advance before East Asian text', () => {
+    const line = firstLine(paragraph('   ab cd 漢字 ef gh ij stuvwxyzabcdefgh end'));
+    expect(x(line, 'ab')).toBe(30);
+    expect(x(line, 'ij') + 20).toBeCloseTo(MEASURE, 4);
+  });
+
+  test('leading spaces of a right-to-left line keep their advance', () => {
+    const rtl = (jc: string) =>
+      paragraph('   אב גד הו זח טי כל מנ סע פצ קרשתאבגד הו', '<w:bidi/>', jc, '<w:rtl/>');
+    const line = firstLine(rtl('both'));
+    // The first word ends three spaces from the right edge, and the last word is at the left.
+    const first = line.spans.find((span) => span.text.trim() === 'אב')!;
+    const natural = firstLine(rtl('left')).spans.find((span) => span.text.trim() === 'אב')!;
+    expect(first.box.x + first.box.width).toBeCloseTo(natural.box.x + natural.box.width, 4);
+    expect(first.box.width).toBeGreaterThan(natural.box.width);
+    expect(Math.min(...words(line).map(([, start]) => start))).toBeCloseTo(0, 4);
+  });
 
   test('leading spaces keep their advance before a manual line break', () => {
     const line = firstLine(paragraph(`   ab cd ef\n${TAIL}`));

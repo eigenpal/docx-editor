@@ -373,7 +373,8 @@ function alignLogicalSpans(
     if (tabIndex >= 0) {
       const from = tabIndex + 1;
       const stretched =
-        from < slotEnd && !tabPlacesText(spans[tabIndex]!, distributed !== undefined)
+        from < slotEnd &&
+        !tabPlacesText(spans[tabIndex]!, distributed !== undefined, trailingEnd < spans.length)
           ? stretchJustifiedLine(
               spans.slice(from),
               measurer,
@@ -418,13 +419,21 @@ function alignLogicalSpans(
 
 /**
  * Whether the stop a tab span reached places the text after it, so that this text cannot
- * stretch. A left stop never does. A center, right or decimal stop does while the tab keeps
- * some width; text too long for such a stop takes the tab's room and flows as plain text.
- * On a `distributed` line every such stop does.
+ * stretch. A left stop never does. A center or right stop does while the tab keeps some
+ * width; text too long for such a stop takes the tab's room and flows as plain text. A
+ * decimal stop places only the text before the decimal point: the text after it flows on, so
+ * the stop holds the whole text only on a line that a break closes (`closedByBreak`). On a
+ * `distributed` line every such stop does.
  */
-function tabPlacesText(tab: StyleSpanRecord, distributed: boolean): boolean {
+function tabPlacesText(
+  tab: StyleSpanRecord,
+  distributed: boolean,
+  closedByBreak: boolean
+): boolean {
   if (tab.tabAlignment === undefined) return false;
-  return distributed || tab.box.width > OVERFLOW_TOLERANCE_PT;
+  if (distributed) return true;
+  if (tab.tabAlignment === 'decimal' && !closedByBreak) return false;
+  return tab.box.width > OVERFLOW_TOLERANCE_PT;
 }
 
 /** The index of the last tab span before `end`, or -1. */
@@ -436,7 +445,7 @@ function lastTabBefore(spans: readonly StyleSpanRecord[], end: number): number {
 }
 
 /**
- * Stretch a justified line, or the part of a distributed line after its last tab, by `slack`
+ * Stretch a justified or distributed line, or the part of one after its last tab, by `slack`
  * over `spans[0, slotEnd)`. `distributed` is the spacing of a distributed line, undefined for
  * an ordinary justified line. `spreads` says whether the line may spread its characters or
  * center: a distributed line with no reserved position. Returns null when nothing can
@@ -452,6 +461,25 @@ function stretchJustifiedLine(
   paragraphRtl = false,
   eastAsianSpacing = true
 ): readonly StyleSpanRecord[] | null {
+  // Spaces before the first character of a justified line's stretched text keep their
+  // advance, whichever rule below stretches the rest. A distributed line keeps them in the
+  // space rule only.
+  let lead = 0;
+  if (distributed === undefined)
+    while (lead < slotEnd - 1 && withoutTrailingSpaces(spans[lead]!.text) === '') lead += 1;
+  if (lead > 0) {
+    const rest = stretchJustifiedLine(
+      spans.slice(lead),
+      measurer,
+      slack,
+      slotEnd - lead,
+      distributed,
+      spreads,
+      paragraphRtl,
+      eastAsianSpacing
+    );
+    return rest ? [...spans.slice(0, lead), ...rest] : null;
+  }
   // Character distribution, unless the spaces can take all the slack: the line then sets
   // as a justified line, and only its spaces stretch.
   let spacesOnly = false;
@@ -476,10 +504,12 @@ function stretchJustifiedLine(
   // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
   // slots either: a boundary between two of them took a share of the slack from the words.
   const gapBefore: number[] = [];
-  // Spaces before the first character of the stretched text keep their advance.
+  // Spaces before a distributed line's first character keep their advance.
   let slotStart = 1;
-  while (slotStart < slotEnd && withoutTrailingSpaces(spans[slotStart - 1]!.text) === '')
-    slotStart += 1;
+  if (distributed !== undefined) {
+    while (slotStart < slotEnd && withoutTrailingSpaces(spans[slotStart - 1]!.text) === '')
+      slotStart += 1;
+  }
   for (let index = slotStart; index < slotEnd; index += 1) {
     // A space inside a fitted group is not a slot: the group keeps its stated width.
     if (insideFitTextGroup(spans[index - 1]!, spans[index]!)) continue;
