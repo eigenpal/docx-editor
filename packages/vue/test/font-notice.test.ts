@@ -88,6 +88,50 @@ describe('<DocxEditor fontNotice>', () => {
     expect(view.container.querySelector(MINE)).toBeNull();
   });
 
+  test('children that is not a function keeps the packaged bar', async () => {
+    // Vue reports the wrong prop type in development. The test checks what renders.
+    const original = console.warn;
+    console.warn = () => {};
+    try {
+      const view = await mountSugarAsync({ document: MISSING, fontNotice: { children: 'text' } });
+      await settle();
+      expect(view.container.querySelector(BAR)?.textContent).toContain(FAMILY);
+    } finally {
+      console.warn = original;
+    }
+  });
+
+  test('an attribute reaches the packaged bar, and a custom notice takes none', async () => {
+    const warnings: unknown[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => void warnings.push(args[0]);
+    try {
+      const bar = await mountSugarAsync({ document: MISSING, fontNotice: { class: 'mine' } });
+      await settle();
+      expect(bar.container.querySelector(BAR)?.classList.contains('mine')).toBe(true);
+      bar.unmount();
+      const custom = await mountSugarAsync(
+        { document: MISSING, fontNotice: { class: 'mine' } },
+        { fontNotice: () => [h('i', { 'data-testid': 'mine' }), h('b')] }
+      );
+      await settle();
+      expect(custom.container.querySelector(MINE)).not.toBeNull();
+      custom.unmount();
+    } finally {
+      console.warn = original;
+    }
+    expect(warnings.filter((entry) => String(entry).includes('Extraneous'))).toEqual([]);
+  });
+
+  test('a press on Dismiss does not take focus from the page', async () => {
+    const view = await mountSugarAsync({ document: MISSING });
+    await settle();
+    const button = view.container.querySelector<HTMLElement>(`${BAR}__dismiss`)!;
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    button.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
+  });
+
   test('fontNotice.children does the same', async () => {
     const view = await mountSugarAsync({
       document: MISSING,

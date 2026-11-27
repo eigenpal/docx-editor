@@ -43,7 +43,7 @@
     "managers/Subscribable",
     "managers/types"
   ],
-  "vueOnlyComponents": ["editor/images/index", "types"],
+  "vueOnlyComponents": ["editor/images/index"],
   "signatureDivergence": {
     "components/DocumentOutline": {
       "propsAddedInReact": [
@@ -238,6 +238,7 @@
         "default",
         "fontNotice",
         "hasSlot",
+        "inheritAttrs",
         "name",
         "props",
         "slots",
@@ -652,6 +653,39 @@
     "i18n/LocaleContext": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "types": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "author",
+        "chrome",
+        "class",
+        "colorMode",
+        "contentLockPolicy",
+        "contextMenu",
+        "document",
+        "fieldDate",
+        "fieldResults",
+        "fontNotice",
+        "hyperlinkPopup",
+        "i18n",
+        "locale",
+        "lockedControlNavigation",
+        "menu",
+        "mode",
+        "modules",
+        "navigation",
+        "openFailure",
+        "reviewDisplayMode",
+        "revisionMarkup",
+        "rulers",
+        "t",
+        "title",
+        "zoom",
+        "zoomMode"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     }

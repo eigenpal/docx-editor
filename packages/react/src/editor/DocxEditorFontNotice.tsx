@@ -11,7 +11,12 @@ const NONE: readonly string[] = [];
 const selectFontSubstitutions = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.fontSubstitutions ?? NONE;
 
-/** What a custom font notice receives. @public */
+/**
+ * What a custom font notice receives. `fonts` and `message` hold family names from the
+ * document, so render them as text, never as HTML.
+ *
+ * @public
+ */
 export interface DocxEditorFontNoticeContext {
   /** The families that render in a substitute face. Never empty. */
   readonly fonts: readonly string[];
@@ -32,7 +37,7 @@ export interface DocxEditorFontNoticeProps {
   /**
    * Your own notice, in place of the packaged bar. It renders only while there are
    * substituted families that the reader has not dismissed. It replaces the whole
-   * element, so `className` and `style` do not apply.
+   * element, so `className` and `style` do not apply. The function can call hooks.
    *
    * ```tsx
    * <DocxEditor.FontNotice>
@@ -79,7 +84,22 @@ export function warnFontNoticeRender(
 }
 
 /**
- * Word-style font compatibility notice.
+ * Runs the host's function as a component of its own. It mounts only while the notice
+ * shows, so the function can call hooks: called inline, its hooks would follow two early
+ * returns and change the hook count when the families arrive.
+ */
+function CustomFontNotice({
+  render,
+  context,
+}: {
+  render: (context: DocxEditorFontNoticeContext) => DocxEditorChildren;
+  context: DocxEditorFontNoticeContext;
+}) {
+  return <>{render(context)}</>;
+}
+
+/**
+ * Font compatibility notice.
  *
  * Shown when the open document declares font families this platform cannot resolve —
  * not installed, not embedded in the file, not supplied by the app's font
@@ -113,7 +133,12 @@ export function DocxEditorFontNotice({
   // `t`, and the notice must not surface a literal placeholder then. A function, so a
   // `$` in a family name is not read as a replacement pattern.
   const message = t('editor.fontSubstitutionNotice', { fonts }).replace('{fonts}', () => fonts);
-  if (children) return <>{children({ fonts: substitutions, message, dismiss })}</>;
+  // A JavaScript host can pass elements here; only a function replaces the bar.
+  if (typeof children === 'function') {
+    return (
+      <CustomFontNotice render={children} context={{ fonts: substitutions, message, dismiss }} />
+    );
+  }
 
   return (
     <div
@@ -122,7 +147,13 @@ export function DocxEditorFontNotice({
       {...(style ? { style } : {})}
     >
       <span className="docx-font-notice__text">{message}</span>
-      <button type="button" className="docx-font-notice__dismiss" onClick={dismiss}>
+      <button
+        type="button"
+        className="docx-font-notice__dismiss"
+        // A press on chrome must not take the caret from the page.
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={dismiss}
+      >
         {t('common.dismiss')}
       </button>
     </div>

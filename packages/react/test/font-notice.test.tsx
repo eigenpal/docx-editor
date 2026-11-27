@@ -11,6 +11,7 @@ import './dom-setup.ts';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { useState } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { docx } from '../../core/src/editor/__tests__/paginated-surface-fixtures.ts';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
@@ -20,10 +21,12 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import type { DocxEditorFontNoticeContext } from '../src/editor/DocxEditorFontNotice.tsx';
 
 const FAMILY = 'Definitely Missing Typeface';
-const MISSING = docx(
-  `<w:p><w:r><w:rPr><w:rFonts w:ascii="${FAMILY}" w:hAnsi="${FAMILY}"/></w:rPr>` +
-    '<w:t>substituted</w:t></w:r></w:p>'
-);
+const missingDocx = (family: string) =>
+  docx(
+    `<w:p><w:r><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}"/></w:rPr>` +
+      '<w:t>substituted</w:t></w:r></w:p>'
+  );
+const MISSING = missingDocx(FAMILY);
 const BAR = '.docx-font-notice';
 
 afterEach(cleanup);
@@ -95,6 +98,56 @@ describe('<DocxEditor fontNotice>', () => {
 
     fireEvent.click(mine);
     expect(container.querySelector('[data-testid="mine"]')).toBeNull();
+  });
+
+  test('a dismissed custom notice shows again for a different set of families', async () => {
+    const other = 'Another Missing Face';
+    const mine = ({ fonts, dismiss }: DocxEditorFontNoticeContext) => (
+      <button type="button" data-testid="mine" onClick={dismiss}>
+        {fonts.join('|')}
+      </button>
+    );
+    const { container, rerender } = render(
+      <DocxEditor document={MISSING} renderFontNotice={mine} />
+    );
+    await settle();
+    fireEvent.click(container.querySelector<HTMLElement>('[data-testid="mine"]')!);
+    expect(container.querySelector('[data-testid="mine"]')).toBeNull();
+
+    rerender(<DocxEditor document={missingDocx(other)} renderFontNotice={mine} />);
+    await settle();
+    expect(container.querySelector('[data-testid="mine"]')?.textContent).toBe(other);
+  });
+
+  test('renderFontNotice can call hooks', async () => {
+    const { container } = render(
+      <DocxEditor
+        document={MISSING}
+        renderFontNotice={({ fonts }) => {
+          // The families arrive after the first render, so an inline call would change
+          // the hook count here and throw.
+          const [label] = useState('mine');
+          return <i data-testid="mine">{`${label}:${fonts.length}`}</i>;
+        }}
+      />
+    );
+    await settle();
+    expect(container.querySelector('[data-testid="mine"]')?.textContent).toBe('mine:1');
+  });
+
+  test('children that is not a function keeps the packaged bar', async () => {
+    const { container } = render(
+      <DocxEditor document={MISSING} fontNotice={{ children: 'text' as never }} />
+    );
+    await settle();
+    expect(container.querySelector(BAR)?.textContent).toContain(FAMILY);
+  });
+
+  test('a press on Dismiss does not take focus from the page', async () => {
+    const { container } = render(<DocxEditor document={MISSING} />);
+    await settle();
+    const button = container.querySelector<HTMLElement>(`${BAR}__dismiss`)!;
+    expect(fireEvent.mouseDown(button)).toBe(false);
   });
 
   test('fontNotice.children does the same', async () => {

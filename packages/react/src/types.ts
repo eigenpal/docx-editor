@@ -109,7 +109,8 @@ export interface DocxEditorProps {
   /**
    * Your own font notice, in place of the packaged bar. It renders in the same row, only
    * while the document has substituted families that the reader has not dismissed. It is
-   * the same as `fontNotice.children`; pass only one. It renders nothing with
+   * the same as `fontNotice.children`; pass only one. The function can call hooks. It
+   * renders nothing with
    * `fontNotice={false}`, and nothing with `chrome={false}`: compose `DocxEditor.FontNotice`
    * yourself there.
    *

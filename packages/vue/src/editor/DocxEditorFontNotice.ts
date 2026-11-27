@@ -1,6 +1,7 @@
 import {
   defineComponent,
   h,
+  mergeProps,
   ref,
   type CSSProperties,
   type PropType,
@@ -18,7 +19,12 @@ const NONE: readonly string[] = [];
 const selectFontSubstitutions = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.fontSubstitutions ?? NONE;
 
-/** What a custom font notice receives. @public */
+/**
+ * What a custom font notice receives. `fonts` and `message` hold family names from the
+ * document, so render them as text, never with `v-html`.
+ *
+ * @public
+ */
 export interface DocxEditorFontNoticeContext {
   /** The families that render in a substitute face. Never empty. */
   readonly fonts: readonly string[];
@@ -85,6 +91,9 @@ export function warnFontNoticeSlot(
  */
 export const DocxEditorFontNotice = defineComponent({
   name: 'DocxEditorFontNotice',
+  // Attributes go on the packaged bar by hand: a custom notice can render several root
+  // nodes, where Vue has no element to put them on and warns.
+  inheritAttrs: false,
   props: {
     className: { type: String, default: undefined },
     style: { type: Object as PropType<CSSProperties>, default: undefined },
@@ -98,7 +107,7 @@ export const DocxEditorFontNotice = defineComponent({
     /** Your own notice, in place of the packaged bar. */
     default?: (context: DocxEditorFontNoticeContext) => VNode[];
   }>,
-  setup(props, { slots }) {
+  setup(props, { attrs, slots }) {
     const substitutions = useEditorState(selectFontSubstitutions);
     const { t: ambient } = useTranslation();
     const dismissedKey = ref<string | null>(null);
@@ -117,20 +126,28 @@ export const DocxEditorFontNotice = defineComponent({
       const dismiss = () => {
         dismissedKey.value = key;
       };
-      const custom = slots.default ?? props.children;
+      // A JavaScript host can pass another value here; only a function replaces the bar.
+      const custom =
+        slots.default ?? (typeof props.children === 'function' ? props.children : undefined);
       if (custom) return custom({ fonts: subs, message, dismiss });
       return h(
         'div',
-        {
+        mergeProps(attrs, {
           class: props.className ? `docx-font-notice ${props.className}` : 'docx-font-notice',
           role: 'status',
           ...(props.style ? { style: props.style } : {}),
-        },
+        }),
         [
           h('span', { class: 'docx-font-notice__text' }, message),
           h(
             'button',
-            { type: 'button', class: 'docx-font-notice__dismiss', onClick: dismiss },
+            {
+              type: 'button',
+              class: 'docx-font-notice__dismiss',
+              // A press on chrome must not take the caret from the page.
+              onMousedown: (event: MouseEvent) => event.preventDefault(),
+              onClick: dismiss,
+            },
             t('common.dismiss')
           ),
         ]

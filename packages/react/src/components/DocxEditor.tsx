@@ -416,7 +416,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
             <DocxEditorHorizontalRuler />
           </div>
         ) : null}
-        {/* Word's font compatibility bar: shown when the document's declared faces render
+        {/* The font compatibility bar: shown when the document's declared faces render
           in substitutes, dismissible per set of missing families. `fontNotice={false}`
           removes it; `renderFontNotice` draws the host's own from the same state. */}
         {fontNotice === false ? null : (
