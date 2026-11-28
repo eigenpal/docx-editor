@@ -28,7 +28,11 @@ const outline = `<w14:textOutline xmlns:w14="${W14}" w14:w="12700"><w14:solidFil
 
 /** The text render mode (`Tr`) in effect at each glyph string that a page shows. */
 async function renderModes(text: string, runProperties: string): Promise<number[]> {
-  const result = await exportPdf(docx(paragraph(text, `<w:rPr>${fonts}${runProperties}</w:rPr>`)), {
+  return renderModesOf(paragraph(text, `<w:rPr>${fonts}${runProperties}</w:rPr>`));
+}
+
+async function renderModesOf(body: string): Promise<number[]> {
+  const result = await exportPdf(docx(body), {
     useSystemFonts: false,
     fonts: { sources: [regular] },
   });
@@ -63,4 +67,45 @@ test('a text outline strokes the glyphs after an emoji carrier', async () => {
 test('plain and synthetic bold text keep their render modes around an emoji carrier', async () => {
   expect(await renderModes('a✅a', '')).toEqual([0, 3, 0]);
   expect(await renderModes('a✅a', '<w:b/>')).toEqual([2, 3, 2]);
+});
+
+/**
+ * The `q`/`Q` pairs that enclose a text object inside an `ActualText` span. `Q` restores the
+ * text position from before the span, and Poppler places the span's text at `EMC` from it.
+ */
+async function textInsideRestoredState(body: string): Promise<number> {
+  const result = await exportPdf(docx(body), {
+    useSystemFonts: false,
+    fonts: { sources: [regular] },
+  });
+  const parsed = await PDFDocument.load(result.bytes);
+  let found = 0;
+  for (const [, object] of parsed.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFRawStream) || object.dict.has(PDFName.of('Length1'))) continue;
+    const content = new TextDecoder().decode(decodePDFRawStream(object).decode());
+    let inSpan = false;
+    const saved: { text: boolean }[] = [];
+    for (const [operator] of content.matchAll(/(?<=^|\s)(?:BDC|EMC|BT|ET|q|Q)(?=\s|$)/g)) {
+      if (operator === 'BDC') inSpan = true;
+      else if (operator === 'EMC') inSpan = false;
+      else if (operator === 'q') saved.push({ text: false });
+      else if (operator === 'ET') for (const level of saved) level.text = true;
+      else if (operator === 'Q' && saved.pop()?.text && inSpan) found++;
+    }
+  }
+  return found;
+}
+
+test('an outlined span keeps its text position for extraction', async () => {
+  const words = (rPr: string) =>
+    `<w:p><w:r><w:rPr>${fonts}${rPr}</w:rPr><w:t xml:space="preserve">Done ✅ check outline</w:t></w:r></w:p>`;
+  expect(await textInsideRestoredState(words(outline))).toBe(0);
+});
+
+test('the run after an outlined run is filled only', async () => {
+  const run = (text: string, rPr: string) =>
+    `<w:r><w:rPr>${fonts}${rPr}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
+  expect(await renderModesOf(`<w:p>${run('Outlined ', outline)}${run('plain', '')}</w:p>`)).toEqual(
+    [2, 0]
+  );
 });
