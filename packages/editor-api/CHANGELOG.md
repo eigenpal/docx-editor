@@ -1,5 +1,11 @@
 # @docx-editor.dev/editor-api
 
+## 2.42.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.42.0
+
 ## 2.41.1
 
 No changes in this release.
