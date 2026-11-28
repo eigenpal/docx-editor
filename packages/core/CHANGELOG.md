@@ -1,5 +1,23 @@
 # @docx-editor.dev/core
 
+## 2.42.0
+
+### Minor Changes
+
+- c423c66: Documents with mirrored margins now swap the left and right page margins on even-numbered pages, and headers, footers, and page borders move with the body text. The binding gutter stays on the inside edge of facing pages, or takes the right side or the top of the page when the document sets that position.
+- 69eab8a: Table styles now apply their cell margins and vertical alignment, including conditional formats such as the first row, and a cell margin side typed `nil`, `auto`, or `pct` no longer reads its number as a margin. In compatibility modes below 15, a table with an absolute width and no stated indent keeps its outer edge on the text edge, and a table style named `Table Normal` takes the built-in table properties in every mode.
+
+### Patch Changes
+
+- 08e892c: Apply contextual spacing across the edges of a table. A paragraph before a table compares its style with the first paragraph of the table, and a paragraph after a table compares it with the end mark of the last row. This also applies to tables in headers, footers, and table cells.
+- af0a63e: A continuous section whose left margin differs from the previous section now starts its text, tables, and columns at its own left margin on the page it shares. A drawing positioned from the margin stays on the margins of that page.
+- bdce49b: A character followed by the emoji variation selector, such as a heart with U+FE0F, and keycap and joined emoji sequences render from the color emoji face even when the run's font has a text glyph for them. Characters without the selector keep the run's font.
+- e46ae35: A line keeps the descent of its text when a taller inline picture, shape, or embedded object ends the line, and a line with an underlined inline object keeps the descent of the object's run. The content below these lines no longer sits too high.
+- dda895a: A justified line with a tab now stretches only the spaces after its last tab, so text at a tab stop stays at the stop. Spaces at the start of a justified line, and spaces directly after its last tab, keep their natural width. Text that a center, right, or decimal tab stop places before a line break no longer stretches.
+- a8defb6: A paragraph that holds only superscript or subscript text, or an empty paragraph, now keeps the line height of its full font size when the paragraph mark is superscript or subscript too. Before, such lines were too short and the content after them sat too high.
+- 4f546c6: The space between the paragraphs around an empty paragraph that only holds a continuous section break is now correct: the space after above it stays, and the next space before collapses against the space after of the empty paragraph. In compatibility mode 15 and later, such a paragraph directly after a table keeps its line.
+- Updated dependencies: @docx-editor.dev/i18n@2.42.0
+
 ## 2.41.1
 
 ### Patch Changes

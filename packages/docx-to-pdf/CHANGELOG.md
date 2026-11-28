@@ -1,5 +1,16 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.42.0
+
+### Patch Changes
+
+- cf26397: PDF export places text baselines more accurately. Single-spaced lines, lines with a minimum or exact line height, and the first and last lines of paragraphs with space before or after no longer paint a fraction of a point too high or too low. Runs in different fonts on one line share one baseline.
+- 58bc598: PDF export draws the letters, digits, and punctuation of fonts that also contain color emoji. They render in the run's color and stay selectable as text. Fixes #2188
+- bdce49b: Emoji at the very start of a document stay searchable and selectable as text in exported PDFs.
+- de4b99c: Text with an outline extracts from exported PDFs in reading order.
+- c1555fa: PDF export keeps the text outline on the characters that follow an emoji in the same run.
+- Updated dependencies: @docx-editor.dev/core@2.42.0, @docx-editor.dev/fonts-cjk@2.42.0, @docx-editor.dev/fonts@2.42.0, @docx-editor.dev/pro@2.42.0
+
 ## 2.41.1
 
 ### Patch Changes
