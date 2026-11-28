@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A character with the emoji variation selector took the run face's text glyph when that face mapped the character.",
+  "after": "A character above Latin-1 with U+FE0F, a keycap, and a joined emoji sequence take a color face, and an editor that loads fonts on demand loads the emoji step once.",
+  "reason": "Only glyph selection, font loading, and line measurement change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/emoji-presentation-fallback.test.ts",
+    "packages/core/src/editor/__tests__/shared-fallback-fonts.test.ts"
+  ],
+  "changeset": "emoji-presentation-selector",
+  "migration": null
+}
