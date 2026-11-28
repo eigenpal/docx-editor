@@ -64,7 +64,8 @@ const work = () => new Work(new AbortController().signal, Date.now() + 5_000);
 test('a self-referencing composite glyph is refused, not a stack overflow', () => {
   const { font, top } = hostile(1, true);
   expect(glyphOutline(font, top, work())).toBeNull();
-  expect(colorGlyph(font, top, work())).toEqual({ kind: 'none', outlined: true });
+  // No color tables: the glyph is not a color glyph, and the text path refuses its outline.
+  expect(colorGlyph(font, top, work())).toEqual({ kind: 'none' });
 });
 
 test('an exponential composite chain is refused before fontkit expands it', () => {

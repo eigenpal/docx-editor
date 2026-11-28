@@ -317,16 +317,23 @@ export class TextWriter {
     const revisionStrike =
       markup !== null && (markup.mark === 'strikethrough' || markup.mark === 'doubleStrikethrough');
     const replacesAuthoredDecoration = markup !== null && (revisionUnderline || revisionStrike);
-    // A color face is never selected as a text font: its glyphs are painted as layers below.
+    // A color face is selected as a text font only when it writes a monochrome glyph; its
+    // color glyphs are painted as layers below.
     const out = [`${color(foreground)} rg`, 'BT'];
-    if (!face.colorLayers) out.push(`/${face.name} ${n(size)} Tf`);
+    // The face and size of the text object's current `Tf`.
+    let selected: { face: EmbeddedFace; size: number } | null = null;
+    if (!face.colorLayers) {
+      out.push(`/${face.name} ${n(size)} Tf`);
+      selected = { face, size };
+    }
     if (style.textOutline)
       out.unshift(`q ${color(style.textOutline.color)} RG ${n(style.textOutline.widthPt)} w 2 Tr`);
     const origins = penOrigins(shaped.run);
     const batch = createGlyphBatch(out, horizontal);
-    // Glyphs of a COLR face are not written as text: the face cannot be subset, and the
-    // line's `ActualText` already carries the characters. Their palette layers are filled
-    // after the text object, in place.
+    // The color glyphs of a COLR face are not written as text: a PDF font has no color
+    // glyph, and the line's `ActualText` already carries the characters. Their palette
+    // layers are filled after the text object, in place. The face's monochrome glyphs are
+    // written as text in its embedded subset.
     const colorGlyphs: {
       layers: readonly ColorGlyphLayer[];
       x: number;
@@ -360,7 +367,10 @@ export class TextWriter {
         activeFace = clusterFace;
         activeIdentity = identity.identity;
         batch.flush();
-        if (!activeFace.colorLayers) out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
+        if (!activeFace.colorLayers) {
+          out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
+          selected = { face: activeFace, size: activeSize };
+        }
       }
       const text = shaped.run.text.slice(cluster.textStart, cluster.textEnd);
       // The cluster's text rides the glyph with the widest advance: the base letter, not a
@@ -375,36 +385,38 @@ export class TextWriter {
         const glyphSize = size * (glyph.drawScale ?? 1);
         if (glyphSize !== activeSize) {
           batch.flush();
-          if (!activeFace.colorLayers) out.push(`/${activeFace.name} ${n(glyphSize)} Tf`);
+          if (!activeFace.colorLayers) {
+            out.push(`/${activeFace.name} ${n(glyphSize)} Tf`);
+            selected = { face: activeFace, size: glyphSize };
+          }
           activeSize = glyphSize;
         }
         const origin = origins?.[i] ?? glyph.originX;
         const gx = x + (origin + glyph.offsetX) * scale * horizontal + extra;
         const gy = baseline + (glyph.originY + glyph.offsetY) * scale;
-        if (activeFace.colorLayers) {
-          const color = colorGlyph(activeFace.font, glyph.id, this.work);
-          // A glyph this writer cannot paint is reported and left out, carrier included, so
-          // strict export refuses and best-effort never extracts text the page does not show.
-          if (color.kind === 'refused' || (color.kind === 'none' && color.outlined)) {
-            this.work.report(
-              'color-glyph',
-              color.kind === 'refused'
-                ? `A color glyph could not be painted: ${color.reason}`
-                : 'A glyph of a color face has no color layers and the face is not embedded',
-              visit.page.index
-            );
-            continue;
-          }
-          if (color.kind === 'layers')
-            colorGlyphs.push({
-              layers: color.layers,
-              x: gx,
-              y: gy,
-              scale: glyphSize / activeFace.font.unitsPerEm,
-            });
+        const paint = activeFace.colorLayers
+          ? colorGlyph(activeFace.font, glyph.id, this.work)
+          : null;
+        // A glyph this writer cannot paint is reported and left out, carrier included, so
+        // strict export refuses and best-effort never extracts text the page does not show.
+        if (paint?.kind === 'refused') {
+          this.work.report(
+            'color-glyph',
+            `A color glyph could not be painted: ${paint.reason}`,
+            visit.page.index
+          );
+          continue;
+        }
+        if (paint?.kind === 'layers') {
+          colorGlyphs.push({
+            layers: paint.layers,
+            x: gx,
+            y: gy,
+            scale: glyphSize / activeFace.font.unitsPerEm,
+          });
           // The cluster's characters ride an invisible space of an embedded text face, so
           // extraction and search find the emoji even in a reader that ignores ActualText.
-          const host = i === cluster.glyphStart && text ? this.textHost(face, page) : null;
+          const host = i === textGlyph && text ? this.textHost(face, page) : null;
           const carrier = host?.carrier(text) ?? null;
           if (host && carrier) {
             // Stretched to the cluster's own advance, so an extractor that reads the pen
@@ -419,6 +431,7 @@ export class TextWriter {
                 : 100;
             batch.flush();
             out.push(`/${host.name} ${n(activeSize)} Tf 3 Tr ${n(stretch)} Tz`);
+            selected = { face: host, size: activeSize };
             batch.add(host, activeSize, gx, gy, carrier);
             batch.flush();
             out.push('0 Tr 100 Tz');
@@ -453,6 +466,16 @@ export class TextWriter {
           // A kana and sound mark drawn as one glyph read as the precomposed character.
           const glyphText =
             cluster.glyphEnd - cluster.glyphStart === 1 ? composedPairOr(text) : text;
+          // A monochrome glyph, of a text face or of a color face, is written as text in the
+          // run's font (`w:rFonts`, CT_Fonts, ECMA-376 §17.3.2.26) and color (`w:color`,
+          // CT_Color, §17.3.2.6). A color face is selected only here, where a glyph is
+          // encoded, so a page never names a color face that the PDF does not embed.
+          if (selected?.face !== activeFace || selected.size !== activeSize) {
+            batch.flush();
+            this.registerFont(page, activeFace);
+            out.push(`/${activeFace.name} ${n(activeSize)} Tf`);
+            selected = { face: activeFace, size: activeSize };
+          }
           batch.add(activeFace, activeSize, gx, gy, activeFace.encode(glyph.id, glyphText));
           continue;
         }
@@ -554,9 +577,9 @@ export class TextWriter {
       for (const layer of layers) {
         // A translucent palette layer keeps its alpha through a graphics state.
         const alpha = layer.alpha < 1 ? this.alphaState(page, layer.alpha) : null;
-        out.push(
-          alpha ? `q /${alpha} gs ${layer.fill} ${layer.path} f Q` : `${layer.fill} ${layer.path} f`
-        );
+        // A layer with palette index 0xFFFF takes the text color.
+        const fill = layer.fill ?? `${color(foreground)} rg`;
+        out.push(alpha ? `q /${alpha} gs ${fill} ${layer.path} f Q` : `${fill} ${layer.path} f`);
       }
       out.push('Q');
     }
@@ -828,11 +851,15 @@ export class TextWriter {
     page.node.setExtGState(PDFName.of(name), ref);
     return name;
   }
-  /** An embedded text face on this page to carry extractable characters: the run's own, or any. */
+  /**
+   * An embedded face on this page to carry extractable characters: the run's own, which a
+   * color face is too, since it embeds its monochrome glyphs. Another face lends its space
+   * when the run's face has none.
+   */
   private textHost(face: EmbeddedFace, page: PDFPage): EmbeddedFace | null {
-    const host = face.colorLayers
-      ? ([...this.faces.values()].find((candidate) => !candidate.colorLayers) ?? null)
-      : face;
+    const host = face.hasSpace
+      ? face
+      : ([...this.faces.values()].find((candidate) => candidate.hasSpace) ?? null);
     if (host) this.registerFont(page, host);
     return host;
   }
