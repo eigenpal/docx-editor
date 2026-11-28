@@ -50,12 +50,53 @@ const EMOJI_PRESENTATION = /\p{Emoji_Presentation}|️/u;
  * Whether a cluster asks for emoji presentation: a character whose default presentation is
  * emoji, or any character followed by the emoji variation selector U+FE0F.
  *
- * Word draws these from its color emoji face and everything else from a symbol face, so a
- * text-presentation dingbat such as a check mark stays a monochrome glyph while the same
- * character with U+FE0F, and every emoji-default pictograph, gets the color face.
+ * A cluster that its run's face cannot draw tries the color faces first when it asks for
+ * emoji presentation, so a text-presentation dingbat such as a check mark stays a monochrome
+ * glyph while the same character with U+FE0F, and every emoji-default pictograph, gets the
+ * color face.
  */
 export function prefersEmojiPresentation(text: string): boolean {
   return EMOJI_PRESENTATION.test(text);
+}
+
+/**
+ * Whether one cluster, followed by the text `after` it, asks for emoji presentation (Unicode
+ * Technical Standard #51): a variation selector decides first, U+FE0F for emoji and U+FE0E
+ * for text; without one, the character's default presentation decides. A digit, `#` or `*`
+ * is an emoji only as the base of a keycap sequence, which ends in U+20E3.
+ */
+export function clusterAsksForEmoji(text: string, after = ''): boolean {
+  // A selector alone belongs to the cluster before it, which it already decided.
+  if (/^[\uFE0E\uFE0F]+$/u.test(text)) return false;
+  if (/^[0-9#*]$/u.test(text)) return /^\uFE0F?\u20E3/u.test(after);
+  const sequence = /^[\uFE0E\uFE0F]/u.test(after) ? text + after[0] : text;
+  if (sequence.includes('\uFE0E')) return false;
+  return EMOJI_PRESENTATION.test(sequence);
+}
+
+/**
+ * Whether a cluster that the run's own face draws asks for a color face instead: the emoji
+ * variation selector U+FE0F after a character above U+00FF, or a keycap sequence with it. A
+ * character whose default presentation is emoji, and a Latin-1 sign such as `©` with
+ * U+FE0F, keep the run face's glyph.
+ */
+export function clusterSelectsColorFace(text: string, after = ''): boolean {
+  if (/^[\uFE0E\uFE0F]+$/u.test(text)) return false;
+  if (/^[0-9#*]$/u.test(text)) return /^\uFE0F\u20E3/u.test(after);
+  const sequence = /^[\uFE0E\uFE0F]/u.test(after) ? text + after[0] : text;
+  return (
+    sequence.includes('\uFE0F') && !sequence.includes('\uFE0E') && (text.codePointAt(0) ?? 0) > 0xff
+  );
+}
+
+/**
+ * Whether a cluster continues the emoji sequence before it: a zero width joiner, the
+ * pictograph after one, a keycap, a skin tone modifier, or a tag (Unicode Technical
+ * Standard #51). Such a cluster belongs in the same face as the sequence it continues.
+ */
+export function continuesEmojiSequence(text: string, before: string): boolean {
+  if (before.endsWith('\u200D')) return /^\p{Extended_Pictographic}/u.test(text);
+  return /^[\u200D\u20E3\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/u.test(text);
 }
 
 /**
@@ -64,11 +105,12 @@ export function prefersEmojiPresentation(text: string): boolean {
  */
 export function orderFallbackFacesForCluster(
   fonts: readonly ResolvedFont[],
-  text: string
+  text: string,
+  emoji = prefersEmojiPresentation(text)
 ): readonly ResolvedFont[] {
   if (fonts.length < 2) return fonts;
   const color = fonts.filter(hasColorGlyphTables);
   if (color.length === 0 || color.length === fonts.length) return fonts;
   const mono = fonts.filter((font) => !color.includes(font));
-  return prefersEmojiPresentation(text) ? [...color, ...mono] : [...mono, ...color];
+  return emoji ? [...color, ...mono] : [...mono, ...color];
 }

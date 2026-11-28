@@ -137,6 +137,8 @@ export interface LayoutEnvironmentShapedMeasurerOptions {
  * full face box would have allowed 2x, which is a usable layout blow-up from a file.
  */
 const MAX_LINE_GAP_FACE_BOXES = 0.5;
+/** Text that can select emoji presentation, which the glyph fallback moves to a color face. */
+const MAY_ASK_FOR_EMOJI = /[\uFE0F\u20E3]/u;
 
 /** Bound on cached coverage answers per face; a file controls which characters are asked. */
 const MAX_COVERAGE_ENTRIES_PER_FONT = 4096;
@@ -582,11 +584,15 @@ export function createShapedMeasurer(
       // is the answer; shaping each word again only to read the face back was a third of
       // line breaking. Composed as the span loop below composes one span, to the same bits.
       // A shaper with glyph fallback faces substitutes a face only for a glyph that `font`
-      // lacks. The face's own cmap maps every character here, so no face is substituted.
+      // lacks, or for a character that selects emoji presentation. The face's own cmap maps
+      // every character here, so no face is substituted unless the text can select emoji.
       // Synthesized small capitals shape other characters than the text holds, so they shape.
       if (
         facePreserving ||
-        (missingGlyphFallback && !style.smallCaps && mapsEveryCharacter(font, text))
+        (missingGlyphFallback &&
+          !style.smallCaps &&
+          !MAY_ASK_FOR_EMOJI.test(text) &&
+          mapsEveryCharacter(font, text))
       ) {
         const metrics = faceLineMetrics(font, style, entry);
         const baseline = Math.max(0, metrics.baseline);

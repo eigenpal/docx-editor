@@ -12,10 +12,22 @@ import {
   type TextShaper,
 } from './shaped-run.ts';
 import { synthesizeSmallCaps } from './synthetic-small-caps.ts';
-import { orderFallbackFacesForCluster } from './color-font-tables.ts';
+import {
+  clusterAsksForEmoji,
+  clusterSelectsColorFace,
+  continuesEmojiSequence,
+  hasColorGlyphTables,
+  orderFallbackFacesForCluster,
+} from './color-font-tables.ts';
 
 /** Keep fragmented fallback work bounded independently of the original shaping limit. */
 const MAX_FALLBACK_CLUSTERS = 2048;
+/**
+ * The longest emoji sequence, in UTF-16 code units, kept whole in one color face. A Unicode
+ * emoji sequence is a few code points; a longer chain of joiners is shaped in pieces, so
+ * each continuation never shapes more than this again.
+ */
+const MAX_EMOJI_SEQUENCE = 64;
 
 export function shapeClusterGlyphFallback(
   shaper: TextShaper,
@@ -37,7 +49,14 @@ export function shapeClusterGlyphFallback(
     return smallCaps(shaper, next, shaper.shape(next));
   };
   const groups: { start: number; end: number; font: ResolvedFont }[] = [];
-  const selected = new Map<string, ResolvedFont>();
+  const selected = new Map<string, ResolvedFont | null>();
+  // A cluster that the primary face covers but that selects emoji presentation moves to a
+  // color face, when the primary face has no color glyphs and a color face draws it.
+  const colorFaces = hasColorGlyphTables(input.environment.font)
+    ? []
+    : fonts.filter(hasColorGlyphTables);
+  // Where the emoji sequence that the last group ends with starts; -1 when it ends with none.
+  let sequenceStart = -1;
   for (const cluster of [...primary.clusters].sort((a, b) => a.textStart - b.textStart)) {
     let font = input.environment.font;
     const text = input.text.slice(cluster.textStart, cluster.textEnd);
@@ -49,36 +68,72 @@ export function shapeClusterGlyphFallback(
       previousGroup.end = cluster.textEnd;
       continue;
     }
+    // An emoji sequence stays in the color face of its first cluster, when that face draws
+    // the whole sequence, so the face forms the sequence's own glyph.
+    if (
+      previousGroup &&
+      sequenceStart >= 0 &&
+      previousGroup.end === cluster.textStart &&
+      cluster.textEnd - sequenceStart <= MAX_EMOJI_SEQUENCE &&
+      continuesEmojiSequence(text, input.text.slice(sequenceStart, cluster.textStart))
+    ) {
+      const sequence = input.text.slice(sequenceStart, cluster.textEnd);
+      let drawn = false;
+      try {
+        drawn = !shape(previousGroup.font, sequence).glyphs.some((glyph) => glyph.id === 0);
+      } catch {
+        drawn = false;
+      }
+      if (drawn) {
+        previousGroup.end = cluster.textEnd;
+        continue;
+      }
+    }
     // A space between Hebrew words that fell back stays with them, so the words keep the
-    // fallback face's line height; punctuation still takes the authored face.
+    // fallback face's line height; punctuation still takes the authored face. A color face
+    // draws emoji, not the words around them, so a space after an emoji keeps the run face.
     if (
       input.environment.script === 'Hebr' &&
       /^\s+$/u.test(text) &&
       previousGroup &&
       previousGroup.font !== input.environment.font &&
+      !hasColorGlyphTables(previousGroup.font) &&
       previousGroup.end === cluster.textStart
     ) {
       previousGroup.end = cluster.textEnd;
       continue;
     }
-    if (
-      primary.glyphs.slice(cluster.glyphStart, cluster.glyphEnd).some((glyph) => glyph.id === 0)
-    ) {
-      // The selector that follows decides the presentation, so it takes part in the order.
-      const presentation = input.text.slice(cluster.textStart, cluster.textEnd + 1);
-      const found =
-        selected.get(text) ??
-        orderFallbackFacesForCluster(fonts, presentation).find((candidate) => {
-          try {
-            return !shape(candidate, text).glyphs.some((glyph) => glyph.id === 0);
-          } catch {
-            return false;
-          }
-        });
-      if (!found) return null;
-      selected.set(text, found);
-      font = found;
+    // The selector that follows decides the presentation, so it takes part in the order and
+    // in the face this cluster keeps: `❤` and `❤️` can take different faces.
+    const after = input.text.slice(cluster.textEnd, cluster.textEnd + 2);
+    const selector = /^[\uFE0E\uFE0F]/u.test(after) ? after[0]! : '';
+    const missing = primary.glyphs
+      .slice(cluster.glyphStart, cluster.glyphEnd)
+      .some((glyph) => glyph.id === 0);
+    const emoji = !missing && colorFaces.length > 0 && clusterSelectsColorFace(text, after);
+    if (missing || emoji) {
+      const key = text + selector;
+      const sample = missing ? text : key;
+      const found = selected.has(key)
+        ? selected.get(key)
+        : ((missing
+            ? orderFallbackFacesForCluster(fonts, text, clusterAsksForEmoji(text, after))
+            : colorFaces
+          ).find((candidate) => {
+            try {
+              return !shape(candidate, sample).glyphs.some((glyph) => glyph.id === 0);
+            } catch {
+              return false;
+            }
+          }) ?? null);
+      selected.set(key, found ?? null);
+      // A missing cluster that no face draws leaves the run uncovered; an emoji cluster that
+      // no color face draws keeps the primary face's glyph.
+      if (found) font = found;
+      else if (missing) return null;
     }
+    sequenceStart =
+      font !== input.environment.font && hasColorGlyphTables(font) ? cluster.textStart : -1;
     const previous = groups.at(-1);
     if (previous && previous.font === font && previous.end === cluster.textStart)
       previous.end = cluster.textEnd;

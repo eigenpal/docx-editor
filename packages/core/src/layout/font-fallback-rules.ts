@@ -69,6 +69,14 @@ const EAST_ASIAN_GLYPH_FALLBACKS = GLYPH_FALLBACK_FAMILIES.slice(0, 8);
 const EMOJI_GLYPH_FALLBACKS = [...TEXT_GLYPH_FALLBACKS, ...GLYPH_FALLBACK_FAMILIES.slice(8)];
 
 /**
+ * The step of {@link GLYPH_FALLBACK_FAMILIES} that emoji presentation loads: the faces before
+ * the East Asian ones, then the emoji faces. A host that holds it holds a start of the chain
+ * for every character that step carries.
+ */
+export const EMOJI_GLYPH_FALLBACK_FAMILIES: readonly string[] =
+  Object.freeze(EMOJI_GLYPH_FALLBACKS);
+
+/**
  * {@link GLYPH_FALLBACK_FAMILIES} in the steps a host loads them on demand, by the kind of
  * character that is uncovered. Each step holds every earlier face of the list that can carry
  * that kind, so a character takes the same face as with the whole list. The East Asian faces
